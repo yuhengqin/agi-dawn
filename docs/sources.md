@@ -16,7 +16,11 @@ Browser Use 的RSS没有分类字段，因此使用 `json_list` 的 `mode=html_j
 
 `detail` 可配置 `maxFetches`、`titleSelector`、`summarySelector`、`authorSelector`、`publishedAtSelector` / `publishedAtRegex`；作者读取声明的署名元素，缺失时保留为空。`publishedAtUtcOffset` 指定无时区时间的来源偏移，默认 `+08:00`。只有来源日期规则确实权威时使用 `publishedAtAuthoritative`，否则允许页面元数据补齐。
 
-代码组件可用 `detail.preserve` 声明 `{selector,as:"pre",code,caption}`；表格组件用 `{selector,as:"table"}`。安全代码、表格、MathML和可静态保存的SVG会保留。样式依赖、无法保存的公式/图表和互动内容会标记不完整。
+代码组件可用 `detail.preserve` 声明 `{selector,as:"pre",code,caption,kind,language}`：`code` 指定正文元素，`caption` 是保留在块外的说明；可选 `kind` 为 `code` 或 `prompt`，`language` 是组件内声明语言的元素选择器。代码原有的首尾缩进与换行保留。规范HTML使用 `pre[data-code-kind][data-language] > code.language-*`，类型和语言跨正文清洗、翻译及归档保留，顶部栏只显示一次。显式语言优先于自动识别，Prompt与Text不自动高亮；Markdown导出保留标准语言fence，Prompt类型仅保留在HTML中。
+
+Claude来源的 `.art-code.art-prompt` 保存为Prompt，其他 `.art-code` 从 `.ch .lang` 读取Text／Shell／TypeScript等语言；原站 `.ch` 工具条及复制按钮不进入正文。表格组件用 `{selector,as:"table"}`。安全代码、表格、MathML和可静态保存的SVG会保留。样式依赖、无法保存的公式／图表和互动内容会标记不完整。
+
+`detail.removeSelector` 是可选的非空 CSS 选择器，在正文识别和图表转换前移除匹配元素及其内容；只用于已核实的非正文控件，不按文字删除段落。Google Developers Blog 使用它排除底部 `.navigation-container`，并用 `preserve` 将 `.code-block:has(pre code)` 整体替换为 `pre code` 的内容，保留代码语言、清除重复语言标签和复制状态。来源模板只初始化新来源；已有来源需通过后台更新运行时配置，已有文章另行重新提取并更新译文。
 
 配置项按来源类型校验，未实现的项返回错误，不能靠填写未知字段扩展采集器。完整允许字段见 `packages/backend/src/sources/config-keys.ts`。
 

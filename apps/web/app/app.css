@@ -179,6 +179,8 @@
   --shadow-pop: 0 12px 32px rgba(28, 39, 51, 0.12);
   --prose-ink: #26323a;
   --code-bg: #f6f7f4;
+  --code-panel-bg: #fafafa;
+  --code-toolbar-bg: #f0f0f2;
   --code-keyword: #006d77;
   --code-string: #2f6f44;
   --code-number: #9a6700;
@@ -237,6 +239,8 @@
   --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.45);
   --prose-ink: #d7dfdf;
   --code-bg: #10151c;
+  --code-panel-bg: #10151c;
+  --code-toolbar-bg: #1d252e;
   --code-keyword: #78dce8;
   --code-string: #a9dc76;
   --code-number: #ffd866;
@@ -683,13 +687,31 @@
   overflow-x: auto;
 }
 .prose pre code { background: none; border: 0; padding: 0; font-size: inherit; }
-/* Code blocks in article bodies get a head with the language and a copy button (features/item/ArticleBody). */
-.prose .code-block { margin-top: 1.2em; border: 1px solid var(--line); border-radius: var(--radius-tile); overflow: hidden; background: var(--code-bg); }
-.prose .code-block pre { margin: 0; border: 0; border-radius: 0; }
-.prose .code-block-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px 6px 14px; border-bottom: 1px solid var(--line-soft); font-size: 12px; line-height: 1.4; color: var(--ink-4); letter-spacing: 0; }
-.prose .code-block-copy { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-mark); background: var(--surface); color: var(--ink-3); font-size: 12px; transition: color 120ms, border-color 120ms; }
-.prose .code-block-copy:hover { color: var(--ink); border-color: var(--line-strong); }
+/* Shared article code panels: metadata above the source, decorative line numbers beside it. */
+.prose .code-block { margin-top: 1.2em; border-radius: 4px; overflow: hidden; background: var(--code-panel-bg); }
+.prose .code-block-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; padding: 0 6px 0 8px; background: var(--code-toolbar-bg); font-family: var(--font-sans); font-size: 13px; line-height: 1.4; color: var(--ink-2); letter-spacing: 0; }
+.prose .code-block-identity, .prose .code-block-dots, .prose .code-block-actions { display: inline-flex; align-items: center; }
+.prose .code-block-identity { min-width: 0; gap: 9px; }
+.prose .code-block-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prose .code-block-dots { flex-shrink: 0; gap: 5px; }
+.prose .code-block-dots i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+.prose .code-block-dots i:nth-child(2) { background: #ffbd2e; }
+.prose .code-block-dots i:nth-child(3) { background: #28c840; }
+.prose .code-block-actions { flex-shrink: 0; gap: 2px; }
+.prose .code-block-toggle, .prose .code-block-copy { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 32px; min-height: 32px; padding: 4px 6px; border-radius: 3px; color: var(--ink-2); font-size: 12px; cursor: pointer; }
+.prose .code-block-toggle:hover, .prose .code-block-copy:hover { color: var(--ink); background: var(--line-soft); }
+.prose .code-block-toggle:focus-visible, .prose .code-block-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.prose .code-block-toggle[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.prose .code-block-status:empty { display: none; }
 .prose .code-block-copy[data-status="copied"] { color: var(--ok-ink); }
+.prose .code-block-copy[data-status="error"] { color: var(--hot); }
+.prose .code-block-body { display: grid; grid-template-columns: max-content minmax(0, 1fr); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; }
+.prose .code-block-body[hidden] { display: none; }
+.prose .code-block-lines { padding: 3px 8px 10px; color: var(--ink-3); background: var(--code-toolbar-bg); white-space: pre; text-align: right; user-select: none; }
+.prose .code-block pre { min-width: 0; margin: 0; border: 0; border-radius: 0; padding: 3px 8px 10px 6px; background: transparent; font: inherit; tab-size: 4; }
+@media (hover: none) {
+  .prose .code-block-toggle, .prose .code-block-copy { min-width: 44px; min-height: 44px; }
+}
 .prose .hljs-comment, .prose .hljs-quote { color: var(--ink-4); font-style: italic; }
 .prose .hljs-keyword, .prose .hljs-selector-tag, .prose .hljs-doctag, .prose .hljs-name { color: var(--code-keyword); }
 .prose .hljs-string, .prose .hljs-regexp, .prose .hljs-link, .prose .hljs-attribute, .prose .hljs-addition { color: var(--code-string); }

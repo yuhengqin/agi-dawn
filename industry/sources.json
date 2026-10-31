@@ -23,7 +23,7 @@
     },
     {
       "id": "claude-dev", "name": "claude.dev", "kind": "rss",
-      "config": {"feedUrl": "https://claude.dev/rss.xml", "publishedAtUtcOffset": "+00:00", "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "config": {"feedUrl": "https://claude.dev/rss.xml", "publishedAtUtcOffset": "+00:00", "detail": {"preserve": [{"selector": ".art-code.art-prompt", "as": "pre", "code": "pre", "kind": "prompt"}, {"selector": ".art-code:not(.art-prompt)", "as": "pre", "code": "pre", "kind": "code", "language": ".ch .lang"}]}, "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
       "tier": "T1", "participation_mode": "editorial", "interval_minutes": 720, "tags": [], "site_fulltext": false
     },
     {
@@ -33,7 +33,7 @@
     },
     {
       "id": "google-developers-ai", "name": "Google Developers Blog · AI", "kind": "web_list",
-      "config": {"url": "https://developers.googleblog.com/search/?technology_categories=AI", "parseMode": "html", "itemSelector": ".search-result", "linkSelector": ".search-result__title a", "titleSelector": ".search-result__title", "publishedAtSelector": ".search-result__eyebrow", "allowUrlPrefixes": ["https://developers.googleblog.com/"], "publishedAtUtcOffset": "+00:00", "acceptLanguage": "en-US,en;q=0.9", "detail": {"maxFetches": 30, "summarySelector": "meta[name='description']"}, "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "config": {"url": "https://developers.googleblog.com/search/?technology_categories=AI", "parseMode": "html", "itemSelector": ".search-result", "linkSelector": ".search-result__title a", "titleSelector": ".search-result__title", "publishedAtSelector": ".search-result__eyebrow", "allowUrlPrefixes": ["https://developers.googleblog.com/"], "publishedAtUtcOffset": "+00:00", "acceptLanguage": "en-US,en;q=0.9", "detail": {"maxFetches": 30, "summarySelector": "meta[name='description']", "removeSelector": ".navigation-container", "preserve": [{"selector": ".code-block:has(pre code)", "as": "pre", "code": "pre code"}]}, "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
       "tier": "T1", "participation_mode": "editorial", "interval_minutes": 720, "tags": [], "site_fulltext": false
     },
     {

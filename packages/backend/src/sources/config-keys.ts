@@ -33,7 +33,7 @@ const NESTED: Record<string, string[]> = {
   minNumeric: ["path", "min"],
   detail: [
     "maxFetches", "publishedAtSelector", "publishedAtRegex", "publishedAtUtcOffset", "publishedAtAuthoritative", "upgradeDatePrecision",
-    "titleSelector", "titleRegex", "titleAuthoritative", "summarySelector", "authorSelector", "preserve",
+    "titleSelector", "titleRegex", "titleAuthoritative", "summarySelector", "authorSelector", "preserve", "removeSelector",
   ],
 };
 
@@ -41,8 +41,9 @@ const NESTED: Record<string, string[]> = {
 const preserveRules = (value: unknown) => Array.isArray(value) && value.every((rule) => {
   if (!rule || typeof rule !== "object") return false;
   const selector = (key: string) => typeof rule[key] === "string" && rule[key].trim() !== "";
-  const parts = rule.as === "pre" ? ["code", "caption"] : rule.as === "table" ? [] : null;
-  return parts !== null && selector("selector") && Object.keys(rule).every((key) => key === "selector" || key === "as" || parts.includes(key) && selector(key));
+  const parts = rule.as === "pre" ? ["code", "caption", "language"] : rule.as === "table" ? [] : null;
+  return parts !== null && selector("selector") && Object.keys(rule).every((key) => key === "selector" || key === "as"
+    || rule.as === "pre" && key === "kind" && ["code", "prompt"].includes(rule.kind) || parts.includes(key) && selector(key));
 });
 
 const VALUES: Record<string, string[]> = {
@@ -79,6 +80,7 @@ export function unsupportedConfig(kind: SourceRow["kind"], config: Record<string
     else if (NESTED[key] && value && typeof value === "object") {
       for (const sub of Object.keys(value)) if (!NESTED[key]!.includes(sub)) out.push(`${key}.${sub}`);
       if (key === "detail" && "preserve" in value && !preserveRules((value as { preserve: unknown }).preserve)) out.push("detail.preserve");
+      if (key === "detail" && "removeSelector" in value && (typeof value.removeSelector !== "string" || !value.removeSelector.trim())) out.push("detail.removeSelector");
     }
   }
   return out;

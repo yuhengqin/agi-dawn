@@ -154,26 +154,31 @@ export interface PreserveRule {
   /** pre: the part holding the text (default: the whole widget), and a label to keep above it. */
   code?: string;
   caption?: string;
+  kind?: "code" | "prompt";
+  /** An element inside the widget that declares its code language. */
+  language?: string;
 }
 
 /** How a source's article pages are read: the zone of a time printed without one, the widgets to preserve, and the language asked for. */
 export interface PageRules {
   utcOffset?: string;
   preserve?: PreserveRule[];
+  removeSelector?: string;
   acceptLanguage?: string;
 }
 
 export const pageRules = (config: SourceRow["config"]): PageRules =>
-  ({ utcOffset: articleUtcOffset(config), preserve: config.detail?.preserve, acceptLanguage: config.acceptLanguage });
+  ({ utcOffset: articleUtcOffset(config), preserve: config.detail?.preserve, removeSelector: config.detail?.removeSelector, acceptLanguage: config.acceptLanguage });
 
 type Doc = ReturnType<typeof parseHTML>["document"];
 type El = NonNullable<ReturnType<Doc["querySelector"]>>;
 
 /** Text of an element as a reader sees it: without scripts, styles and parts hidden from assistive technology. */
-function shownText(el: El): string {
+function shownText(el: El, trim = true): string {
   const copy = el.cloneNode(true) as El;
   for (const hidden of copy.querySelectorAll('script, style, [aria-hidden="true"]')) hidden.remove();
-  return copy.textContent?.trim() ?? "";
+  const text = copy.textContent ?? "";
+  return trim ? text.trim() : text;
 }
 
 /** The widget's text (its `code` part) as a code block, verbatim, under its caption when it has one. */
@@ -182,9 +187,12 @@ function codeBlock(document: Doc, el: El, rule: PreserveRule): El | null {
   if (!text) return null;
   const pre = document.createElement("pre");
   const code = document.createElement("code");
-  code.textContent = shownText(text);
-  const language=text.getAttribute('data-language')??el.getAttribute('data-language')??/(?:^|\s)language-([\w-]+)/.exec(text.getAttribute('class')??'')?.[1];
-  if(language&&/^[\w-]{1,40}$/.test(language)){code.setAttribute('class','language-'+language);pre.setAttribute('data-language',language);}
+  code.textContent = shownText(text, text.localName !== "pre" && text.localName !== "code");
+  if (rule.kind) pre.setAttribute("data-code-kind", rule.kind);
+  const labelLanguage = rule.language ? el.querySelector(rule.language) : null;
+  const language = (labelLanguage ? shownText(labelLanguage) : null) || text.getAttribute("data-language") || el.getAttribute("data-language")
+    || /(?:^|\s)language-([\w-]+)/.exec(text.getAttribute("class") ?? "")?.[1];
+  if (language) pre.setAttribute("data-language", language);
   pre.append(code);
   const label = rule.caption ? el.querySelector(rule.caption) : null;
   const caption = label ? shownText(label) : "";
@@ -411,6 +419,10 @@ export function readableDocument(document: Doc, url: string, rules: PageRules = 
     // no head
   }
   settleStreamedContent(document);
+  // Remove declared page controls before their SVGs or labels can become article material.
+  if (rules.removeSelector) {
+    for (const el of document.querySelectorAll(rules.removeSelector)) el.remove();
+  }
   settleInlineVisibility(document);
   preserveWidgets(document, rules.preserve ?? []);
   describeFigureDrawings(document);

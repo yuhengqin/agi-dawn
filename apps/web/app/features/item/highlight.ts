@@ -11,6 +11,7 @@ import sql from "highlight.js/lib/languages/sql";
 import typescript from "highlight.js/lib/languages/typescript";
 import xml from "highlight.js/lib/languages/xml";
 import yaml from "highlight.js/lib/languages/yaml";
+import { isPlainLanguage, languageLabel } from "./code-language";
 
 const LABELS: Record<string, string> = {
   bash: "Shell", css: "CSS", javascript: "JavaScript", json: "JSON", markdown: "Markdown", python: "Python", sql: "SQL",
@@ -19,10 +20,17 @@ const LABELS: Record<string, string> = {
 for (const [name, language] of Object.entries({ bash, css, javascript, json, markdown, python, sql, typescript, xml, yaml })) hljs.registerLanguage(name, language);
 
 /** Coloured HTML (escaped text and hljs spans only) and a language label, or null when unsure. */
-export function highlightCode(source: string): { html: string; label: string } | null {
+export function highlightCode(source: string, declared?: string): { html: string; label: string } | null {
   const text = source.replace(/\r\n?/g, "\n");
   const length = text.trim().length;
-  if (length < 40 || length > 12_000) return null;
+  if (!length || length > 12_000 || isPlainLanguage(declared)) return null;
+  if (declared) {
+    const aliases: Record<string, string> = { shell: "bash", sh: "bash", zsh: "bash", js: "javascript", ts: "typescript", py: "python", html: "xml", md: "markdown", yml: "yaml" };
+    const language = Object.hasOwn(aliases, declared) ? aliases[declared]! : declared;
+    if (!hljs.getLanguage(language)) return null;
+    return { html: hljs.highlight(text, { language, ignoreIllegals: true }).value, label: languageLabel(declared) };
+  }
+  if (length < 40) return null;
   const result = hljs.highlightAuto(text, Object.keys(LABELS));
   if (!result.language || result.relevance < 4) return null;
   const clear = result.relevance >= 6 && result.relevance - (result.secondBest?.relevance ?? 0) >= 2;

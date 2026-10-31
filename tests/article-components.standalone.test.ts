@@ -4,10 +4,12 @@
 // instead of silently changing nothing; the engine knows no site's classes.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 import * as cheerio from "cheerio";
-import { readable } from "@agidawn/backend/content/extract";
+import { pageRules, readable } from "@agidawn/backend/content/extract";
 import { unsupportedConfig } from "@agidawn/backend/sources/config-keys";
 import { bodyToMarkdown } from "@agidawn/backend/content/markdown";
+import { sanitizeBody } from "@agidawn/backend/content/sanitize";
 
 const prose = "The article explains how to maintain software, with practical examples and measurements. ".repeat(6);
 const page = (content: string) => `<html><head><title>Maintenance</title></head><body><article><h1>Maintenance</h1><p>${prose}</p>${content}<p>${prose}</p></article></body></html>`;
@@ -76,9 +78,86 @@ test("technical diagrams and MathML survive while unsupported figures are report
 });
 
 test('declared source code components preserve indentation and the declared language',()=>{
-  const body=readable(page('<div class="publisher-code"><button>Copy</button><pre><code class="language-typescript">const result = await call();\n  return result;</code></pre></div>'),'https://publisher.example/article',{preserve:[{selector:'.publisher-code',as:'pre',code:'pre code'}]});
+  const body=readable(page('<div class="publisher-code"><button>Copy</button><pre><code class="language-typescript">  const result = await call();\n  return result;\n</code></pre></div>'),'https://publisher.example/article',{preserve:[{selector:'.publisher-code',as:'pre',code:'pre code'}]});
   const $=cheerio.load(body!.html);
-  assert.equal($('pre code').text(),'const result = await call();\n  return result;');
+  assert.equal($('pre code').text(),'  const result = await call();\n  return result;\n');
   assert.equal($('pre code').attr('class'),'language-typescript');
   assert.doesNotMatch(body!.html,/Copy/);
+});
+
+test("source cleanup removes declared controls without deleting article words or images", () => {
+  const content = '<p>Previous examples used Python. Copied values remain part of this explanation.</p>' +
+    '<figure><img src="https://publisher.example/diagram.png" alt="Actual diagram"><figcaption>Actual diagram</figcaption></figure>' +
+    `<div class="publisher-tools"><p>Previous article control. ${prose}</p><span>Next article control</span><svg viewBox="0 0 24 24"><use href="#arrow"></use></svg></div>`;
+  const body = readable(page(content), "https://publisher.example/article", pageRules({ detail: { removeSelector: ".publisher-tools" } }));
+  assert.ok(body);
+  assert.doesNotMatch(body.html, /Previous article control|Next article control|data:image\/svg/);
+  assert.match(body.text, /Previous examples used Python\. Copied values remain part of this explanation\./);
+  assert.equal(cheerio.load(body.html)('img[src="https://publisher.example/diagram.png"]').length, 1);
+  assert.match(readable(page(content), "https://publisher.example/article")!.text, /Previous article control/);
+});
+
+test("source cleanup accepts only a nonempty selector", () => {
+  assert.deepEqual(unsupportedConfig("web_list", { detail: { removeSelector: ".article-pagination" } }), []);
+  for (const removeSelector of ["", " ", null, 3, [".article-pagination"]]) {
+    assert.deepEqual(unsupportedConfig("web_list", { detail: { removeSelector } }), ["detail.removeSelector"]);
+  }
+});
+
+test("Google source rules keep code and article media without publisher controls", () => {
+  const sources = JSON.parse(readFileSync(new URL("../industry/sources.json", import.meta.url), "utf8"));
+  const source = sources.sources.find((entry: { id: string }) => entry.id === "google-developers-ai");
+  assert.ok(source);
+  const content = '<div class="inner-block-content code-block line-numbers"><pre><code class="language-python">print("Copied")\n  preserve_indentation()</code></pre>' +
+    '<div class="language-block">Python</div><div class="copy-code-block"><span class="hidden">Copied</span><button>Copy</button></div></div>' +
+    '<figure><img src="https://publisher.example/architecture.png" alt="Architecture"></figure>' +
+    '<section class="navigation-container"><a href="/previous"><svg viewBox="0 0 24 24"><use href="#arrow"></use></svg></a><span>Previous</span><span>Next</span></section>';
+  const body = readable(page(content), "https://developers.googleblog.com/example/", pageRules(source.config));
+  assert.ok(body);
+  const $ = cheerio.load(body.html);
+  assert.equal($("pre code").text(), 'print("Copied")\n  preserve_indentation()');
+  assert.equal($("pre code").attr("class"), "language-python");
+  assert.doesNotMatch($("p").text(), /Python|Copied|Previous|Next/);
+  assert.equal($("img").length, 1);
+  assert.equal($("img").attr("alt"), "Architecture");
+});
+
+test("Claude code components keep their kind and language without a separate publisher header", () => {
+  const sources = JSON.parse(readFileSync(new URL("../industry/sources.json", import.meta.url), "utf8"));
+  const source = sources.sources.find((entry: { id: string }) => entry.id === "claude-dev");
+  const body = readable(page('<div class="art-code art-prompt"><div class="ch"><span>PROMPT</span><button>Copy</button></div><pre><span>/claude-api onboard</span></pre></div>' +
+    '<div class="art-code"><div class="ch"><span>CODE<span class="lang">Text</span></span><button>Copy</button></div><pre><span>folder/\n  child.txt</span></pre></div>' +
+    '<div class="art-code"><div class="ch"><span>CODE<span class="lang">Shell</span></span><button>Copy</button></div><pre><span>echo hello</span></pre></div>'),
+    "https://claude.dev/blog/example/", pageRules(source.config));
+  assert.ok(body);
+  const $ = cheerio.load(body.html);
+  assert.equal($("pre").eq(0).attr("data-code-kind"), "prompt");
+  assert.equal($("pre").eq(1).attr("data-language"), "text");
+  assert.equal($("pre").eq(2).attr("data-language"), "shell");
+  assert.deepEqual($("pre code").toArray().map(node => $(node).text()), ["/claude-api onboard", "folder/\n  child.txt", "echo hello"]);
+  assert.doesNotMatch($("p").text(), /PROMPT|CODE|Text|Shell|Copy/);
+  assert.equal(sanitizeBody(body.html), body.html, "code metadata survives repeated cleaning");
+  assert.match(bodyToMarkdown(body.html), /```shell\necho hello/);
+});
+
+test("ordinary code language declarations survive extraction and unsafe metadata is discarded", () => {
+  const body = readable(page('<pre data-code-kind="prompt"><code class="language-text">  keep this indentation\n</code></pre>'), "https://publisher.example/article");
+  assert.ok(body);
+  const $ = cheerio.load(body.html);
+  assert.equal($("pre").attr("data-code-kind"), "prompt");
+  assert.equal($("pre").attr("data-language"), "text");
+  assert.equal($("pre code").attr("class"), "language-text");
+  assert.equal($("pre code").text(), "  keep this indentation\n");
+  const fallback = readable(page('<pre class="language-shell"><code class="source">echo hello</code></pre>'), "https://publisher.example/article");
+  assert.equal(cheerio.load(fallback!.html)("pre").attr("data-language"), "shell", "a non-language code class does not mask the pre language");
+  const unsafe = cheerio.load(sanitizeBody('<pre data-code-kind="invalid" data-language="bad <script>"><code>x</code></pre>'));
+  assert.equal(unsafe("pre").attr("data-code-kind"), undefined);
+  assert.equal(unsafe("pre").attr("data-language"), undefined);
+});
+
+test("source code metadata rules reject unsupported kinds and invalid language selectors", () => {
+  assert.deepEqual(unsupportedConfig("rss", { detail: { preserve: [{ selector: ".prompt", as: "pre", code: "pre", kind: "prompt", language: ".lang" }] } }), []);
+  for (const fields of [{ kind: "arbitrary" }, { language: " " }, { language: 3 }]) {
+    assert.deepEqual(unsupportedConfig("rss", { detail: { preserve: [{ selector: ".code", as: "pre", ...fields }] } }), ["detail.preserve"]);
+  }
 });

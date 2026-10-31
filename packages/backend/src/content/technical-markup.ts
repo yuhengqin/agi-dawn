@@ -13,9 +13,15 @@ export function normalizeTechnicalMarkup(html:string,_baseUrl:string,trackIssues
     const index=issues.push(issue)-1;
     if(trackIssues)element.attr('data-reader-issues',[element.attr('data-reader-issues'),index].filter(value=>value!==undefined).join(','));
   };
-  $("pre[data-language]").each((_,node)=>{
-    const pre=$(node),lang=pre.attr("data-language")??"";
-    if(/^[\w-]{1,40}$/.test(lang)) pre.find("code").first().addClass(`language-${lang}`);
+  $("pre").each((_,node)=>{
+    const pre=$(node),code=pre.find("code").first();
+    const declared=pre.attr("data-language")??/(?:^|\s)language-([\w-]+)/.exec(code.attr("class")??"")?.[1]
+      ??/(?:^|\s)language-([\w-]+)/.exec(pre.attr("class")??"")?.[1];
+    const value=declared?.trim().toLowerCase().replace(/\s+/g,"-")??"";
+    const lang=value==="c++"?"cpp":value==="c#"?"csharp":value==="f#"?"fsharp":value;
+    if(/^[\w-]{1,40}$/.test(lang)){pre.attr("data-language",lang);code.addClass(`language-${lang}`);}
+    else pre.removeAttr("data-language");
+    if(!["code","prompt"].includes(pre.attr("data-code-kind")??""))pre.removeAttr("data-code-kind");
   });
   $(".katex").each((_,node)=>{
     const math=$(node).find("math").first();

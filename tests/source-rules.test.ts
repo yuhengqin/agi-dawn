@@ -27,7 +27,7 @@ const pages: Record<string, (base: string) => string> = {
   "/list.html": () => html("", `<ul><li><a href="/p/a-${T}">Short clean title ${T}</a><time>2026-09-20</time></li><li><a href="/p/b-${T}">${LONG}</a></li></ul>`),
   [`/p/a-${T}`]: () =>
     html(`<meta name="description" content="Summary of A"><meta property="article:published_time" content="2026-01-01T00:00:00Z">`, `<h1>Detail heading A</h1><p class="byline"><time datetime="2026-09-21T08:00:00Z">Sep 21</time></p>`),
-  [`/p/b-${T}`]: () => html(`<meta name="description" content="Summary of B"><meta property="article:published_time" content="2026-01-01T00:00:00Z">`, `<article><h1>Detail heading B ${T}</h1><p>${ARTICLE_BODY}</p></article>`),
+  [`/p/b-${T}`]: () => html(`<meta name="description" content="Summary of B"><meta property="article:published_time" content="2026-01-01T00:00:00Z">`, `<article><h1>Detail heading B ${T}</h1><p>${ARTICLE_BODY}</p><div class="publisher-tools"><p>Publisher controls. ${ARTICLE_BODY}</p></div></article>`),
   [`/j/1-${T}`]: () => html(`<meta property="article:published_time" content="2026-09-27T01:00:00Z">`, "<p>one</p>"),
   [`/j/2-${T}`]: () => html(`<meta property="article:published_time" content="2026-09-27T02:00:00Z">`, "<p>two</p>"),
 };
@@ -60,7 +60,7 @@ const SOURCES = {
     kind: "web_list",
     config: {
       url: `${base}/list.html`, parseMode: "html", itemSelector: "li", linkSelector: "a", titleSelector: "a", publishedAtSelector: "time",
-      detail: { maxFetches: 10, titleSelector: "h1", summarySelector: 'meta[name="description"]', publishedAtAuthoritative: true, publishedAtSelector: ".byline time" },
+      detail: { maxFetches: 10, titleSelector: "h1", summarySelector: 'meta[name="description"]', publishedAtAuthoritative: true, publishedAtSelector: ".byline time", removeSelector: ".publisher-tools" },
     },
   },
   jina: { kind: "web_list", config: { url: `https://r.jina.ai/${base}/jlist-${T}`, parseMode: "markdown", allowUrlPrefixes: [`${base}/j/`], detail: { maxFetches: 5, titleRegex: "^# (.+)$" } } },
@@ -159,4 +159,7 @@ test("detail HTML supplies the ordinary extracted body once, while short pages k
   assert.ok(full!.body_html?.includes(`<p>${ARTICLE_BODY}</p>`), "the saved body keeps the article paragraph");
   assert.equal(await extractArticleBody(full!.id), "skipped");
   assert.equal(pageReads.get(`/p/b-${T}`), 1, "known listings and extraction never download the same confirmed body again");
+  assert.equal(await extractArticleBody(full!.id, { force: true, paidFallback: false }), "ok");
+  const [refreshed] = await sql<{ body_text: string }[]>`SELECT body_text FROM articles WHERE id=${full!.id}`;
+  assert.equal(refreshed!.body_text, full!.body_text, "forced extraction applies the same source cleanup as collection");
 });

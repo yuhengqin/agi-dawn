@@ -55,12 +55,13 @@ test('only newly collected foreign bodies translate, without model calls on page
 });
 
 test('delayed bodies are eligible; code, images and link destinations survive translation',async()=>{
-  const material=input('<h2>Technical section</h2><p>Read <a href="https://example.org/docs">the docs</a>, run <code>npm test</code>.<img src="https://example.org/diagram.png" alt="Diagram"></p><pre><code>const x = 1;</code></pre>');
+  const material=input('<h2>Technical section</h2><p>Read <a href="https://example.org/docs">the docs</a>, run <code>npm test</code>.<img src="https://example.org/diagram.png" alt="Diagram"></p><pre data-code-kind="prompt" data-language="text"><code>const x = 1;</code></pre>');
   const pending=await upsertMaterial({...material,bodyHtml:undefined,bodyText:undefined,bodyStatus:'pending'});
   await run();assert.equal((await detail(pending.articleId)).translation??null,null);
   await upsertMaterial(material);await run();
   const item=await detail(pending.articleId);assert.match(item.translation.bodyHtml,/href="https:\/\/example.org\/docs"/);assert.match(item.translation.bodyHtml,/<code>npm test<\/code>/);assert.match(item.translation.bodyHtml,/const x = 1;/);
   const [stored]=await sql`SELECT body_html FROM reader_translations WHERE article_id=${pending.articleId}`;assert.match(stored!.body_html,/src="https:\/\/example.org\/diagram.png"/);
+  assert.match(stored!.body_html,/data-code-kind="prompt"/);assert.match(stored!.body_html,/data-language="text"/);
 });
 
 test('missing protected content is retried once, then retained as original and labelled partial',async()=>{
