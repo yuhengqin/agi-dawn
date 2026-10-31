@@ -5,27 +5,41 @@ import { fakeApi, feedItem, itemDetail, readerPage, startWebServer, visit, type 
 
 for(const engine of [chromium,webkit])test(`numbered pagination counts, jumps and switches page size without losing filters (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined;
-  const articles=Array.from({length:137},(_,i)=>feedItem({id:'paged-'+i,title:'Paged article '+i}));
+  const articles=Array.from({length:165},(_,i)=>feedItem({id:'paged-'+i,title:'Paged article '+i}));
   try{
     web=await startWebServer(fakeApi(url=>{
-      if(url.pathname==='/api/site/articles')return readerPage(url.searchParams.get('q')==='missing'?[]:articles,url);
+      if(url.pathname==='/api/site/articles'){
+        const q=url.searchParams.get('q');
+        const items=q==='missing'?[]:q==='single'?articles.slice(0,10):q==='ten'||q==='many'?Array.from({length:q==='ten'?250:1000},(_,i)=>feedItem({id:'paged-'+i,title:'Paged article '+i})):articles;
+        return readerPage(items,url);
+      }
       if(url.pathname==='/api/site/engagement')return {items:(url.searchParams.get('ids')??'').split(',').map(id=>({id,views:0,likes:0,liked:false}))};
       if(url.pathname==='/api/site/categories')return {items:[{id:'coding',name:'AI 编程'}]};
-      if(url.pathname==='/api/site/sources')return {items:[{id:'source',name:'Source',url:null,description:null,articles:137,fulltext:false,latestAt:null}]};
-      if(url.pathname==='/api/site/topics')return {topics:[{slug:'mcp',name:'MCP',group:'field',definition:'',brand:null,total:137,recent:1,indexable:true,latest:null}]};
+      if(url.pathname==='/api/site/sources')return {items:[{id:'source',name:'Source',url:null,description:null,articles:165,fulltext:false,latestAt:null}]};
+      if(url.pathname==='/api/site/topics')return {topics:[{slug:'mcp',name:'MCP',group:'field',definition:'',brand:null,total:165,recent:1,indexable:true,latest:null}]};
     }));
     const page=await browser.newPage({viewport:{width:1440,height:900}});
     const filters='q=tools&category=coding&topic=mcp&sourceId=source&from=2026-10-01&to=2026-10-28';
     await visit(page,web.origin+'/?'+filters);
-    await expect(page.getByRole('status',{name:'文章分页信息'})).toContainText('共 137 篇');
+    await expect(page.getByRole('status',{name:'文章分页信息'})).toContainText('共 165 篇');
     await expect(page.locator('main ol article')).toHaveCount(25);
     const nav=page.getByRole('navigation',{name:'文章分页',exact:true});
+    for(let number=1;number<=7;number++)await expect(nav.getByRole('link',{name:`第 ${number} 页`,exact:true})).toBeVisible();
+    const controls=page.getByRole('group',{name:'文章分页控制',exact:true});
+    await expect(controls.getByRole('combobox',{name:'每页篇数',exact:true})).toBeVisible();
+    for(const width of [320,390]){
+      await page.setViewportSize({width,height:800});await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));
+      for(let number=1;number<=7;number++)await expect(nav.getByRole('link',{name:`第 ${number} 页`,exact:true})).toBeVisible();
+      await controls.getByRole('button',{name:'跳转',exact:true}).click({trial:true});
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+    }
+    await page.setViewportSize({width:1440,height:900});
     await nav.getByRole('link',{name:'第 3 页',exact:true}).click();
     await expect(page).toHaveURL(/page=3/);await expect(page.getByRole('link',{name:'Paged article 50',exact:true})).toBeVisible();
     await expect(nav.locator('[aria-current="page"]')).toHaveText('3');await expect(page).toHaveTitle(/第 3 页/);
     for(const [key,value] of new URLSearchParams(filters))assert.equal(new URL(page.url()).searchParams.get(key),value);
-    await page.getByRole('spinbutton',{name:'跳转页码',exact:true}).fill('6');await page.getByRole('button',{name:'跳转',exact:true}).click();
-    await expect(page).toHaveURL(/page=6/);await expect(page.locator('main ol article')).toHaveCount(12);
+    await controls.getByRole('spinbutton',{name:'跳转页码',exact:true}).fill('7');await controls.getByRole('spinbutton',{name:'跳转页码',exact:true}).press('Enter');
+    await expect(page).toHaveURL(/page=7/);await expect(page.locator('main ol article')).toHaveCount(15);
     await expect(nav.getByRole('link',{name:'下一页',exact:true})).toHaveCount(0);
     await page.getByRole('combobox',{name:'每页篇数',exact:true}).selectOption('50');
     await expect(page).toHaveURL(/limit=50/);assert(!new URL(page.url()).searchParams.has('page'));
@@ -37,16 +51,25 @@ for(const engine of [chromium,webkit])test(`numbered pagination counts, jumps an
     await page.goBack();await expect(page).toHaveURL(/page=2/);await expect(page.getByRole('link',{name:'Paged article 50',exact:true})).toBeVisible();
     await page.getByRole('combobox',{name:'每页篇数',exact:true}).selectOption('100');await expect(page).toHaveURL(/limit=100/);
     await expect(page.locator('main ol article')).toHaveCount(100);
-    for(const width of [320,390]){
-      await page.setViewportSize({width,height:800});await nav.scrollIntoViewIfNeeded();
-      await expect(nav.getByRole('link',{name:'下一页',exact:true})).toBeVisible();
-      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
-    }
     await visit(page,web.origin+'/?'+filters+'&page=999&limit=50');
-    await expect(page).toHaveURL(/page=3&limit=50/);await expect(page.locator('main ol article')).toHaveCount(37);
+    await expect(page).toHaveURL(/page=4&limit=50/);await expect(page.locator('main ol article')).toHaveCount(15);
     await visit(page,web.origin+'/?q=missing&page=999&limit=100');
     await expect(page).toHaveURL(web.origin+'/?q=missing&limit=100');
     await expect(page.getByRole('status',{name:'文章分页信息'})).toContainText('共 0 篇');await expect(nav).toHaveCount(0);
+    await expect(controls.getByRole('combobox',{name:'每页篇数',exact:true})).toHaveValue('100');
+    await visit(page,web.origin+'/?q=single&limit=100');
+    await expect(page.locator('main ol article')).toHaveCount(10);await expect(nav).toHaveCount(0);
+    await controls.getByRole('combobox',{name:'每页篇数',exact:true}).selectOption('25');await expect(page).toHaveURL(/limit=25/);
+    assert.equal(new URL(page.url()).searchParams.get('q'),'single');
+    for(const [q,totalPages,positions] of [['ten',10,[1,5,10]],['many',40,[1,20,40]]] as const){
+      for(const number of positions){
+        await visit(page,web.origin+`/?q=${q}&page=${number}`);
+        await expect(nav.getByRole('link',{name:'第 1 页',exact:true})).toBeVisible();
+        await expect(nav.getByRole('link',{name:`第 ${totalPages} 页`,exact:true})).toBeVisible();
+        await expect(nav.locator('[aria-current="page"]')).toHaveText(String(number));
+        if(number===20)for(const neighbor of [18,19,21,22])await expect(nav.getByRole('link',{name:`第 ${neighbor} 页`,exact:true})).toBeVisible();
+      }
+    }
     const plain=await browser.newPage({javaScriptEnabled:false,viewport:{width:390,height:844}});
     await plain.goto(web.origin+'/?'+filters);
     await plain.getByRole('combobox',{name:'每页篇数',exact:true}).selectOption('50');await plain.getByRole('button',{name:'应用数量',exact:true}).click();

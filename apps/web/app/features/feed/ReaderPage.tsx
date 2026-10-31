@@ -21,7 +21,7 @@ export function ReaderPage({page,sources,topics,categories,query}:ReaderPageData
     <ReaderToolbar {...{query,sources}}/>
     <ReaderNavigation {...{query,topics,categories}}/>
     <ReaderFilters {...{query,sources,topics,categories}}/>
-    <ReaderListSummary {...{page,query}}/>
+    <ReaderListSummary page={page}/>
     <EngagementProvider key={JSON.stringify(query)} items={page.items}>
     {page.items.length===0?<p className="py-12 text-ink-3">没有符合条件的文章。可以调整筛选，或稍后查看更新。</p>:<ol className="divide-y divide-line border-b border-line">
       {page.items.map(item=><li key={item.id} className="reader-feed-row"><article>
