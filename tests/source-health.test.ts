@@ -86,6 +86,10 @@ test("hot-signal activity does not hide editorial collection stopping", async ()
   assert.match(finding!.title, /文章|编辑/);
   await material(editorial, "editorial");
   assert.equal((await collectFindings(now)).find(f => f.key === "content.collect"), undefined);
+  assert.equal((await collectFindings(now + 13 * 3600_000)).find(f => f.key === "content.collect"), undefined,
+    "a twelve-hour collection interval leaves room for scheduling and a run with no new articles");
+  assert.equal((await collectFindings(now + 25 * 3600_000)).find(f => f.key === "content.collect")?.level, "now",
+    "a full day without new editorial content still raises the alert");
 });
 
 test("daily follow-ups retain chronic failures after a successful run, separately by use", async () => {

@@ -207,7 +207,7 @@ const CreateSchema = z
     config: z.record(z.string(), z.unknown()),
     tier: z.enum(["T1", "T1_5", "T2", "EXCLUDE_MP"]).default("T2"),
     participation_mode: z.enum(["editorial", "hot_signal", "isolated"]).default("editorial"),
-    interval_minutes: z.number().int().min(1).max(1440).default(30),
+    interval_minutes: z.number().int().min(1).max(1440).default(SOURCE_DEFAULTS.intervalMinutes),
     first_party: z.boolean().default(false),
     tags: z.array(z.string()).default([]),
     site_fulltext: z.boolean().default(SOURCE_DEFAULTS.siteFulltext),

@@ -3,6 +3,7 @@
 // Re-runnable:  node --env-file=.env scripts/seed.ts
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { SOURCE_DEFAULTS } from "@agidawn/site";
 import { REPO_ROOT } from "@agidawn/backend/config";
 import { closeDb, sql } from "@agidawn/backend/db";
 import { assertSupportedConfig } from "@agidawn/backend/sources/config-keys";
@@ -30,7 +31,7 @@ for (const s of sources) {
   const inserted = await sql`
     INSERT INTO sources (id, name, kind, config, tier, first_party, participation_mode, interval_minutes, tags, site_fulltext, enabled, next_fetch_at)
     VALUES (${s.id}, ${s.name}, ${s.kind}, ${sql.json(s.config as never)}, ${tier}, ${tier === "T1"},
-            ${s.participation_mode ?? "editorial"}, ${s.interval_minutes ?? 60}, ${s.tags ?? []}, ${s.site_fulltext ?? false},
+            ${s.participation_mode ?? "editorial"}, ${s.interval_minutes ?? SOURCE_DEFAULTS.intervalMinutes}, ${s.tags ?? []}, ${s.site_fulltext ?? false},
             ${s.enabled ?? true}, now())
     ON CONFLICT (id) DO NOTHING RETURNING id`;
   added += inserted.length;

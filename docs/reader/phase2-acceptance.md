@@ -9,7 +9,7 @@
 | 常驻运行 | systemd用户target托管API/web/worker，登录后启动；CLI安装、启停、重启、状态、journal日志；只绑定本机 |
 | 进程恢复 | 实际SIGKILL worker，PID从3493381变为3494212，NRestarts=1；主动停止target后等待超过重启间隔，三服务保持inactive。证据 `.data/phase2-supervision.json` |
 | 工作副本归属 | 安装与全部控制命令校验unit归属；从临时另一副本执行start/stop/restart/status/logs均拒绝，原worker PID不变。`.data/phase2-foreign-control.json` |
-| 增量采集 | 五个既定来源入队并由受管worker实际完成，均health=ok；仍96篇，无重复identity。间隔120分钟并复用原有自适应机制，未增加第二套调度 |
+| 增量采集 | 五个既定来源入队并由受管worker实际完成，均health=ok；仍96篇，无重复identity。当时验收间隔120分钟；2026-10-31改为固定12小时，现行规则见[信源配置](../sources.md) |
 | 正文诊断 | 无可选Jina配置时保留直接HTTP/网络/正文不足原因；无正文改为unconfirmed，失败刷新保留旧正文。21篇工程正文实测均HTTP403，当前按原三次上限重试/失败，不虚称接通 |
 | 私人阅读 | 文章页直接显示与当前正文修订和representation完全匹配的私人快照，同页收藏、状态、笔记和ZIP；历史版本仍可读；公开全文权限不变 |
 | 使用边界 | 笔记未保存提示、站内跳转/关闭离开保护；冲突草稿保留；会话401后卸载私人页面并回登录，正文和笔记一并消失；书库筛选刷新及“全部”正确 |

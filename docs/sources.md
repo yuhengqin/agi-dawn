@@ -2,6 +2,8 @@
 
 当前11个来源及真实采集限制见 [来源验收](reader/source-inventory.md)，可运行的配置位于 `industry/sources.json`。`scripts/seed.ts` 只插入不存在的ID；后台 `/admin/sources` 可新增、修改、预览和暂停，修改带版本检查与审计。
 
+默认采集间隔为720分钟（12小时），后台新增、API与初始化共用 `site/site.ts` 的 `SOURCE_DEFAULTS.intervalMinutes`；数据库默认值由迁移维护。当前11个来源也使用720分钟。后台可以单独修改，程序不再按文章数量自动调频。worker每分钟检查到期来源；成功采集后从完成时间再等待一个间隔，不固定在每天某两个整点执行。
+
 支持 RSS/Atom（`rss`）、HTML/Markdown列表（`web_list`）、JSON列表（`json_list`）、X搜索（`x_search`）、微信公众号（`mp_account`）和外部推送（`external`）。当前实际接入RSS、HTML和页面内嵌JSON。仅 `participation_mode=editorial` 的文章可公开；其他参与模式不会进入阅读列表。
 
 ## 常用配置
@@ -21,6 +23,8 @@ Browser Use 的RSS没有分类字段，因此使用 `json_list` 的 `mode=html_j
 ## 范围、权限与重试
 
 首次默认最多30篇、近12个月，可在 `_agidawn.initialBackfillLimit` / `initialBackfillMonths` 修改。正文处理与手动刷新最多三次，刷新失败保留旧正文并显示状态；并发旧结果不能覆盖新修订。来源暂停保留历史，人工下架不会因重采集撤销。
+
+来源采集失败逐次延后，等待上限为6小时与该来源间隔中的较大值，因此12小时间隔失败后仍等待12小时。付费预算耗尽单独等待15分钟，不累计来源失败。整站超过24小时没有新文章才触发停收告警；它判断内容产出，不等于每个来源都发生了采集故障。
 
 `site_fulltext` 默认关闭。获得RSS正文、成功提取页面与获得公开再发布许可是不同条件。来源未授权时只公开摘要与链接，管理员私人归档仍使用独立认证接口。公开搜索只检索当前获准公开的正文。
 

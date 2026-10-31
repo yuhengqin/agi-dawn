@@ -123,7 +123,9 @@ node scripts/local-reader.ts stop
 
 进程异常退出由systemd自动重启，主动停止不会复活；日志用journalctl保留。`status`的active表示进程状态，启动后API监听可能晚于web，HTTP就绪再执行smoke；本机重启不承诺零停机。机器关机或休眠期间不能采集。此轮未修改用户linger设置，也未进行整机重启验收；PG容器已配置 `unless-stopped`，跟随Docker恢复。
 
-当前11个已确认来源在本机私有.env中开启 `COLLECT_ENABLED=true`，初始间隔120分钟，随后沿用已有自适应调度。模板和测试仍关闭外部采集。原有五源全文已按站主授权开启，新增六源保持默认 `site_fulltext=false`，通知及IndexNow保持关闭。
+当前11个已确认来源在本机私有.env中开启 `COLLECT_ENABLED=true`，采集间隔为720分钟（12小时），后台新增与初始化默认值相同。自动调频已移除，后台单独修改的间隔会保留。模板和测试仍关闭外部采集。原有五源全文已按站主授权开启，新增六源保持默认 `site_fulltext=false`，通知及IndexNow保持关闭。
+
+2026-10-31采集间隔更新：执行新增迁移 `0107_source_collection_interval_default.sql`，重新构建web并重启API、worker与web；worker启动会清除旧自动调频定时任务及其待执行队列，保留历史执行记录。迁移只调整数据库默认值，不覆盖已有来源；本机11个来源另行更新为720分钟，下一次采集按上次采集完成时间加12小时重新计算，避免仍沿用旧的1小时计划。不删除文章、来源游标或私人阅读数据。失败等待不短于来源间隔；无新文章告警改为1440分钟（24小时）。若私有环境中填写过 `ALERT_QUIET_MINUTES`，也需同步调整该覆盖值。到期检查、正文处理与翻译频率保持。
 
 本地备份timer每天上海时间04:10执行现有 `--local-only`，观察timer每天20:00写本地报告；均不上传、不发消息。可手动运行：
 

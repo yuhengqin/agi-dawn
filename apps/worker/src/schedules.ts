@@ -4,7 +4,7 @@ import type { PgBoss } from "pg-boss";
 import { ensureQueue, recordRun } from "@agidawn/backend/jobs/queue";
 import { serverModules, type Scheduled } from "@agidawn/backend/modules";
 import { sweepUnprocessed } from "@agidawn/backend/jobs/content";
-import { adaptIntervals, scheduleDueSources } from "@agidawn/backend/sources/collect";
+import { scheduleDueSources } from "@agidawn/backend/sources/collect";
 import { scheduleMpReconcile } from "@agidawn/backend/sources/mp";
 import { followXRenames } from "@agidawn/backend/sources/x-renames";
 import { dajialaConfigured } from "@agidawn/backend/providers/dajiala";
@@ -39,7 +39,6 @@ const ENGINE_SCHEDULES: Scheduled[] = [
   ...(collecting
     ? [
         { name: "sources.schedule", cron: "* * * * *", run: () => scheduleDueSources() },
-        { name: "sources.adapt-intervals", cron: "20 4 * * *", run: adaptIntervals },
         // X accounts quiet for a day: a renamed one is followed to its new handle (SocialData, paid per lookup).
         { name: "sources.x-renames", cron: "50 4 * * *", missed: "once" as const, run: () => followXRenames() },
         // Icons are read from the sources' own sites, so they stop with collection.

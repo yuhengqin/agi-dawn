@@ -10,7 +10,7 @@ import { closeDb, sql } from "@agidawn/backend/db";
 import { stopBoss } from "@agidawn/backend/jobs/queue";
 import { extractArticleBody } from "@agidawn/backend/content/extract";
 import { collectSource } from "@agidawn/backend/sources/collect";
-import { updateSource } from "@agidawn/backend/admin/sources";
+import { createSource, updateSource } from "@agidawn/backend/admin/sources";
 
 const T = tag();
 const LONG = `${"A card label that swallowed the summary of the article it links to, ".repeat(2)}${T}`;
@@ -83,6 +83,31 @@ after(async () => {
 const articles = (sourceId: string) =>
   sql<{ url: string; title: string; excerpt: string | null; published_at: Date | null; revision: number }[]>`
     SELECT url, title, excerpt, published_at, revision FROM articles WHERE source_id = ${sourceId} ORDER BY url`;
+
+test("new sources default to twelve-hour collection and retain an explicit interval", async () => {
+  for (const interval of [undefined, 90]) {
+    const sourceId = `test-interval-${interval ?? "default"}-${T}`;
+    const result = await createSource({ id: sourceId, name: sourceId, kind: "rss", config: { feedUrl: `${base}/${sourceId}.xml` },
+      ...(interval === undefined ? {} : { interval_minutes: interval }) }, "test");
+    assert.equal(result.created, true);
+    if (result.created) assert.equal(result.source.interval_minutes, interval ?? 720);
+  }
+  const [row] = await sql<{ interval_minutes: number }[]>`INSERT INTO sources (id, name, kind)
+    VALUES (${`test-db-interval-${T}`}, 'Database default', 'rss') RETURNING interval_minutes`;
+  assert.equal(row!.interval_minutes, 720);
+});
+
+test("failed collection never shortens a long source interval", async () => {
+  const sourceId = `test-failed-interval-${T}`;
+  await sql`INSERT INTO sources (id, name, kind, config, interval_minutes)
+    VALUES (${sourceId}, 'Long interval', 'rss', ${sql.json(SOURCES.unsupported.config)}, 720)`;
+  const result = await collectSource(sourceId, { force: true });
+  assert.equal(result.status, "failed");
+  assert.match(result.error ?? "", /unsupported config: adapter/);
+  const [row] = await sql<{ minutes: number }[]>`SELECT extract(epoch FROM next_fetch_at - last_fetch_at) / 60 AS minutes
+    FROM sources WHERE id = ${sourceId}`;
+  assert.equal(Number(row!.minutes), 720);
+});
 
 test("a config entry the collector does not implement fails the fetch instead of being ignored", async () => {
   const run = await collectSource(id("unsupported"), { force: true });

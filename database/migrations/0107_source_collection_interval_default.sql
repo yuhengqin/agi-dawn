@@ -1,0 +1,1 @@
+ALTER TABLE sources ALTER COLUMN interval_minutes SET DEFAULT 720;

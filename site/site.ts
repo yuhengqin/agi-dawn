@@ -24,8 +24,8 @@ export const ABOUT={
   termsAnchor:null as string|null,
 } as const;
 export const ADMIN={feedbackNote:null as string|null,banNote:null as string|null,budgetNote:null as string|null};
-export const ALERTS={quietMinutes:360,usualFlow:null as string|null,workerLogs:"看 worker 的日志（docker compose logs worker）"};
-export const SOURCE_DEFAULTS={siteFulltext:false};
+export const ALERTS={quietMinutes:1440,usualFlow:null as string|null,workerLogs:"看 worker 的日志（docker compose logs worker）"};
+export const SOURCE_DEFAULTS={intervalMinutes:720,siteFulltext:false};
 // Homepage shortcuts; unlisted categories keep their stored order after these entries.
 export const ARTICLE_NAVIGATION={
   categoryOrder:['智能体工程','AI 编程','产品与应用','评测与安全','系统与性能','观点与方法','待分类'] as string[],

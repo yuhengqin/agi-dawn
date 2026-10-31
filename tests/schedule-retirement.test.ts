@@ -15,14 +15,14 @@ after(async () => { await stopBoss(); await closeDb(); });
 test("retired schedules leave the current overview and execution queues while live jobs and history remain", async () => {
   let externalJobs = ["external.kept", "kept", "external.kept"];
   const boss = await getBoss();
-  const retired = ["cron.retired.scheduled", "cron.retired.unscheduled", "cron.paused", "cron.renamed.old","cron.content.translate","cron.hot.rank","cron.hot.snapshot","cron.stories.links","cron.reports.compose"];
+  const retired = ["cron.retired.scheduled", "cron.retired.unscheduled", "cron.paused", "cron.renamed.old","cron.content.translate","cron.hot.rank","cron.hot.snapshot","cron.stories.links","cron.reports.compose","cron.sources.adapt-intervals"];
   const retiredBusiness=["content.analyze","events.group","events.digest","notify.selected","media.prepare"];
   for (const name of [...retired, "cron.kept", "cron.renamed.new", "business.kept"]) {
     await boss.createQueue(name);
     await boss.send(name, { fixture: true }, { startAfter: "2099-01-01" });
   }
   for(const name of retiredBusiness){await boss.createQueue(name);await boss.send(name,{articleId:"retired-fixture"},{startAfter:"2099-01-01"});}
-  for (const name of [retired[0]!, "cron.paused", "cron.renamed.old"]) await boss.schedule(name, "0 0 1 1 *");
+  for (const name of [retired[0]!, "cron.paused", "cron.renamed.old", "cron.sources.adapt-intervals"]) await boss.schedule(name, "0 0 1 1 *");
   for (const name of retired) {
     await sql`INSERT INTO job_runs (job, status, finished_at) VALUES (${name.slice("cron.".length)}, 'failed', now())`;
   }
