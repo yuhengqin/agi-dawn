@@ -1,0 +1,137 @@
+{
+  "groups": [
+    {
+      "key": "field",
+      "name": "技术主题",
+      "blurb": "按实际阅读内容整理，可跨分类关联文章。"
+    }
+  ],
+  "topics": [
+    {
+      "slug": "harness-long-running",
+      "name": "Harness 与长任务",
+      "group": "field",
+      "definition": "Agent执行框架、任务循环、长时运行、进度保存与恢复的设计和实践。",
+      "tags": [
+        "Harness 与长任务"
+      ]
+    },
+    {
+      "slug": "multi-agent",
+      "name": "多智能体协作",
+      "group": "field",
+      "definition": "多Agent的分工、通信、协作、协调与并行执行。",
+      "tags": [
+        "多智能体协作"
+      ]
+    },
+    {
+      "slug": "context-memory",
+      "name": "上下文与记忆",
+      "group": "field",
+      "definition": "上下文组织、压缩、持久记忆及相关缓存设计。",
+      "tags": [
+        "上下文与记忆"
+      ]
+    },
+    {
+      "slug": "skills-extensions",
+      "name": "Skills 与扩展",
+      "group": "field",
+      "definition": "Skills、插件、hooks和mods的设计、维护与使用。",
+      "tags": [
+        "Skills 与扩展"
+      ]
+    },
+    {
+      "slug": "mcp-tool-use",
+      "name": "MCP 与工具调用",
+      "group": "field",
+      "definition": "MCP服务接入、工具接口设计、发现、调用和执行。",
+      "tags": [
+        "MCP 与工具调用"
+      ]
+    },
+    {
+      "slug": "evals-benchmarks",
+      "name": "评测与基准",
+      "group": "field",
+      "definition": "评测集、验证方法、基准解读、评测偏差及AI参与下的人员技术能力评估。",
+      "tags": [
+        "评测与基准"
+      ]
+    },
+    {
+      "slug": "security-permissions",
+      "name": "安全与权限",
+      "group": "field",
+      "definition": "攻防、沙箱、文件与网络权限以及访问控制。",
+      "tags": [
+        "安全与权限"
+      ]
+    },
+    {
+      "slug": "code-review-maintenance",
+      "name": "软件维护与审查",
+      "group": "field",
+      "definition": "代码审查、开源及文档维护、软件质量工作流。",
+      "tags": [
+        "软件维护与审查"
+      ]
+    },
+    {
+      "slug": "frontend-interaction",
+      "name": "前端与交互",
+      "group": "field",
+      "definition": "前端实现、页面与应用界面、游戏交互及ChatGPT Apps交互设计。",
+      "tags": [
+        "前端与交互"
+      ]
+    },
+    {
+      "slug": "realtime-voice",
+      "name": "实时语音",
+      "group": "field",
+      "definition": "实时语音API、语音产品及语音实时传输系统。",
+      "tags": [
+        "实时语音"
+      ]
+    },
+    {
+      "slug": "performance-cost",
+      "name": "性能与成本",
+      "group": "field",
+      "definition": "延迟、吞吐、缓存、推理效率、任务成本及预算取舍。",
+      "tags": [
+        "性能与成本"
+      ]
+    },
+    {
+      "slug": "data-infrastructure",
+      "name": "数据与基础设施",
+      "group": "field",
+      "definition": "数据库、存储、网络、平台可靠性、基础设施故障及数据系统。",
+      "tags": [
+        "数据与基础设施"
+      ]
+    },
+    {
+      "slug": "productivity-organization",
+      "name": "工程效率与组织",
+      "group": "field",
+      "definition": "人机协作、团队流程、生产力、组织结构与软件工作方式。",
+      "tags": [
+        "工程效率与组织"
+      ]
+    },
+    {
+      "slug": "prompting-model-use",
+      "name": "提示词与模型使用",
+      "group": "field",
+      "definition": "提示词、模型选择、effort等设置及使用效果取舍。",
+      "tags": [
+        "提示词与模型使用"
+      ]
+    }
+  ]
+}

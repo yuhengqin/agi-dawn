@@ -1,0 +1,60 @@
+{
+  "$comment": "AGI黎明来源；已存在的配置不会被seed覆盖。首次最多30篇、近12个月（受上游列表窗口限制），公开全文许可未确认，site_fulltext默认关闭。栏目范围与接入证据见docs/reader/source-inventory.md。",
+  "sources": [
+    {
+      "id": "sshh-blog", "name": "Shrivu’s Substack", "kind": "rss",
+      "config": {"feedUrl": "https://blog.sshh.io/feed", "publishedAtUtcOffset": "+00:00", "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "tier": "T2", "participation_mode": "editorial", "interval_minutes": 120, "tags": [], "site_fulltext": false
+    },
+    {
+      "id": "openai-developer-blog", "name": "OpenAI Developer Blog", "kind": "web_list",
+      "config": {"url": "https://developers.openai.com/blog", "parseMode": "html", "itemSelector": "main a.resource-item[href^='/blog/']", "titleSelector": ".line-clamp-2", "allowUrlPrefixes": ["https://developers.openai.com/blog/"], "denyUrlPrefixes": ["https://developers.openai.com/blog/categories/"], "publishedAtUtcOffset": "+00:00", "detail": {"maxFetches": 30, "titleSelector": "h1", "titleAuthoritative": true, "publishedAtSelector": "main header span.text-default.font-medium", "authorSelector": "main header p:has(> span.font-medium)", "preserve": [{"selector": "pre[data-language]", "as": "pre", "code": "code"}]}, "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "tier": "T1", "participation_mode": "editorial", "interval_minutes": 120, "tags": [], "site_fulltext": false
+    },
+    {
+      "id": "openai-engineering", "name": "OpenAI 工程（英文 RSS）", "kind": "rss",
+      "config": {"feedUrl": "https://openai.com/news/rss.xml", "allowCategories": ["Engineering"], "publishedAtUtcOffset": "+00:00", "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "tier": "T1", "participation_mode": "editorial", "interval_minutes": 120, "tags": [], "site_fulltext": false
+    },
+    {
+      "id": "anthropic-engineering", "name": "Anthropic Engineering", "kind": "web_list",
+      "config": {"url": "https://www.anthropic.com/engineering", "parseMode": "html", "itemSelector": "main article[data-listing-row]", "linkSelector": "h3 a[href]", "titleSelector": "h3", "publishedAtSelector": "time", "publishedAtUtcOffset": "+00:00", "detail": {"maxFetches": 30, "preserve": [{"selector": "[class*='CodeBlock-module'][class$='__container']", "as": "pre", "code": "pre code"}]}, "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "tier": "T1", "participation_mode": "editorial", "interval_minutes": 120, "tags": [], "site_fulltext": false
+    },
+    {
+      "id": "claude-dev", "name": "claude.dev", "kind": "rss",
+      "config": {"feedUrl": "https://claude.dev/rss.xml", "publishedAtUtcOffset": "+00:00", "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "tier": "T1", "participation_mode": "editorial", "interval_minutes": 120, "tags": [], "site_fulltext": false
+    },
+    {
+      "id": "latent-patterns", "name": "Latent Patterns", "kind": "rss",
+      "config": {"feedUrl": "https://latentpatterns.com/rss.xml", "publishedAtUtcOffset": "+00:00", "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "tier": "T2", "participation_mode": "editorial", "interval_minutes": 120, "tags": [], "site_fulltext": false
+    },
+    {
+      "id": "google-developers-ai", "name": "Google Developers Blog · AI", "kind": "web_list",
+      "config": {"url": "https://developers.googleblog.com/search/?technology_categories=AI", "parseMode": "html", "itemSelector": ".search-result", "linkSelector": ".search-result__title a", "titleSelector": ".search-result__title", "publishedAtSelector": ".search-result__eyebrow", "allowUrlPrefixes": ["https://developers.googleblog.com/"], "publishedAtUtcOffset": "+00:00", "acceptLanguage": "en-US,en;q=0.9", "detail": {"maxFetches": 30, "summarySelector": "meta[name='description']"}, "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "tier": "T1", "participation_mode": "editorial", "interval_minutes": 120, "tags": [], "site_fulltext": false
+    },
+    {
+      "id": "uber-ai", "name": "Uber Engineering · AI / ML", "kind": "web_list",
+      "config": {"url": "https://www.uber.com/us/en/blog/engineering/uber-ai/", "parseMode": "html", "itemSelector": "[data-testid='newsroom-article-feed-card']:has(span[title='AI / ML'])", "linkSelector": "a:not([aria-hidden])", "titleSelector": "a:not([aria-hidden])", "publishedAtSelector": "[data-baseweb='block'] > div:last-child", "allowUrlPrefixes": ["https://www.uber.com/us/en/blog/"], "publishedAtUtcOffset": "+00:00", "acceptLanguage": "en-US,en;q=0.9", "detail": {"maxFetches": 30, "summarySelector": "meta[name='description']"}, "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "tier": "T1", "participation_mode": "editorial", "interval_minutes": 120, "tags": [], "site_fulltext": false
+    },
+    {
+      "id": "geoffrey-huntley", "name": "Geoffrey Huntley", "kind": "rss",
+      "config": {"feedUrl": "https://ghuntley.com/rss/", "publishedAtUtcOffset": "+00:00", "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "tier": "T2", "participation_mode": "editorial", "interval_minutes": 120, "tags": [], "site_fulltext": false
+    },
+    {
+      "id": "browser-use-engineering", "name": "Browser Use · Engineering", "kind": "json_list",
+      "config": {"url": "https://browser-use.com/posts", "mode": "html_json_key", "jsonKey": "posts", "titlePaths": ["title"], "summaryPaths": ["description"], "authorPaths": ["author"], "publishedAtPath": "date", "publishedAtUtcOffset": "+00:00", "urlTemplate": "https://browser-use.com{raw:url}", "requireBoolean": {"path": "category", "equals": "Engineering"}, "allowUrlPrefixes": ["https://browser-use.com/posts/"], "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "tier": "T1", "participation_mode": "editorial", "interval_minutes": 120, "tags": [], "site_fulltext": false
+    },
+    {
+      "id": "microsoft-blog", "name": "The Official Microsoft Blog", "kind": "rss",
+      "config": {"feedUrl": "https://blogs.microsoft.com/feed/", "publishedAtUtcOffset": "+00:00", "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "tier": "T1", "participation_mode": "editorial", "interval_minutes": 120, "tags": [], "site_fulltext": false
+    }
+  ]
+}

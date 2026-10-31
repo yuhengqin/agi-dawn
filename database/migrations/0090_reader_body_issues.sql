@@ -1,0 +1,1 @@
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS body_issues jsonb NOT NULL DEFAULT '[]';

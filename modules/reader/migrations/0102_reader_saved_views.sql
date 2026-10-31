@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS reader_saved_views (id text PRIMARY KEY, name text NOT NULL UNIQUE CHECK (length(name) BETWEEN 1 AND 60), filters jsonb NOT NULL CHECK (jsonb_typeof(filters) = 'object'), version integer NOT NULL DEFAULT 1, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());

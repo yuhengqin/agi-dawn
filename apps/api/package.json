@@ -1,0 +1,20 @@
+{
+  "name": "@agidawn/api",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=../../.env src/main.ts",
+    "start": "node src/main.ts"
+  },
+  "dependencies": {
+    "@agidawn/backend": "*",
+    "@agidawn/contracts": "*",
+    "@agidawn/industry": "*",
+    "@agidawn/site": "*",
+    "fastify": "5.12.7",
+    "zod": "4.6.5"
+  }
+}

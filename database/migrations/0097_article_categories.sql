@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS article_categories (id text PRIMARY KEY, name text NOT NULL UNIQUE CHECK (length(name) BETWEEN 1 AND 60), version integer NOT NULL DEFAULT 1, updated_at timestamptz NOT NULL DEFAULT now());

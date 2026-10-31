@@ -1,0 +1,12 @@
+{
+  "name": "@agidawn/contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@agidawn/industry": "*",
+    "@agidawn/site": "*"
+  }
+}

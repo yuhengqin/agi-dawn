@@ -1,0 +1,35 @@
+# One image for every role: setup (migrations and seed), api, worker and web.
+# Build arg NPM_REGISTRY switches the npm registry (e.g. https://registry.npmmirror.com in mainland China).
+FROM node:24-trixie-slim AS base
+WORKDIR /app
+# pg_dump for the optional database backups (Debian's client matches the PostgreSQL 17 server in compose).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends postgresql-client ca-certificates python3 python3-venv \
+ && rm -rf /var/lib/apt/lists/*
+COPY deploy/curl-cffi-requirements.txt /opt/curl-cffi-requirements.txt
+RUN python3 -m venv /opt/curl-cffi \
+ && /opt/curl-cffi/bin/pip install --no-cache-dir --only-binary=:all: -r /opt/curl-cffi-requirements.txt
+ENV CURL_CFFI_PYTHON=/opt/curl-cffi/bin/python
+
+FROM base AS build
+ARG NPM_REGISTRY=
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+COPY apps/worker/package.json apps/worker/
+COPY packages/backend/package.json packages/backend/
+COPY packages/contracts/package.json packages/contracts/
+COPY industry/package.json industry/
+COPY site/package.json site/
+COPY modules/reader/package.json modules/reader/
+RUN npm ci --no-audit --no-fund ${NPM_REGISTRY:+--registry=$NPM_REGISTRY}
+COPY . .
+RUN npm run build -w @agidawn/web && npm prune --omit=dev --no-audit --no-fund
+
+FROM base
+ENV NODE_ENV=production
+COPY --from=build --chown=node:node /app /app
+RUN mkdir -p /data && chown node:node /data
+USER node
+EXPOSE 3000
+CMD ["node", "apps/web/server.ts"]

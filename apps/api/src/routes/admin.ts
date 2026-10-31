@@ -1,0 +1,101 @@
+// /api/admin/*: queries are GET, creation POST, edits PATCH, business commands POST.
+// Every route goes through adminHandler (session + CSRF); manual changes are audited in the modules.
+import { readFile } from "node:fs/promises";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { AdminSourceUpdate } from "@agidawn/contracts/admin";
+import { actorOf } from "@agidawn/backend/admin/auth";
+import { navCounts } from "@agidawn/backend/admin/navigation";
+import { listAudit } from "@agidawn/backend/audit";
+import { contentChain, overrideFields, rerun, searchContent, setSeoIndexed, setVisibility } from "@agidawn/backend/admin/content";
+import { banFeedbackEmail, banSource, eraseFeedback, feedbackScreenshot, listFeedback, unbanSource, updateFeedback } from "@agidawn/backend/admin/feedback";
+import { requeueFailedArticles, runsOverview } from "@agidawn/backend/admin/runs";
+import { releaseReceipt } from "@agidawn/backend/operations/recover";
+import { replaceContactQr, settingsOverview, updateBudget } from "@agidawn/backend/admin/settings";
+import { createSource, fetchNow, listSources, previewSource, previewStoredSource, sourceDetail, updateSource } from "@agidawn/backend/admin/sources";
+import { sendProblem } from "../http/respond.ts";
+import { adminHandler } from "./admin-auth.ts";
+
+// What every admin route reads its request with (the modules' admin routes too).
+type Q = Record<string, string | undefined>;
+export const q = (req: FastifyRequest) => req.query as Q;
+export const body = <T = Record<string, unknown>>(req: FastifyRequest) => (req.body ?? {}) as T;
+export const param = (req: FastifyRequest, name: string) => (req.params as Record<string, string>)[name]!;
+const notFound = (req: FastifyRequest, reply: FastifyReply) => sendProblem(req, reply, { status: 404, code: "not_found", detail: "Not found." });
+export const orNotFound = <T>(req: FastifyRequest, reply: FastifyReply, value: T | null) => (value === null || value === undefined ? notFound(req, reply) : value);
+export const page = (req: FastifyRequest) => Math.max(1, Number(q(req).page) || 1);
+
+function decodeImage(dataUrl: unknown): Buffer {
+  const m = /^data:image\/(png|jpeg|webp);base64,(.+)$/s.exec(String(dataUrl ?? ""));
+  if (!m) throw Object.assign(new Error("image must be a PNG, JPEG or WebP data URL"), { statusCode: 400 });
+  return Buffer.from(m[2]!, "base64");
+}
+
+export function registerAdmin(app: FastifyInstance) {
+  // Sources
+  app.get("/api/admin/sources", adminHandler(async (req) => {
+    const f = q(req);
+    return listSources({ q: f.q, kind: f.kind, health: f.health, mode: f.mode, enabled: f.enabled as "true" | "false" | undefined, page: page(req) });
+  }));
+  app.post("/api/admin/sources", adminHandler(async (req, _reply, admin) => createSource(body(req), actorOf(admin))));
+  app.post("/api/admin/sources/preview", adminHandler(async (req) => previewSource(body(req) as never)));
+  app.get("/api/admin/sources/:id", adminHandler(async (req, reply) => orNotFound(req, reply, await sourceDetail(param(req, "id")))));
+  app.patch("/api/admin/sources/:id", adminHandler(async (req, reply, admin) => {
+    const b = body<AdminSourceUpdate>(req);
+    return orNotFound(req, reply, await updateSource(param(req, "id"), b, actorOf(admin)));
+  }));
+  app.post("/api/admin/sources/:id/preview", adminHandler(async (req, reply) => orNotFound(req, reply, await previewStoredSource(param(req, "id")))));
+  app.post("/api/admin/sources/:id/fetch", adminHandler(async (req, reply, admin) => orNotFound(req, reply, await fetchNow(param(req, "id"), actorOf(admin)))));
+
+  // Content and events
+  app.get("/api/admin/content", adminHandler(async (req) => ({ rows: await searchContent(q(req).q ?? "") })));
+  app.get("/api/admin/content/:id", adminHandler(async (req, reply) => orNotFound(req, reply, await contentChain(param(req, "id")))));
+  app.post("/api/admin/content/:id/visibility", adminHandler(async (req, _reply, admin) => setVisibility(param(req, "id"), body(req) as never, actorOf(admin))));
+  app.post("/api/admin/content/:id/seo", adminHandler(async (req, reply, admin) => orNotFound(req, reply, await setSeoIndexed(param(req, "id"), body(req) as never, actorOf(admin)))));
+  app.post("/api/admin/content/:id/override", adminHandler(async (req, _reply, admin) => overrideFields(param(req, "id"), body(req) as never, actorOf(admin))));
+  app.post("/api/admin/content/:id/rerun", adminHandler(async (req, reply, admin) => {
+    const b = body<{step:"extract"}>(req);
+    const requestId = String(req.headers["idempotency-key"] ?? "");
+    return orNotFound(req, reply, await rerun(param(req, "id"), b.step, requestId, actorOf(admin)));
+  }));
+
+  // Feedback
+  app.get("/api/admin/feedback", adminHandler(async (req) => listFeedback({ status: q(req).status, q: q(req).q, page: page(req) })));
+  app.patch("/api/admin/feedback/:id", adminHandler(async (req, reply, admin) => orNotFound(req, reply, await updateFeedback(Number(param(req, "id")), body(req) as never, actorOf(admin)))));
+  app.post("/api/admin/feedback/:id/erase", adminHandler(async (req, reply, admin) => orNotFound(req, reply, await eraseFeedback(Number(param(req, "id")), String(body(req).reason ?? ""), actorOf(admin)))));
+  app.get("/api/admin/feedback/:id/screenshot", adminHandler(async (req, reply) => {
+    const file = await feedbackScreenshot(Number(param(req, "id")));
+    const data = file ? await readFile(file).catch(() => null) : null;
+    if (!data) return notFound(req, reply);
+    const ext = file!.split(".").pop();
+    return reply.type(ext === "jpeg" || ext === "jpg" ? "image/jpeg" : `image/${ext}`).send(data);
+  }));
+  app.post("/api/admin/feedback-bans", adminHandler(async (req, reply, admin) => {
+    const b = body<{ sourceHash: string; feedbackId?: number; reason: string }>(req);
+    if (b.feedbackId !== undefined) await banFeedbackEmail(b.feedbackId, b.reason, actorOf(admin));
+    else await banSource(b.sourceHash, b.reason, actorOf(admin));
+    return reply.code(204).send();
+  }));
+  app.delete("/api/admin/feedback-bans/:hash", adminHandler(async (req, reply, admin) => {
+    await unbanSource(param(req, "hash"), actorOf(admin));
+    return reply.code(204).send();
+  }));
+
+  // Runs
+  app.get("/api/admin/runs", adminHandler(async () => runsOverview()));
+  app.post("/api/admin/receipts/:id/release", adminHandler(async (req, reply, admin) => orNotFound(req, reply, await releaseReceipt(Number(param(req, "id")), body(req) as never, actorOf(admin)))));
+  app.post("/api/admin/processing/requeue", adminHandler(async (req, _reply, admin) => requeueFailedArticles(body(req) as never, actorOf(admin))));
+
+  // Settings
+  app.get("/api/admin/settings", adminHandler(async () => settingsOverview()));
+  app.post("/api/admin/settings/contact-qr", adminHandler(async (req, _reply, admin) => {
+    const b = body<{ slot: "wechatQr" | "feishuQr"; image: string }>(req);
+    return replaceContactQr({ slot: b.slot, data: decodeImage(b.image) }, actorOf(admin));
+  }));
+  app.put("/api/admin/budgets/:service", adminHandler(async (req, _reply, admin) => updateBudget(param(req, "service"), body(req) as never, actorOf(admin))));
+
+
+
+  // Attention counts for the navigation, and the audit trail.
+  app.get("/api/admin/nav-counts", adminHandler(async () => navCounts()));
+  app.get("/api/admin/audit", adminHandler(async (req) => listAudit({ subject: q(req).subject, action: q(req).action, page: page(req) })));
+}

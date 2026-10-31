@@ -1,0 +1,1019 @@
+{
+  "snapshotAt": "2026-10-27T22:17:57.628Z",
+  "categories": [
+    {
+      "key": "agent-engineering",
+      "name": "智能体工程"
+    },
+    {
+      "key": "ai-coding",
+      "name": "AI 编程"
+    },
+    {
+      "key": "products-applications",
+      "name": "产品与应用"
+    },
+    {
+      "key": "evaluation-security",
+      "name": "评测与安全"
+    },
+    {
+      "key": "systems-performance",
+      "name": "系统与性能"
+    },
+    {
+      "key": "ideas-methods",
+      "name": "观点与方法"
+    }
+  ],
+  "articles": [
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/redesigning-source-control",
+      "title": "Redesigning source control at Anthropic",
+      "category": "systems-performance",
+      "topics": [
+        "data-infrastructure"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/how-we-contain-claude",
+      "title": "How we contain Claude across products",
+      "category": "evaluation-security",
+      "topics": [
+        "security-permissions"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/april-23-postmortem",
+      "title": "An update on recent Claude Code quality reports",
+      "category": "systems-performance",
+      "topics": [
+        "context-memory"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/managed-agents",
+      "title": "Scaling Managed Agents: Decoupling the brain from the hands",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/claude-code-auto-mode",
+      "title": "How we built Claude Code auto mode: a safer way to skip permissions",
+      "category": "evaluation-security",
+      "topics": [
+        "security-permissions"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/harness-design-long-running-apps",
+      "title": "Harness design for long-running application development",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running",
+        "multi-agent",
+        "evals-benchmarks",
+        "frontend-interaction"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/eval-awareness-browsecomp",
+      "title": "Eval awareness in Claude Opus 4.6’s BrowseComp performance",
+      "category": "evaluation-security",
+      "topics": [
+        "evals-benchmarks"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/building-c-compiler",
+      "title": "Building a C compiler with a team of parallel Claudes",
+      "category": "ai-coding",
+      "topics": [
+        "multi-agent"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/infrastructure-noise",
+      "title": "Quantifying infrastructure noise in agentic coding evals",
+      "category": "evaluation-security",
+      "topics": [
+        "evals-benchmarks"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/AI-resistant-technical-evaluations",
+      "title": "Designing AI-resistant technical evaluations",
+      "category": "evaluation-security",
+      "topics": [
+        "evals-benchmarks"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/demystifying-evals-for-ai-agents",
+      "title": "Demystifying evals for AI agents",
+      "category": "evaluation-security",
+      "topics": [
+        "evals-benchmarks"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/effective-harnesses-for-long-running-agents",
+      "title": "Effective harnesses for long-running agents",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running",
+        "context-memory"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/advanced-tool-use",
+      "title": "Introducing advanced tool use on the Claude Developer Platform",
+      "category": "agent-engineering",
+      "topics": [
+        "mcp-tool-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "anthropic-engineering",
+      "url": "https://www.anthropic.com/research/code-execution-with-mcp",
+      "title": "Code execution with MCP: Building more efficient agents",
+      "category": "agent-engineering",
+      "topics": [
+        "context-memory",
+        "mcp-tool-use",
+        "performance-cost"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/solving-code-review-at-anthropic/",
+      "title": "How the Claude Code team does code review",
+      "category": "ai-coding",
+      "topics": [
+        "code-review-maintenance",
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/building-effective-agent-automations/",
+      "title": "Building effective agent automations",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/claude-code-in-the-cloud/",
+      "title": "Claude Code in the cloud: a field guide to cloud sessions",
+      "category": "ai-coding",
+      "topics": [],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/getting-started-with-claude-code-mods/",
+      "title": "Getting started with Claude Code mods",
+      "category": "ai-coding",
+      "topics": [
+        "skills-extensions"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/automating-eval-design-and-hillclimbing/",
+      "title": "Automating eval design and hillclimbing with Claude",
+      "category": "evaluation-security",
+      "topics": [
+        "evals-benchmarks"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/building-with-claude-sonnet-5-5/",
+      "title": "Building with Claude Sonnet 5.5",
+      "category": "products-applications",
+      "topics": [
+        "performance-cost",
+        "prompting-model-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/what-a-task-costs-on-opus-5-5/",
+      "title": "What a task costs on Opus 5.5",
+      "category": "ai-coding",
+      "topics": [
+        "performance-cost",
+        "prompting-model-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/spending-your-effort/",
+      "title": "Using Claude Code: Spending your effort",
+      "category": "ai-coding",
+      "topics": [
+        "evals-benchmarks",
+        "performance-cost",
+        "prompting-model-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/how-we-made-claude-ai-faster/",
+      "title": "How we made claude.ai 3x faster in two weeks",
+      "category": "systems-performance",
+      "topics": [
+        "performance-cost"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/getting-the-most-out-of-opus-5-5/",
+      "title": "Getting the most out of Opus 5.5 in Claude and Claude Code",
+      "category": "products-applications",
+      "topics": [
+        "prompting-model-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models/",
+      "title": "The new rules of context engineering for Claude 5 generation models",
+      "category": "agent-engineering",
+      "topics": [
+        "context-memory"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/lessons-from-building-claude-code-how-we-use-skills/",
+      "title": "Lessons from building Claude Code: How we use skills",
+      "category": "agent-engineering",
+      "topics": [
+        "skills-extensions"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code/",
+      "title": "A harness for every task: dynamic workflows in Claude Code",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running",
+        "multi-agent"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/using-claude-code-the-unreasonable-effectiveness-of-html/",
+      "title": "Using Claude Code: The unreasonable effectiveness of HTML",
+      "category": "products-applications",
+      "topics": [
+        "frontend-interaction"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/lessons-from-building-claude-code-prompt-caching-is-everything/",
+      "title": "Lessons from building Claude Code: Prompt caching is everything",
+      "category": "systems-performance",
+      "topics": [
+        "context-memory",
+        "performance-cost"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "claude-dev",
+      "url": "https://claude.dev/blog/seeing-like-an-agent/",
+      "title": "Seeing like an agent: how we design tools in Claude Code",
+      "category": "agent-engineering",
+      "topics": [
+        "mcp-tool-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/designing-failover-across-openai-model-providers",
+      "title": "Designing failover across OpenAI model providers",
+      "category": "systems-performance",
+      "topics": [
+        "data-infrastructure"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/maintaining-software-with-the-gpt-6-family",
+      "title": "Maintaining software with the GPT-6 family",
+      "category": "ai-coding",
+      "topics": [
+        "code-review-maintenance"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/bringing-my-led-display-to-life",
+      "title": "Bringing my LED display to life with GPT-Live-1 and Codex",
+      "category": "products-applications",
+      "topics": [
+        "realtime-voice"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra",
+      "title": "Rethinking skills and prompts for GPT-6 Astra",
+      "category": "agent-engineering",
+      "topics": [
+        "context-memory",
+        "skills-extensions",
+        "prompting-model-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/architectural-visualization-with-astra",
+      "title": "Architectural visualization with Astra",
+      "category": "products-applications",
+      "topics": [
+        "prompting-model-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/how-to-build-games-with-astra",
+      "title": "Building games with Astra",
+      "category": "ai-coding",
+      "topics": [
+        "frontend-interaction",
+        "prompting-model-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/rosalind-workbench",
+      "title": "Meet Rosalind Workbench: Empowering every scientist to be their own research team",
+      "category": "products-applications",
+      "topics": [],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/build-week-winners",
+      "title": "Meet the winners of OpenAI Build Week",
+      "category": "products-applications",
+      "topics": [],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/automating-repetitive-work-at-openai-with-codex",
+      "title": "Automating repetitive work at OpenAI with Codex",
+      "category": "ai-coding",
+      "topics": [
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/scaling-cyber-defenders-with-daybreak",
+      "title": "Scaling cyber defenders with Daybreak",
+      "category": "evaluation-security",
+      "topics": [
+        "security-permissions"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/codex-as-a-platform",
+      "title": "Codex as a platform: build on the open agent harness",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/custom-code-review-rules-for-codex",
+      "title": "Custom Code Review rules for Codex",
+      "category": "ai-coding",
+      "topics": [
+        "code-review-maintenance"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/connect-private-mcp-servers-to-openai-products",
+      "title": "Making private MCP servers reachable without making them public",
+      "category": "evaluation-security",
+      "topics": [
+        "mcp-tool-use",
+        "security-permissions"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/mastering-codex-remote-for-engineering",
+      "title": "Mastering remote engineering work from your phone",
+      "category": "ai-coding",
+      "topics": [],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/realtime-perplexity-computer",
+      "title": "How Perplexity Brought Voice Search to Millions Using the Realtime API",
+      "category": "products-applications",
+      "topics": [
+        "realtime-voice"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/designing-delightful-frontends-with-gpt-5-4",
+      "title": "Designing delightful frontends with GPT-5.4",
+      "category": "ai-coding",
+      "topics": [
+        "frontend-interaction",
+        "prompting-model-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/one-year-of-responses",
+      "title": "From prompts to products: One year of Responses",
+      "category": "products-applications",
+      "topics": [],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/skills-agents-sdk",
+      "title": "Using skills to accelerate OSS maintenance",
+      "category": "ai-coding",
+      "topics": [
+        "skills-extensions",
+        "code-review-maintenance",
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/building-frontend-uis-with-codex-and-figma",
+      "title": "Building frontend UIs with Codex and Figma",
+      "category": "ai-coding",
+      "topics": [
+        "mcp-tool-use",
+        "frontend-interaction"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/run-long-horizon-tasks-with-codex",
+      "title": "Run long horizon tasks with Codex",
+      "category": "ai-coding",
+      "topics": [
+        "harness-long-running",
+        "prompting-model-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/skills-shell-tips",
+      "title": "Shell + Skills + Compaction: Tips for long-running agents that do real work",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running",
+        "context-memory",
+        "skills-extensions"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/15-lessons-building-chatgpt-apps",
+      "title": "15 lessons learned building ChatGPT Apps",
+      "category": "products-applications",
+      "topics": [
+        "frontend-interaction"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/eval-skills",
+      "title": "Testing Agent Skills Systematically with Evals",
+      "category": "evaluation-security",
+      "topics": [
+        "skills-extensions",
+        "evals-benchmarks"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/skyscanner-codex-jetbrains-mcp",
+      "title": "Supercharging Codex with JetBrains MCP at Skyscanner",
+      "category": "ai-coding",
+      "topics": [
+        "mcp-tool-use",
+        "code-review-maintenance"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/openai-for-developers-2025",
+      "title": "OpenAI for Developers in 2025",
+      "category": "products-applications",
+      "topics": [],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/updates-audio-models",
+      "title": "Updates for developers building with voice",
+      "category": "products-applications",
+      "topics": [
+        "realtime-voice"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/what-makes-a-great-chatgpt-app",
+      "title": "What makes a great ChatGPT app",
+      "category": "products-applications",
+      "topics": [
+        "frontend-interaction"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/codex-for-documentation-dagster",
+      "title": "Using Codex for education at Dagster Labs",
+      "category": "ai-coding",
+      "topics": [
+        "code-review-maintenance",
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/codex-at-devday",
+      "title": "How Codex ran OpenAI DevDay 2025",
+      "category": "ai-coding",
+      "topics": [
+        "mcp-tool-use",
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/responses-api",
+      "title": "Why we built the Responses API",
+      "category": "agent-engineering",
+      "topics": [
+        "mcp-tool-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/realtime-api",
+      "title": "Developer notes on the Realtime API",
+      "category": "products-applications",
+      "topics": [
+        "realtime-voice"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-developer-blog",
+      "url": "https://developers.openai.com/blog/intro",
+      "title": "Hello, world!",
+      "category": null,
+      "topics": [],
+      "provisional": false
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/scaling-storage-one-billion-users-part-two",
+      "title": "Rapidly scaling online storage to serve over 1 billion ChatGPT users (Part II)",
+      "category": "systems-performance",
+      "topics": [
+        "performance-cost",
+        "data-infrastructure"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/building-chatgpt-ad-stack",
+      "title": "How we built ChatGPT’s novel ad stack for user trust and relevance",
+      "category": "products-applications",
+      "topics": [],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/scaling-storage-one-billion-users-part-one",
+      "title": "Rapidly scaling online storage to serve over 1 billion ChatGPT users",
+      "category": "systems-performance",
+      "topics": [
+        "performance-cost",
+        "data-infrastructure"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/jalapeno-first-results",
+      "title": "Jalapeño’s first results show industry-leading speed and efficiency in AI inference",
+      "category": "systems-performance",
+      "topics": [
+        "performance-cost",
+        "data-infrastructure"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/continuous-voice-interaction-with-gpt-live",
+      "title": "How we built a realtime system for responsive voice AI in six months",
+      "category": "systems-performance",
+      "topics": [
+        "realtime-voice",
+        "performance-cost"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/gpt-5-6-frontier-intelligence-efficiency",
+      "title": "How GPT-5.6 fuses frontier intelligence with frontier efficiency",
+      "category": "systems-performance",
+      "topics": [
+        "performance-cost"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/core-dump-epidemiology-data-infrastructure-bug",
+      "title": "Core dump epidemiology: fixing an 18-year-old bug",
+      "category": "systems-performance",
+      "topics": [
+        "data-infrastructure"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/building-self-improving-tax-agents-with-codex",
+      "title": "Building self-improving tax agents with Codex",
+      "category": "products-applications",
+      "topics": [],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/building-codex-windows-sandbox",
+      "title": "Building a safe, effective sandbox to enable Codex on Windows",
+      "category": "evaluation-security",
+      "topics": [
+        "security-permissions"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/mrc-supercomputer-networking",
+      "title": "Unlocking large scale AI training networks with MRC (Multipath Reliable Connection)",
+      "category": "systems-performance",
+      "topics": [
+        "performance-cost",
+        "data-infrastructure"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/delivering-low-latency-voice-ai-at-scale",
+      "title": "How OpenAI delivers low-latency voice AI at scale",
+      "category": "systems-performance",
+      "topics": [
+        "realtime-voice",
+        "performance-cost",
+        "data-infrastructure"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/open-source-codex-orchestration-symphony",
+      "title": "An open-source spec for orchestration: Symphony",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running",
+        "multi-agent"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/speeding-up-agentic-workflows-with-websockets",
+      "title": "Speeding up agentic workflows with WebSockets in the Responses API",
+      "category": "systems-performance",
+      "topics": [
+        "performance-cost",
+        "data-infrastructure"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/equip-responses-api-computer-environment",
+      "title": "From model to agent: Equipping the Responses API with a computer environment",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running",
+        "mcp-tool-use",
+        "security-permissions"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/beyond-rate-limits",
+      "title": "Beyond rate limits: scaling access to Codex and Sora",
+      "category": "systems-performance",
+      "topics": [
+        "performance-cost",
+        "data-infrastructure"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/harness-engineering",
+      "title": "Harness engineering: leveraging Codex in an agent-first world",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/unlocking-the-codex-harness",
+      "title": "Unlocking the Codex harness: how we built the App Server",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/inside-our-in-house-data-agent",
+      "title": "Inside OpenAI’s in-house data agent",
+      "category": "products-applications",
+      "topics": [
+        "context-memory",
+        "data-infrastructure"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/unrolling-the-codex-agent-loop",
+      "title": "Unrolling the Codex agent loop",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running",
+        "mcp-tool-use"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/scaling-postgresql",
+      "title": "Scaling PostgreSQL to power 800 million ChatGPT users",
+      "category": "systems-performance",
+      "topics": [
+        "performance-cost",
+        "data-infrastructure"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "openai-engineering",
+      "url": "https://openai.com/index/shipping-sora-for-android-with-codex",
+      "title": "How We Used Codex to Ship Sora for Android in 28 Days",
+      "category": "ai-coding",
+      "topics": [
+        "multi-agent",
+        "productivity-organization"
+      ],
+      "provisional": true
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/i-asked-100-agents-to-hack-me",
+      "title": "I Asked 100 Agents to Hack Me",
+      "category": "evaluation-security",
+      "topics": [
+        "evals-benchmarks",
+        "security-permissions"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/the-harness-is-the-company",
+      "title": "The Harness Is the Company",
+      "category": "ideas-methods",
+      "topics": [
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/how-i-use-ai-in-2026-coding-writing",
+      "title": "How I use AI in 2026 (Coding, Writing, Learning, Assistant-ing)",
+      "category": "ideas-methods",
+      "topics": [
+        "productivity-organization",
+        "prompting-model-use"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/exploring-claudegpt-knowledge-cutoffs",
+      "title": "Exploring Claude/GPT Knowledge Cutoffs & Pre-training Timelines",
+      "category": "evaluation-security",
+      "topics": [
+        "evals-benchmarks"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/designing-software-for-software-factories",
+      "title": "Designing Software for Software Factories",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running",
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/how-ai-productivity-fails",
+      "title": "How AI Productivity Fails",
+      "category": "ideas-methods",
+      "topics": [
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/the-transposed-organization",
+      "title": "The Transposed Organization",
+      "category": "ideas-methods",
+      "topics": [
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/taste-is-not-a-moat",
+      "title": "Taste Is Not a Moat",
+      "category": "ideas-methods",
+      "topics": [
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/move-faster",
+      "title": "Move Faster",
+      "category": "ideas-methods",
+      "topics": [
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/building-multi-agent-systems-part-c0c",
+      "title": "Building Multi-Agent Systems (Part 3)",
+      "category": "agent-engineering",
+      "topics": [
+        "harness-long-running",
+        "multi-agent"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/most-code-is-just-cache",
+      "title": "Most Code is Just Cache",
+      "category": "ideas-methods",
+      "topics": [
+        "productivity-organization"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/understanding-ai-benchmarks",
+      "title": "Understanding AI Benchmarks",
+      "category": "evaluation-security",
+      "topics": [
+        "evals-benchmarks"
+      ],
+      "provisional": false
+    },
+    {
+      "sourceId": "sshh-blog",
+      "url": "https://blog.sshh.io/p/how-i-use-every-claude-code-feature",
+      "title": "How I Use Every Claude Code Feature",
+      "category": "ai-coding",
+      "topics": [],
+      "provisional": false
+    }
+  ]
+}

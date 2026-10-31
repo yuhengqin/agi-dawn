@@ -1,0 +1,15 @@
+{
+  "name": "@agidawn/site",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "dependencies":{"@agidawn/reader":"*"},
+  "exports": {
+    ".": "./site.ts",
+    "./modules": "./modules/index.ts",
+    "./modules/server": "./modules/server.ts",
+    "./modules/web": "./modules/web.ts",
+    "./pages/*": "./pages/*",
+    "./brand/*": "./brand/*"
+  }
+}

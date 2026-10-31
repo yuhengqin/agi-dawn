@@ -1,0 +1,8 @@
+{
+  "name": "@agidawn/industry",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*.ts"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "@agidawn/reader",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./module.ts", "./server": "./server.ts", "./contracts": "./contracts.ts", "./web": "./web.tsx" },
+  "dependencies": { "@agidawn/backend": "*", "@agidawn/contracts": "*", "fflate": "0.7.5" }
+}
