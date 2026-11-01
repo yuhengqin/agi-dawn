@@ -2,6 +2,7 @@
 // know would otherwise fall back silently to the generic parse (menus and sentence fragments as
 // articles, dates never found).
 import type { SourceRow } from "./types.ts";
+import { isBodyAdapter } from "../content/adapters/index.ts";
 
 // Rules applied in collect.ts to every kind read through collectSource.
 const PUBLISHER = ["publisherRole", "publisherUrlPrefixes", "publisherRequiresDiscovery"];
@@ -33,11 +34,11 @@ const NESTED: Record<string, string[]> = {
   minNumeric: ["path", "min"],
   detail: [
     "maxFetches", "publishedAtSelector", "publishedAtRegex", "publishedAtUtcOffset", "publishedAtAuthoritative", "upgradeDatePrecision",
-    "titleSelector", "titleRegex", "titleAuthoritative", "summarySelector", "authorSelector", "preserve", "removeSelector",
+    "titleSelector", "titleRegex", "titleAuthoritative", "summarySelector", "authorSelector", "preserve", "removeSelector", "bodyAdapter",
   ],
 };
 
-/** Article widgets to preserve (PreserveRule in content/extract.ts): { selector, as: "pre" | "table" }, a code block's `code` and `caption` parts. */
+/** Article widgets to preserve (PreserveRule in content/components.ts), with optional code metadata. */
 const preserveRules = (value: unknown) => Array.isArray(value) && value.every((rule) => {
   if (!rule || typeof rule !== "object") return false;
   const selector = (key: string) => typeof rule[key] === "string" && rule[key].trim() !== "";
@@ -81,6 +82,7 @@ export function unsupportedConfig(kind: SourceRow["kind"], config: Record<string
       for (const sub of Object.keys(value)) if (!NESTED[key]!.includes(sub)) out.push(`${key}.${sub}`);
       if (key === "detail" && "preserve" in value && !preserveRules((value as { preserve: unknown }).preserve)) out.push("detail.preserve");
       if (key === "detail" && "removeSelector" in value && (typeof value.removeSelector !== "string" || !value.removeSelector.trim())) out.push("detail.removeSelector");
+      if (key === "detail" && "bodyAdapter" in value && !isBodyAdapter(value.bodyAdapter)) out.push("detail.bodyAdapter");
     }
   }
   return out;

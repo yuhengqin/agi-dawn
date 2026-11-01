@@ -191,6 +191,12 @@ DATABASE_URL=postgres://127.0.0.1:5432/reader_restore node scripts/verify-reader
 
 ## 更新与回退
 
+### 正文组件管道与 Browser Use 适配
+
+2026-11-01。更新 API 和 worker；没有新增依赖、数据库迁移或前端代码变化。通用代码块、表格与图形转换从正文获取中分离，原有 `detail.preserve`、`detail.removeSelector` 规则保持原意。Browser Use 增加显式的 `detail.bodyAdapter: "browser-use"`，将已核实结构的作者区和三类图表转换为通用段落／表格；未能完整转换的图表仍提示不完整。
+
+部署不会修改已有数据库配置。若要启用，先按本节既有要求核对服务与数据归属并完成备份，再通过后台来源管理为 Browser Use 的 `config.detail` 合并 `bodyAdapter`，保留其他配置与全文许可；不要重复 seed 覆盖来源。存量文章需要另行明确授权后通过现有“重新提取”入口更新，已有翻译资格依原流程匹配新正文，保留历史快照、私人资料和旧阅读位置。回退旧代码前先从运行配置移除 `bodyAdapter`，旧代码会拒绝这个新字段；已生成的段落／表格使用既有 HTML 格式，无需反向改写。
+
 ### 代码块元信息与阅读样式
 
 2026-11-01。重建web并一起更新API、worker、web，无新增依赖或数据库迁移。`detail.preserve` 增加可选 `kind`（code／prompt）和 `language`（语言元素选择器），既有规则保持原意；声明语言可位于pre或code。代码块的规范元信息通过HTML清洗、翻译与归档保存，客户端提供新的行号、折叠及复制栏。

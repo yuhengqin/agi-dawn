@@ -27,6 +27,8 @@ flowchart LR
 
 付费的全文翻译、Jina、SocialData、Dajiala 继续经过 `providers/receipts.ts` 的回执、费用历史和预算。`MODEL_CALLS_ENABLED`、`COLLECT_ENABLED`、`FEISHU_INTERNAL_ENABLED`、`INDEXNOW_SUBMIT_ENABLED` 只认字符串 `true`，默认关闭。页面打开不触发付费请求。
 
+正文获取与存储由 `content/extract.ts` 负责；`content/pipeline.ts` 固定流式内容整理、控件移除、可见性、来源适配、组件转换及图形处理的先后顺序。`content/components.ts` 以函数注册表实现通用代码块与表格转换；`content/adapters/` 由来源显式选择，负责识别特殊结构并复用安全文本／表格输出，不在清洗器中堆叠站点规则。所有结果继续通过既有 Readability、HTML 白名单及正文质量检查，没有独立内容 AST 或新的存储格式。
+
 ## 模块
 
 `modules/reader` 包含私人状态/笔记、归档、API、页面、迁移和测试；由 `site/modules/{index,server,web}` 三份清单装配。前端模块只使用纯类型和 HTTP。认证通过已有 `adminHandler` 注入，所有私人接口带 `no-store`，写入需要 CSRF 和当前管理员会话。

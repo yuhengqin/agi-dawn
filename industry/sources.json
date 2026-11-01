@@ -48,7 +48,7 @@
     },
     {
       "id": "browser-use-engineering", "name": "Browser Use · Engineering", "kind": "json_list",
-      "config": {"url": "https://browser-use.com/posts", "mode": "html_json_key", "jsonKey": "posts", "titlePaths": ["title"], "summaryPaths": ["description"], "authorPaths": ["author"], "publishedAtPath": "date", "publishedAtUtcOffset": "+00:00", "urlTemplate": "https://browser-use.com{raw:url}", "requireBoolean": {"path": "category", "equals": "Engineering"}, "allowUrlPrefixes": ["https://browser-use.com/posts/"], "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "config": {"url": "https://browser-use.com/posts", "mode": "html_json_key", "jsonKey": "posts", "titlePaths": ["title"], "summaryPaths": ["description"], "authorPaths": ["author"], "publishedAtPath": "date", "publishedAtUtcOffset": "+00:00", "urlTemplate": "https://browser-use.com{raw:url}", "requireBoolean": {"path": "category", "equals": "Engineering"}, "allowUrlPrefixes": ["https://browser-use.com/posts/"], "detail": {"bodyAdapter": "browser-use"}, "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
       "tier": "T1", "participation_mode": "editorial", "interval_minutes": 720, "tags": [], "site_fulltext": false
     },
     {

@@ -18,7 +18,9 @@ Browser Use 的RSS没有分类字段，因此使用 `json_list` 的 `mode=html_j
 
 代码组件可用 `detail.preserve` 声明 `{selector,as:"pre",code,caption,kind,language}`：`code` 指定正文元素，`caption` 是保留在块外的说明；可选 `kind` 为 `code` 或 `prompt`，`language` 是组件内声明语言的元素选择器。代码原有的首尾缩进与换行保留。规范HTML使用 `pre[data-code-kind][data-language] > code.language-*`，类型和语言跨正文清洗、翻译及归档保留，顶部栏只显示一次。显式语言优先于自动识别，Prompt与Text不自动高亮；Markdown导出保留标准语言fence，Prompt类型仅保留在HTML中。
 
-Claude来源的 `.art-code.art-prompt` 保存为Prompt，其他 `.art-code` 从 `.ch .lang` 读取Text／Shell／TypeScript等语言；原站 `.ch` 工具条及复制按钮不进入正文。表格组件用 `{selector,as:"table"}`。安全代码、表格、MathML和可静态保存的SVG会保留。样式依赖、无法保存的公式／图表和互动内容会标记不完整。
+Claude来源的 `.art-code.art-prompt` 保存为Prompt，其他 `.art-code` 从 `.ch .lang` 读取Text／Shell／TypeScript等语言；原站 `.ch` 工具条及复制按钮不进入正文。表格组件用 `{selector,as:"table"}`，目前适用于多列具有相同条目名称的描述列表，不自动识别任意图表。安全代码、表格、MathML和可静态保存的SVG会保留。样式依赖、无法保存的公式／图表和互动内容会标记不完整。
+
+声明式规则不足以表达来源结构时，可显式设置 `detail.bodyAdapter`；当前仅支持 `"browser-use"`，未知值会被拒绝。该适配器在正文识别与去样式之前，将作者名单整理为紧凑段落，将 Odysseys2 已知的完成数量、推理力度和双评判结果转换为表格，保留数值、列名与图注；同一图表的不同显示版本仅在数据一致时合并。无法完整校验的图表继续使用通用图形／文字降级并提示不完整，不猜测缺失数据。此规则不计算原站 CSS，也不执行页面脚本。模板已为 Browser Use 声明适配，已有实例仍须通过后台合并该配置；部署或刷新页面不会重写存量正文与译文。
 
 `detail.removeSelector` 是可选的非空 CSS 选择器，在正文识别和图表转换前移除匹配元素及其内容；只用于已核实的非正文控件，不按文字删除段落。Google Developers Blog 使用它排除底部 `.navigation-container`，并用 `preserve` 将 `.code-block:has(pre code)` 整体替换为 `pre code` 的内容，保留代码语言、清除重复语言标签和复制状态。来源模板只初始化新来源；已有来源需通过后台更新运行时配置，已有文章另行重新提取并更新译文。
 
