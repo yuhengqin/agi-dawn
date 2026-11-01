@@ -1,6 +1,6 @@
 // Shared admin building blocks: page frame, cards, stats, badges, tables, buttons, fields and a
 // reason dialog (manual changes always carry a reason for the audit log).
-import { AnimatePresence, motion } from "motion/react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ago, bj } from "./format";
@@ -282,6 +282,7 @@ export function ReasonDialog({
   onClose,
   onSubmit,
   busy,
+  className = "",
 }: {
   open: boolean;
   title: ReactNode;
@@ -293,59 +294,60 @@ export function ReasonDialog({
   onClose: () => void;
   onSubmit: (reason: string) => Promise<boolean | void> | boolean | void;
   busy?: boolean;
+  className?: string;
 }) {
   const [reason, setReason] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const descriptionId = useId();
   useEffect(() => {
-    if (!open) return;
-    setReason("");
-    const t = setTimeout(() => ref.current?.focus(), 60);
-    return () => clearTimeout(t);
+    if (open) setReason("");
   }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div className="fixed inset-0 z-[75] flex items-end justify-center p-3 sm:items-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <div className="absolute inset-0 bg-ink/30 backdrop-blur-[2px]" onClick={onClose} />
-          <motion.form
-            role="dialog"
-            aria-modal="true"
-            initial={{ y: 16, scale: 0.98, opacity: 0 }}
-            animate={{ y: 0, scale: 1, opacity: 1 }}
-            exit={{ y: 10, scale: 0.98, opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
-            className="relative w-full max-w-lg rounded-sheet bg-raised p-5 shadow-2xl ring-1 ring-line-strong"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (requireReason && !reason.trim()) return;
-              const closed = await onSubmit(reason.trim());
-              if (closed !== false) onClose();
+    <Dialog.Root open={open} onOpenChange={next => { if (!next) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="reason-dialog-overlay fixed inset-0 z-[75] flex items-end justify-center bg-ink/30 p-3 backdrop-blur-[2px] sm:items-center">
+          <Dialog.Content asChild
+            aria-describedby={description ? descriptionId : undefined}
+            onOpenAutoFocus={event => {
+              event.preventDefault();
+              // Invokers focus themselves before opening, including on WebKit mouse clicks.
+              opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+              ref.current?.focus({ preventScroll: true });
+            }}
+            onCloseAutoFocus={event => {
+              event.preventDefault();
+              if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
             }}
           >
-            <h2 className="text-[16px] font-semibold text-ink">{title}</h2>
-            {description && <div className="mt-1.5 text-[13px] leading-relaxed text-ink-3">{description}</div>}
-            {children && <div className="mt-4 space-y-3">{children}</div>}
-            <div className="mt-4">
-              <Field label={requireReason ? "原因（写进审计记录）" : "备注（可选）"}>
-                <Textarea ref={ref} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={requireReason ? "为什么做这个改动" : ""} rows={2} />
-              </Field>
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button tone="ghost" onClick={onClose}>取消</Button>
-              <Button type="submit" tone={danger ? "danger" : "primary"} busy={busy} disabled={requireReason && !reason.trim()}>
-                {confirmLabel}
-              </Button>
-            </div>
-          </motion.form>
-        </motion.div>
-      )}
-    </AnimatePresence>
+            <form
+              className={`reason-dialog-content relative w-full max-w-lg rounded-sheet bg-raised p-5 shadow-2xl ring-1 ring-line-strong ${className}`}
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (requireReason && !reason.trim()) return;
+                const closed = await onSubmit(reason.trim());
+                if (closed !== false) onClose();
+              }}
+            >
+              <Dialog.Title className="text-[16px] font-semibold text-ink">{title}</Dialog.Title>
+              {description && <Dialog.Description asChild id={descriptionId}><div className="mt-1.5 text-[13px] leading-relaxed text-ink-3">{description}</div></Dialog.Description>}
+              {children && <div className="mt-4 space-y-3">{children}</div>}
+              <div className="mt-4">
+                <Field label={requireReason ? "原因（写进审计记录）" : "备注（可选）"}>
+                  <Textarea ref={ref} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={requireReason ? "为什么做这个改动" : ""} rows={2} />
+                </Field>
+              </div>
+              <div className="mt-5 flex justify-end gap-2">
+                <Button tone="ghost" onClick={onClose}>取消</Button>
+                <Button type="submit" tone={danger ? "danger" : "primary"} busy={busy} disabled={requireReason && !reason.trim()}>
+                  {confirmLabel}
+                </Button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Overlay>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

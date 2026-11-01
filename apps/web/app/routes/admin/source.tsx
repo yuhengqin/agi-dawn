@@ -111,7 +111,7 @@ export default function SourceDetail({ loaderData }: Route.ComponentProps) {
           <Button busy={pending === "fetch"} onClick={() => run("POST", `${base}/fetch`, undefined, { label: "fetch", success: "已加入采集队列" })}>
             立即采集
           </Button>
-          <Button tone={s.enabled ? "danger" : "primary"} onClick={() => setDialog("toggle")}>
+          <Button tone={s.enabled ? "danger" : "primary"} onClick={event => { event.currentTarget.focus({ preventScroll: true }); setDialog("toggle"); }}>
             {s.enabled ? "暂停" : "恢复"}
           </Button>
         </>
@@ -201,7 +201,7 @@ export default function SourceDetail({ loaderData }: Route.ComponentProps) {
             <div className="mt-4 flex items-center justify-end gap-2">
               {changes > 0 && <span className="text-[12.5px] text-ink-3">{changes} 项改动未保存</span>}
               <Button tone="ghost" disabled={!changes} onClick={() => setDraft(draftOf(s))}>还原</Button>
-              <Button tone="primary" disabled={!changes} onClick={() => patch() && setDialog("save")}>保存</Button>
+              <Button tone="primary" disabled={!changes} onClick={event => { if (patch()) { event.currentTarget.focus({ preventScroll: true }); setDialog("save"); } }}>保存</Button>
             </div>
           </Card>
 

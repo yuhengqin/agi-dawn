@@ -565,6 +565,15 @@ for(const engine of [chromium,webkit])test(`figure notices show hover details an
     await page.getByRole('heading',{name:'figure-a',exact:true}).click();await notice.focus();await expect(details).toContainText(detailsMessages[0]!);await page.keyboard.press('Escape');await expect(details).toHaveCount(0);
     await trigger.focus();await trigger.press('ArrowDown');await expect(menu.getByRole('menuitem',{name:'本次关闭直到下次访问',exact:true})).toBeFocused();await expect(menu.getByRole('menuitem')).toHaveCount(2);
     await page.keyboard.press('End');await expect(menu.getByRole('menuitem',{name:'永久禁用',exact:true})).toBeFocused();await page.keyboard.press('Escape');await expect(menu).toHaveCount(0);await expect(trigger).toBeFocused();
+    await trigger.press('ArrowDown');await page.keyboard.press('ArrowUp');await expect(menu.getByRole('menuitem',{name:'永久禁用',exact:true})).toBeFocused();
+    await page.keyboard.press('Home');await expect(menu.getByRole('menuitem',{name:'本次关闭直到下次访问',exact:true})).toBeFocused();
+    await page.keyboard.press('Shift+Tab');await expect(menu).toHaveCount(0);await expect(notice).toBeFocused();
+    await trigger.press('ArrowDown');await page.keyboard.press('Tab');await expect(menu).toHaveCount(0);await expect(trigger).not.toBeFocused();await expect(page.locator('body')).not.toBeFocused();
+    await trigger.press('ArrowUp');await expect(menu.getByRole('menuitem',{name:'永久禁用',exact:true})).toBeFocused();
+    // A non-modal menu must let a single outside click activate another control.
+    const theme=page.getByRole('button',{name:'主题切换',exact:true}),previousTheme=await page.locator('html').getAttribute('data-theme');
+    await theme.click();await expect(menu).toHaveCount(0);await expect(page.locator('html')).not.toHaveAttribute('data-theme',previousTheme!);
+    await trigger.press('ArrowDown');await page.keyboard.press('Escape');await expect(trigger).toBeFocused();
     await trigger.click();await menu.getByRole('menuitem',{name:'本次关闭直到下次访问',exact:true}).click();await expect(notice).toHaveCount(0);await expect(details).toHaveCount(0);
     await page.reload();await expect(notice).toBeVisible();await trigger.click();await menu.getByRole('menuitem',{name:'本次关闭直到下次访问',exact:true}).click();await visit(page,web.origin+'/items/figure-b');await visit(page,web.origin+'/items/figure-a');await expect(notice).toBeVisible();
     const other=await context.newPage();await visit(other,web.origin+'/items/figure-b');await expect(other.getByText('部分图表可能显示不完整',{exact:true})).toBeVisible();

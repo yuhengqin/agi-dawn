@@ -444,6 +444,12 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 @keyframes agidawn-collapse-out { from { grid-template-rows: 1fr; opacity: 1; } to { grid-template-rows: 0fr; opacity: 0; } }
 @keyframes agidawn-fade-in { from { opacity: 0; } }
 @keyframes agidawn-fade-out { to { opacity: 0; } }
+@keyframes agidawn-reason-in { from { opacity: 0; transform: translateY(16px) scale(0.98); } }
+@keyframes agidawn-reason-out { to { opacity: 0; transform: translateY(10px) scale(0.98); } }
+.reason-dialog-overlay[data-state="open"] { animation: agidawn-fade-in 300ms ease-out both; }
+.reason-dialog-overlay[data-state="closed"] { animation: agidawn-fade-out 300ms ease-out both; }
+.reason-dialog-content[data-state="open"] { animation: agidawn-reason-in 220ms cubic-bezier(0.25, 1, 0.5, 1) both; }
+.reason-dialog-content[data-state="closed"] { animation: agidawn-reason-out 220ms cubic-bezier(0.25, 1, 0.5, 1) both; }
 @keyframes agidawn-drop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
 @keyframes agidawn-drop-out { to { opacity: 0; transform: translateY(-4px) scale(0.98); } }
 @keyframes agidawn-notice-in { from { opacity: 0; transform: translateY(-6px); } }

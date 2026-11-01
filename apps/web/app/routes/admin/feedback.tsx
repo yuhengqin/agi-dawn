@@ -62,9 +62,9 @@ function FeedbackCard({ f }: { f: AdminFeedbackRow }) {
           <Button size="md" disabled={note === (f.note ?? "")} busy={pending === "note"} onClick={() => run("PATCH", base, { note: note || null, version }, { label: "note", success: "备注已保存" })}>
             保存备注
           </Button>
-          <Button tone="ghost" onClick={() => setDialog(f.banned ? null : "ban")} disabled={f.banned} title="拒绝这个来源的后续反馈">封禁来源</Button>
-          {f.email && <Button tone="ghost" onClick={() => setDialog("email-ban")} disabled={f.email_banned} title="拒绝填写这个邮箱的反馈，48 小时后自动解除">临时封禁邮箱</Button>}
-          <Button tone="ghost" onClick={() => setDialog("erase")} title="按隐私说明删除提交者的资料">删除资料</Button>
+          <Button tone="ghost" onClick={event => { event.currentTarget.focus({ preventScroll: true }); setDialog(f.banned ? null : "ban"); }} disabled={f.banned} title="拒绝这个来源的后续反馈">封禁来源</Button>
+          {f.email && <Button tone="ghost" onClick={event => { event.currentTarget.focus({ preventScroll: true }); setDialog("email-ban"); }} disabled={f.email_banned} title="拒绝填写这个邮箱的反馈，48 小时后自动解除">临时封禁邮箱</Button>}
+          <Button tone="ghost" onClick={event => { event.currentTarget.focus({ preventScroll: true }); setDialog("erase"); }} title="按隐私说明删除提交者的资料">删除资料</Button>
         </div>
       </div>
       <ReasonDialog

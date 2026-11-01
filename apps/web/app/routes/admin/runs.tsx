@@ -120,7 +120,7 @@ export default function RunsAdmin({ loaderData }: Route.ComponentProps) {
               { key: "w", label: "服务", render: (x) => <span className="whitespace-nowrap">{x.service}{x.model ? ` · ${x.model}` : ""}</span> },
               { key: "p", label: "用途", render: (x) => (x.subject && /^[\w-]{10,}$/.test(x.subject) && x.purpose.includes("analy") ? <Link className="text-accent" to={`/admin/content/${x.subject}`}>{x.purpose}</Link> : x.purpose) },
               { key: "e", label: "错误", render: (x) => <span className="line-clamp-2 text-[12px] text-ink-3" title={x.error ?? ""}>{x.error}</span> },
-              { key: "a", label: "", render: (x) => (x.status === "unknown" ? <Button size="sm" onClick={() => setReceipt(x)}>核对</Button> : null) },
+              { key: "a", label: "", render: (x) => (x.status === "unknown" ? <Button size="sm" onClick={event => { event.currentTarget.focus({ preventScroll: true }); setReceipt(x); }}>核对</Button> : null) },
             ]}
           />
         </Card>
@@ -147,7 +147,7 @@ export default function RunsAdmin({ loaderData }: Route.ComponentProps) {
           right={
             <span className="flex items-center gap-3">
               {r.retrying.count > 0 && <span>等待重试 {num(r.retrying.count)} 条 · 下一次 <Time at={r.retrying.next} /></span>}
-              {r.errors.length > 0 && <Button size="sm" onClick={() => setRequeue("")}>全部重新处理</Button>}
+              {r.errors.length > 0 && <Button size="sm" onClick={event => { event.currentTarget.focus({ preventScroll: true }); setRequeue(""); }}>全部重新处理</Button>}
             </span>
           }
           pad={false} scrollable
@@ -162,7 +162,7 @@ export default function RunsAdmin({ loaderData }: Route.ComponentProps) {
               { key: "n", label: "条数", align: "right", render: (e) => num(e.n) },
               { key: "x", label: "示例", render: (e) => <Link className="text-accent" to={`/admin/content/${e.example}`}>查看</Link> },
               { key: "l", label: "最近", render: (e) => <Time at={e.last} /> },
-              { key: "a", label: "", align: "right", render: (e) => <Button size="sm" onClick={() => setRequeue(e.error)}>重新处理</Button> },
+              { key: "a", label: "", align: "right", render: (e) => <Button size="sm" onClick={event => { event.currentTarget.focus({ preventScroll: true }); setRequeue(e.error); }}>重新处理</Button> },
             ]}
           />
         </Card>

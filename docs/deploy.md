@@ -60,6 +60,8 @@ reader 模块每五分钟翻译新收录且已取得正文的外文文章。新�
 
 主题切换移至公开页面右下角的太阳／月亮按钮，左侧入口移除；“我的”页面继续提供浅色、深色、跟随系统。主题偏好使用 `agidawn-theme`。重新构建并重启web后刷新即可。
 
+2026-11-01 的 ReasonDialog/Menu 迁移新增固定版本 Radix 依赖。升级工作副本后先按锁文件安装依赖（`npm ci`），再构建并重启 web；开发 web 也需要安装新依赖。无需数据库迁移或重启 API/worker，图片加载策略保持原状。交互验收与性能成本见 [Radix 与 LCP 基线](reader/radix-lcp-acceptance.md)。
+
 ### AGIDawn 标识升级
 
 2026-10-31。运行标识统一为 `agidawn`，文档和文件名中的项目名统一为 `AGIDawn`。本机项目目录改为 `/home/laoq/Project/AGIDawn`，已有 systemd 用户服务的工作目录、启动路径及工具链 PATH 随之更新；Codex 或编辑器需要重新打开新目录。原项目版权与品牌声明保留在 NOTICE。实际数据库名和私有 `.env` 保持原有配置；代码中的默认数据库名为 `agidawn`，已部署实例继续使用显式 `DATABASE_URL`。

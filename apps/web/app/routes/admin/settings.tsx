@@ -64,9 +64,10 @@ function BudgetRow({ b }: { b: AdminSettings["budgets"][number] }) {
       ))}
       <td className="num px-3 py-2 text-right text-ink-3">{num(b.used_hour)} / {num(b.used_day)}</td>
       <td className="px-3 py-2 text-right">
-        <Button size="sm" tone="primary" disabled={!changed} onClick={() => setOpen(true)}>保存</Button>
+        <Button size="sm" tone="primary" disabled={!changed} onClick={event => { event.currentTarget.focus({ preventScroll: true }); setOpen(true); }}>保存</Button>
         <ReasonDialog
           open={open}
+          className="text-right text-[13px]"
           title={`调整 ${b.service} 的请求上限`}
           description={`上限是付费请求的熔断：超过后请求暂停并按窗口重试。填 0 表示立即停用这个服务。${ADMIN.budgetNote ?? ""}`}
           confirmLabel="保存"
