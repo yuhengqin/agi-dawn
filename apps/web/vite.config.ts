@@ -6,7 +6,7 @@ import { isApiOwned, resolveRedirect } from "@agidawn/contracts/http-policy";
 import { DEPLOYMENT } from "@agidawn/site";
 import { proxyToApi } from "./app/lib/api-proxy.server.ts";
 
-/** Development stand-in for the production web server: the shared redirect table and api-owned path routing. */
+/** Development stand-in for the production web server: redirects, public navigation and api-owned paths. */
 function devEdge(): Plugin {
   return {
     name: "agidawn-dev-edge",
@@ -24,7 +24,26 @@ function devEdge(): Plugin {
           res.statusCode = decision.status;
           return res.end();
         }
-        if (!isApiOwned(pathname)) return next();
+        if (!isApiOwned(pathname)) {
+          if ((req.method === "GET" || req.method === "HEAD") && pathname.endsWith(".data")) {
+            const url = new URL(raw.startsWith("/") ? `http://web.local${raw}` : raw, "http://web.local");
+            let pagePathname: string;
+            try {
+              pagePathname = decodeURIComponent(url.pathname).replace(/\.data$/, "");
+            } catch {
+              res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+              return res.end("Bad request");
+            }
+            // Match production: route selection is framework metadata, never an article filter.
+            if (!/^\/admin(?:\/|$)/i.test(pagePathname)) {
+              url.searchParams.delete("_routes");
+              req.url = url.pathname + url.search;
+              // The development adapter restores originalUrl before creating its Request.
+              req.originalUrl = req.url;
+            }
+          }
+          return next();
+        }
         // The api sees the Host it gets in production.
         if (DEPLOYMENT.originHost) req.headers.host = DEPLOYMENT.originHost;
         proxyToApi(req, res);
