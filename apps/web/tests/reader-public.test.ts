@@ -71,7 +71,17 @@ for(const engine of [chromium,webkit])test(`numbered pagination counts, jumps an
         await expect(nav.getByRole('link',{name:'第 1 页',exact:true})).toBeVisible();
         await expect(nav.getByRole('link',{name:`第 ${totalPages} 页`,exact:true})).toBeVisible();
         await expect(nav.locator('[aria-current="page"]')).toHaveText(String(number));
-        if(number===20)for(const neighbor of [18,19,21,22])await expect(nav.getByRole('link',{name:`第 ${neighbor} 页`,exact:true})).toBeVisible();
+        if(number===20){
+          for(const neighbor of [18,19,21,22])await expect(nav.getByRole('link',{name:`第 ${neighbor} 页`,exact:true})).toBeVisible();
+          await nav.getByRole('link',{name:'向前跳转至第 15 页',exact:true}).click();
+          await expect(nav.locator('[aria-current="page"]')).toHaveText('15');
+          await nav.getByRole('link',{name:'向后跳转至第 20 页',exact:true}).click();
+          await expect(nav.locator('[aria-current="page"]')).toHaveText('20');
+          await page.keyboard.press('ArrowRight');
+          await expect(nav.locator('[aria-current="page"]')).toHaveText('21');
+          await page.keyboard.press('ArrowLeft');
+          await expect(nav.locator('[aria-current="page"]')).toHaveText('20');
+        }
       }
     }
     const plain=await browser.newPage({javaScriptEnabled:false,viewport:{width:390,height:844}});
