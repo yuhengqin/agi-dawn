@@ -28,9 +28,9 @@ export function ReaderPagination({page,query}:PaginationProps){
   }
   return <div className="reader-pagination">
     {page.pageCount>1&&<nav aria-label="文章分页" className="reader-pagination-nav">
-      {page.page>1?<Link to={href(page.page-1)} rel="prev" aria-label="上一页" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only sm:not-sr-only">上一页</span></Link>:<span aria-disabled="true" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only sm:not-sr-only">上一页</span></span>}
+      {page.page>1?<Link to={href(page.page-1)} rel="prev" aria-label="上一页" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only sm:not-sr-only">上一页</span></Link>:<span aria-disabled="true" aria-label="上一页" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only sm:not-sr-only">上一页</span></span>}
       {entries.map(entry=>typeof entry==='number'?<Link key={entry} to={href(entry)} aria-label={`第 ${entry} 页`} aria-current={entry===page.page?'page':undefined} className="reader-page-control">{entry}</Link>:<span key={entry} className="reader-page-gap" aria-hidden="true">…</span>)}
-      {page.page<page.pageCount?<Link to={href(page.page+1)} rel="next" aria-label="下一页" className="reader-page-control"><span className="sr-only sm:not-sr-only">下一页</span><IconChevronRight size={16}/></Link>:<span aria-disabled="true" className="reader-page-control"><span className="sr-only sm:not-sr-only">下一页</span><IconChevronRight size={16}/></span>}
+      {page.page<page.pageCount?<Link to={href(page.page+1)} rel="next" aria-label="下一页" className="reader-page-control"><span className="sr-only sm:not-sr-only">下一页</span><IconChevronRight size={16}/></Link>:<span aria-disabled="true" aria-label="下一页" className="reader-page-control"><span className="sr-only sm:not-sr-only">下一页</span><IconChevronRight size={16}/></span>}
     </nav>}
     <div role="group" aria-label="文章分页控制" className="reader-pagination-controls">
       <p className="reader-pagination-total">{page.total>0&&<>第 {start}–{end} 篇<span className="mx-2 text-ink-4">/</span></>}共 {page.total} 篇</p>

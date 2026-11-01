@@ -1,5 +1,5 @@
 import { data,redirect } from "react-router";
-import type { ReaderListPage,TopicSummary } from "@agidawn/contracts/site";
+import { READER_PAGE_SIZES, type ReaderListPage, type TopicSummary } from "@agidawn/contracts/site";
 import { loadOr404 } from "../../lib/api.server";
 
 export interface ReaderSource { id:string;name:string;url:string|null;description:string|null;articles:number;fulltext:boolean;latestAt:string|null }
@@ -11,6 +11,14 @@ export async function loadReaderPage(request:Request) {
   const params=new URLSearchParams();
   for(const [key,value] of url.searchParams) if(value.trim()) params.set(key,value.trim());
   if(params.toString()!==url.searchParams.toString())throw redirect(params.size?`/?${params}`:"/");
+  const rawPage=params.get('page'),pageNumber=rawPage?Number(rawPage):null;
+  if(rawPage!==null&&(!Number.isSafeInteger(pageNumber)||pageNumber!<1||pageNumber===1)){
+    params.delete('page');throw redirect(params.size?`/?${params}`:'/');
+  }
+  const rawLimit=params.get('limit'),limitNumber=rawLimit?Number(rawLimit):null;
+  if(rawLimit!==null&&(!Number.isSafeInteger(limitNumber)||!READER_PAGE_SIZES.includes(limitNumber as (typeof READER_PAGE_SIZES)[number]))){
+    params.delete('limit');throw redirect(params.size?`/?${params}`:'/');
+  }
   const [page,sources,topics,categories]=await Promise.all([
     loadOr404<ReaderListPage>(`/api/site/articles?${params}`,{signal:request.signal}),
     loadOr404<{items:ReaderSource[]}>("/api/site/sources",{signal:request.signal}),

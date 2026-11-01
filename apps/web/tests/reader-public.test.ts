@@ -53,6 +53,10 @@ for(const engine of [chromium,webkit])test(`numbered pagination counts, jumps an
     await expect(page.locator('main ol article')).toHaveCount(100);
     await visit(page,web.origin+'/?'+filters+'&page=999&limit=50');
     await expect(page).toHaveURL(/page=4&limit=50/);await expect(page.locator('main ol article')).toHaveCount(15);
+    await visit(page,web.origin+'/?'+filters+'&page=0&limit=50');
+    await expect(page).toHaveURL(web.origin+'/?'+filters+'&limit=50');
+    await visit(page,web.origin+'/?'+filters+'&page=1&limit=50');
+    await expect(page).toHaveURL(web.origin+'/?'+filters+'&limit=50');
     await visit(page,web.origin+'/?q=missing&page=999&limit=100');
     await expect(page).toHaveURL(web.origin+'/?q=missing&limit=100');
     await expect(page.getByRole('status',{name:'文章分页信息'})).toContainText('共 0 篇');await expect(nav).toHaveCount(0);
