@@ -77,6 +77,27 @@ test("technical diagrams and MathML survive while unsupported figures are report
   assert.ok(unsupported.issues.some(issue=>issue.kind==="missing-figure"));
 });
 
+test("heading permalink icons do not make an article partial",()=>{
+  const icon='<svg viewBox="0 0 24 24" class="section-link" fill="none" stroke="currentColor"><path d="M10 13L14 9"/></svg>';
+  const body=extract(`<h2 id="results">Results<a href="#results" aria-label="Link to results">${icon}</a></h2><h3 id="details"><a href="https://publisher.example/article#details">${icon}Details</a></h3>`);
+  const $=cheerio.load(body.html);
+  assert.equal($("h2").text(),"Results");
+  assert.equal($("h3").text(),"Details");
+  assert.equal($("img").length,0);
+  assert.equal(body.quality,"ready");
+  assert.deepEqual(body.issues,[]);
+});
+
+test("heading diagrams and styled figure legends still report lost styling",()=>{
+  const body=extract('<h2 id="results">Results<a href="#results"><svg role="img" aria-label="Score trend" viewBox="0 0 120 40" class="chart"><path d="M0 40L120 0"/></svg></a></h2><figure><p><svg aria-hidden="true" class="legend" viewBox="0 0 10 10"><circle class="series" cx="5" cy="5" r="4"/></svg>Completed tasks</p></figure>');
+  const $=cheerio.load(body.html);
+  assert.equal($('h2 img[alt="Score trend"]').length,1);
+  assert.equal($("figure img").length,1);
+  assert.match(body.text,/Completed tasks/);
+  assert.equal(body.quality,"partial");
+  assert.ok(body.issues.some(issue=>issue.kind==="missing-figure"));
+});
+
 test('declared source code components preserve indentation and the declared language',()=>{
   const body=readable(page('<div class="publisher-code"><button>Copy</button><pre><code class="language-typescript">  const result = await call();\n  return result;\n</code></pre></div>'),'https://publisher.example/article',{preserve:[{selector:'.publisher-code',as:'pre',code:'pre code'}]});
   const $=cheerio.load(body!.html);

@@ -526,7 +526,10 @@ for(const engine of [chromium,webkit])test(`floating theme toggle follows the di
 for(const engine of [chromium,webkit])test(`figure notices show hover details and distinguish visit dismissal from permanent disable (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined,writes=0;
   const issues=[{kind:'missing-figure' as const,message:'图表依赖原站样式，保存的图形可能不完整。'},{kind:'missing-figure' as const,message:'图表的外部引用未保存。'}];
-  const articles=['figure-a','figure-b','figure-mixed'].map(id=>itemDetail({id,title:id,bodyState:{status:'partial',bodyRevision:1,refreshPending:false,issues:id==='figure-mixed'?[...issues,{kind:'missing-formula',message:'部分公式保留为源文本，请对照原文。'}]:issues}}));
+  const styleIssues=[...Array.from({length:10},()=>({...issues[0]!})),{kind:'missing-figure' as const,message:'图表依赖原站样式，保留了文字说明，请对照原文。'}];
+  const repeatedIssues=[...styleIssues,{...issues[1]!},{...issues[0]!},{...issues[1]!}];
+  const detailsMessages=['图表的外部引用未保存。'];
+  const articles=['figure-a','figure-b','figure-mixed','figure-style'].map(id=>itemDetail({id,title:id,bodyState:{status:'partial',bodyRevision:1,refreshPending:false,issues:id==='figure-style'?styleIssues:id==='figure-mixed'?[...repeatedIssues,{kind:'missing-formula',message:'部分公式保留为源文本，请对照原文。'}]:repeatedIssues}}));
   try{
     web=await startWebServer(fakeApi((url,res,req)=>{
       const article=articles.find(article=>url.pathname==='/api/site/items/'+article.id);if(article)return article;
@@ -538,10 +541,14 @@ for(const engine of [chromium,webkit])test(`figure notices show hover details an
     const context=await browser.newContext({viewport:{width:1440,height:900}}),page=await context.newPage();
     await page.addInitScript(()=>localStorage.setItem('agi-dawn-figure-notices-v1:figure-a','hidden'));
     const notice=page.getByRole('button',{name:'部分图表可能显示不完整',exact:true}),trigger=page.getByRole('button',{name:'关闭图表提示',exact:true}),menu=page.getByRole('menu',{name:'关闭图表提示',exact:true}),details=page.getByRole('tooltip');
+    await visit(page,web.origin+'/items/figure-style');const text=page.getByText('部分图表可能显示不完整',{exact:true});
+    await expect(text).toBeVisible();await expect(notice).toHaveCount(0);await text.hover();await expect(details).toHaveCount(0);await text.click();await expect(details).toHaveCount(0);
+    await page.getByRole('link',{name:'打开原文',exact:true}).focus();await page.keyboard.press('Tab');await expect(trigger).toBeFocused();
+    await trigger.click();await menu.getByRole('menuitem',{name:'本次关闭直到下次访问',exact:true}).click();await expect(text).toHaveCount(0);await page.reload();await expect(text).toBeVisible();
     await visit(page,web.origin+'/items/figure-a');await expect(notice).toBeVisible();await expect(page.getByText('正文有缺失，请对照原文。',{exact:true})).toHaveCount(0);await expect(details).toHaveCount(0);
     await expect.poll(()=>page.evaluate(()=>localStorage.getItem('agi-dawn-figure-notices-v1:figure-a'))).toBe(null);
-    await notice.hover();for(const issue of issues)await expect(details).toContainText(issue.message);await details.hover();await expect(details).toBeVisible();await page.keyboard.press('Escape');await expect(details).toHaveCount(0);
-    await page.getByRole('heading',{name:'figure-a',exact:true}).click();await notice.focus();await expect(details).toContainText(issues[0]!.message);await page.keyboard.press('Escape');await expect(details).toHaveCount(0);
+    await notice.hover();await expect(details.getByRole('listitem')).toHaveText(detailsMessages);await details.hover();await expect(details).toBeVisible();await page.keyboard.press('Escape');await expect(details).toHaveCount(0);
+    await page.getByRole('heading',{name:'figure-a',exact:true}).click();await notice.focus();await expect(details).toContainText(detailsMessages[0]!);await page.keyboard.press('Escape');await expect(details).toHaveCount(0);
     await trigger.focus();await trigger.press('ArrowDown');await expect(menu.getByRole('menuitem',{name:'本次关闭直到下次访问',exact:true})).toBeFocused();await expect(menu.getByRole('menuitem')).toHaveCount(2);
     await page.keyboard.press('End');await expect(menu.getByRole('menuitem',{name:'永久禁用',exact:true})).toBeFocused();await page.keyboard.press('Escape');await expect(menu).toHaveCount(0);await expect(trigger).toBeFocused();
     await trigger.click();await menu.getByRole('menuitem',{name:'本次关闭直到下次访问',exact:true}).click();await expect(notice).toHaveCount(0);await expect(details).toHaveCount(0);

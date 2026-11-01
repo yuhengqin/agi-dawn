@@ -5,8 +5,21 @@ import type { BodyIssue } from "@agidawn/contracts/site";
 const SVG_TAGS=["svg","g","path","rect","circle","ellipse","line","polyline","polygon","text","tspan","defs","linearGradient","radialGradient","stop","marker","clipPath","title","desc","use"];
 const SVG_ATTRIBUTES=["xmlns","viewBox","width","height","x","y","x1","x2","y1","y2","cx","cy","r","rx","ry","d","points","transform","fill","fill-opacity","stroke","stroke-width","stroke-opacity","stroke-dasharray","stroke-linecap","stroke-linejoin","opacity","font-family","font-size","font-weight","text-anchor","dominant-baseline","id","offset","stop-color","stop-opacity","markerWidth","markerHeight","refX","refY","orient","marker-end","marker-start","clip-path","href"];
 
+/** A heading's permalink glyph is a control, while labelled drawings and figure legends remain content. */
+function isHeadingPermalinkIcon(element:ReturnType<cheerio.CheerioAPI>,baseUrl:string):boolean {
+  const id=element.closest("h1,h2,h3,h4,h5,h6").attr("id"),href=element.closest("a[href]").attr("href");
+  if(!id||!href||element.text().trim()||element.closest('figure,[role="img"]').length||element.is("[aria-label],[aria-labelledby],[aria-describedby]"))return false;
+  if(href===`#${id}`)return true;
+  try {
+    const page=new URL(baseUrl),target=new URL(href,page);
+    if(decodeURIComponent(target.hash.slice(1))!==id)return false;
+    page.hash="";target.hash="";
+    return page.href===target.href;
+  } catch {return false;}
+}
+
 /** Static drawings become isolated images; unsupported representations remain explicitly partial. */
-export function normalizeTechnicalMarkup(html:string,_baseUrl:string,trackIssues=false):{html:string;issues:BodyIssue[]} {
+export function normalizeTechnicalMarkup(html:string,baseUrl:string,trackIssues=false):{html:string;issues:BodyIssue[]} {
   const $=cheerio.load(html,null,false);
   const issues:BodyIssue[]=[];
   const mark=(element:ReturnType<cheerio.CheerioAPI>,issue:BodyIssue)=>{
@@ -29,7 +42,7 @@ export function normalizeTechnicalMarkup(html:string,_baseUrl:string,trackIssues
   });
   $("svg").each((_,node)=>{
     const original=$(node);
-    if(original.closest("nav,header,footer,button").length) {original.remove();return;}
+    if(original.closest("nav,header,footer,button").length||isHeadingPermalinkIcon(original,baseUrl)) {original.remove();return;}
     // XML attributes stay literal here; the HTML parser otherwise reserializes href as xlink:href.
     const drawing=cheerio.load($.html(original),{xmlMode:true}),svg=drawing('svg').first();
     if(!svg.attr("viewBox")&&!svg.attr("width")&&!svg.attr("height")&&!svg.attr("aria-label")&&!svg.attr("role")&&!svg.text().trim()){original.remove();return;}
