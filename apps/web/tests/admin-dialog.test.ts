@@ -30,6 +30,38 @@ for (const engine of [chromium, webkit]) test(`reason dialog contains focus and 
       }
     }));
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    // Record before navigation so failed dismissals can be diagnosed without pausing the interactions.
+    await page.addInitScript(() => {
+      const events: Array<Record<string, unknown>> = [];
+      (globalThis as typeof globalThis & { __reasonDialogEvents?: typeof events }).__reasonDialogEvents = events;
+      const describe = (target: EventTarget | null) => target instanceof Element
+        ? { tag: target.tagName, role: target.getAttribute("role"), label: target.getAttribute("aria-label"), state: target.getAttribute("data-state"), classes: target.getAttribute("class") }
+        : null;
+      const record = (event: Record<string, unknown>) => {
+        events.push({ at: performance.now(), ...event });
+        if (events.length > 100) events.shift();
+      };
+      for (const type of ["keydown", "pointerdown", "click", "dismissableLayer.pointerDownOutside", "animationstart", "animationend", "animationcancel"]) {
+        const capture = (event: Event) => {
+          if (event instanceof KeyboardEvent && !["Escape", "Tab"].includes(event.key)) return;
+          if (event instanceof AnimationEvent && !(event.target instanceof Element && event.target.matches('[role="dialog"], .reason-dialog-overlay'))) return;
+          record({ type, phase: event.eventPhase, target: describe(event.target), prevented: event.defaultPrevented,
+            ...(event instanceof KeyboardEvent ? { key: event.key } : {}),
+            ...(event instanceof MouseEvent ? { x: event.clientX, y: event.clientY } : {}),
+            ...(event instanceof AnimationEvent ? { animation: event.animationName } : {}),
+          });
+        };
+        document.addEventListener(type, capture, true);
+        window.addEventListener(type, capture);
+      }
+      new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+          if (mutation.target instanceof Element && mutation.target.matches('[role="dialog"], .reason-dialog-overlay')) {
+            record({ type: "state", target: describe(mutation.target), previous: mutation.oldValue });
+          }
+        }
+      }).observe(document, { subtree: true, attributes: true, attributeFilter: ["data-state"], attributeOldValue: true });
+    });
     await visit(page, web.origin + "/admin/settings");
     await page.getByRole("spinbutton").first().fill("20");
     const opener = page.getByRole("button", { name: "保存", exact: true });
@@ -75,7 +107,21 @@ for (const engine of [chromium, webkit]) test(`reason dialog contains focus and 
       if (dismiss === "escape") await page.keyboard.press("Escape");
       else if (dismiss === "cancel") await cancel.click();
       else await page.mouse.click(1400, 40);
-      await expect(dialog).toHaveCount(0);
+      try {
+        await expect(dialog, `${engine.name()}: close via ${dismiss}`).toHaveCount(0);
+      } catch (error) {
+        const evidence = await page.evaluate(() => ({
+          events: (globalThis as typeof globalThis & { __reasonDialogEvents?: unknown[] }).__reasonDialogEvents,
+          targetAtOutsideClick: document.elementFromPoint(1400, 40)?.getAttribute("class"),
+          nodes: [...document.querySelectorAll('[role="dialog"]')].flatMap(dialog => [dialog.parentElement, dialog]).filter((node): node is HTMLElement => node instanceof HTMLElement).map(node => ({
+            role: node.getAttribute("role"), state: node.getAttribute("data-state"), rect: node.getBoundingClientRect().toJSON(),
+            opacity: getComputedStyle(node).opacity, animation: getComputedStyle(node).animationName,
+            animations: node.getAnimations().map(animation => ({ state: animation.playState, time: String(animation.currentTime) })),
+          })),
+        })).catch(evidenceError => ({ error: String(evidenceError) }));
+        console.error("Reason dialog dismissal evidence", JSON.stringify({ engine: engine.name(), dismiss, evidence }));
+        throw error;
+      }
       await expect(opener).toBeFocused();
     }
     assert.equal(commands.length, 2, "dismissal never submits a command");
