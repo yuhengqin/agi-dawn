@@ -136,8 +136,10 @@ test("anonymous engagement counts visible opens once per half hour and makes lik
 });
 
 test("anonymous engagement accepts the SSH-forwarded origin and rejects cross-origin writes",async()=>{
-  const {buildApp}=await import("../apps/api/src/app.ts");
-  const app=await buildApp(),origin='http://localhost:8123',host='localhost:8123';
+  const {buildApp}=await import("../apps/api/src/app.ts"),{config}=await import("@agidawn/backend/config");
+  // SSH forwarding changes only the port; the hostname must stay the configured site host.
+  const site=new URL(config.siteUrl),host=`${site.hostname}:8123`,origin=`${site.protocol}//${host}`;
+  const app=await buildApp();
   try{
     await sql`INSERT INTO sources(id,name,kind) VALUES('engagement-forwarded','Forwarded engagement','rss')`;
     const {articleId:id}=await upsertMaterial({sourceId:'engagement-forwarded',title:'Forwarded engagement',url:'https://example.com/engagement-forwarded',bodyStatus:'pending',via:'fetch'});
@@ -152,15 +154,15 @@ test("anonymous engagement accepts the SSH-forwarded origin and rejects cross-or
     const rejectedHeaders:Record<string,string>[]=[
       {origin:'https://elsewhere.example'},
       {host:'elsewhere.example',origin:'http://elsewhere.example'},
-      {origin:'http://localhost:3000'},
-      {origin:'http://localhost:8124'},
-      {origin:'https://localhost:8123'},
+      {origin:site.origin},
+      {origin:`${site.protocol}//${site.hostname}:8124`},
+      {origin:`${site.protocol==='http:'?'https:':'http:'}//${host}`},
       {origin:'null'},
       {origin:''},
       {origin:'not-an-origin'},
       {'sec-fetch-site':'cross-site'},
       {origin:'https://elsewhere.example','x-forwarded-host':'elsewhere.example','x-forwarded-proto':'https'},
-      {origin:'http://localhost:8124','x-forwarded-host':'localhost:8124'},
+      {origin:`${site.protocol}//${site.hostname}:8124`,'x-forwarded-host':`${site.hostname}:8124`},
     ];
     for(const headers of rejectedHeaders){
       for(const [method,action] of [['POST','view'],['PUT','like'],['DELETE','like']] as const){
