@@ -26,7 +26,7 @@ test("a failed browser test retains a screenshot and page metadata", async () =>
       });
     `);
     const artifacts = path.join(directory, "artifacts");
-    const env = { ...process.env, WEB_TEST_ARTIFACTS: artifacts };
+    const env: NodeJS.ProcessEnv = { ...process.env, WEB_TEST_ARTIFACTS: artifacts };
     delete env.NODE_TEST_CONTEXT;
     const child = spawn(process.execPath, ["--test", fixture], {
       env,
