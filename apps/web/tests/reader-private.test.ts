@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
-import {chromium,webkit,expect} from "@playwright/test";
+import {chromium,webkit,expect} from "./browser.ts";
 import {fakeApi,startWebServer,visit,type WebServer} from "./web-server.ts";
 import type {SavedReaderView,ReaderPosition} from "../../../modules/reader/contracts.ts";
 

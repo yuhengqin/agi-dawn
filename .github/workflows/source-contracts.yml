@@ -1,0 +1,89 @@
+# Read-only checks of the committed public listing templates; never runs collection or article extraction.
+name: Source contracts
+
+on:
+  schedule:
+    # Monday 09:17 Asia/Shanghai.
+    - cron: '17 1 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: agidawn-source-contracts
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AGIDawn_CREDENTIALS_DIR: /nonexistent-source-contract-credentials
+      AGIDawn_DATA_DIR: ${{ runner.temp }}/source-contract-data
+      ALLOW_PRIVATE_NETWORK_FETCH: "false"
+      COLLECT_ENABLED: "false"
+      MODEL_CALLS_ENABLED: "false"
+      FEISHU_INTERNAL_ENABLED: "false"
+      INDEXNOW_SUBMIT_ENABLED: "false"
+      CURL_CFFI_PYTHON: ${{ runner.temp }}/curl-cffi/bin/python
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Browser-profile HTTP runtime
+        run: |
+          python3 -m venv "$CURL_CFFI_PYTHON_DIR"
+          "$CURL_CFFI_PYTHON/bin/pip" install --only-binary=:all: -r deploy/curl-cffi-requirements.txt
+        env:
+          CURL_CFFI_PYTHON_DIR: ${{ runner.temp }}/curl-cffi
+      - name: Check public source contracts
+        id: check
+        continue-on-error: true
+        run: node scripts/check-source-contracts.ts --output "$RUNNER_TEMP/source-contracts/report.json" --markdown "$RUNNER_TEMP/source-contracts/report.md"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: source-contracts-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/source-contracts/report.json
+            ${{ runner.temp }}/source-contracts/report.md
+      - name: Synchronize one review issue
+        if: always() && steps.check.outcome != 'cancelled'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const { pathToFileURL } = require('node:url');
+            const reportPath = path.join(process.env.RUNNER_TEMP, 'source-contracts/report.json');
+            const markdownPath = path.join(process.env.RUNNER_TEMP, 'source-contracts/report.md');
+            if (!fs.existsSync(reportPath) || !fs.existsSync(markdownPath)) {
+              core.setFailed('Source contract report is missing; existing review issue kept');
+              return;
+            }
+            try {
+              const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+              const markdown = fs.readFileSync(markdownPath, 'utf8');
+              const helper = path.join(process.env.GITHUB_WORKSPACE, 'scripts/source-contract-issue.mjs');
+              const { syncSourceContractIssue } = await import(pathToFileURL(helper).href);
+              const result = await syncSourceContractIssue({
+                github, owner: context.repo.owner, repo: context.repo.repo, report, markdown,
+              });
+              core.info(`Source contract Issue synchronization: ${result.action}`);
+              if (result.hasCheckFailures) {
+                core.setFailed('Some source checks did not complete; review issue retained or updated from the valid report');
+              }
+            } catch (error) {
+              console.error(error);
+              core.setFailed('Source contract Issue synchronization failed; existing review issue kept');
+            }

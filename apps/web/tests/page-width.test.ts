@@ -1,7 +1,8 @@
 // Reading page long titles, URLs and code must not stretch phone or desktop layouts.
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { chromium, webkit, expect, type Browser, type Page } from "@playwright/test";
+import { expect, type Browser, type Page } from "@playwright/test";
+import { chromium, webkit } from "./browser.ts";
 import { fakeApi, feedItem, itemDetail, startWebServer, visit, type WebServer } from "./web-server.ts";
 
 const longText = "查看完整说明 https://example.org/announcements/" + "a".repeat(100) + "。";

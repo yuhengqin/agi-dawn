@@ -6,6 +6,24 @@
 
 支持 RSS/Atom（`rss`）、HTML/Markdown列表（`web_list`）、JSON列表（`json_list`）、X搜索（`x_search`）、微信公众号（`mp_account`）和外部推送（`external`）。当前实际接入RSS、HTML和页面内嵌JSON。仅 `participation_mode=editorial` 的文章可公开；其他参与模式不会进入阅读列表。
 
+## 只读契约漂移检查
+
+`.github/workflows/source-contracts.yml` 每周一09:17（上海时间）及手动触发时，对 `industry/sources.json` 的公开列表模板执行只读探针。它复用当前RSS、HTML和JSON解析器，再应用URL、分类和噪声筛选；不读取 `.env` 或运行时数据库，不提取正文、不调用付费服务、不收录文章，也不修改后台来源。OpenAI所需的浏览器指纹传输使用GitHub runner的隔离临时目录，报告不包含私人资料。
+
+每个来源分为 `unchanged`（仍能解析并有通过筛选的条目）、`review-required`（解析或筛选结果需要人工对照原站）和 `check-failed`（网络、HTTP或检查器未完成）。后两类不直接证明上游损坏。JSON与Markdown报告始终保留14天；需要复核时，工作流按稳定语义指纹创建或更新一个 `source-contract-drift` Issue，同指纹不覆盖人工编辑，重复机器Issue会关闭。只有完整成功的 `unchanged` 报告才自动关闭机器Issue；检查失败保留现状。它补充现有worker信源周报，不替代真实来源验收，也不检查仅在数据库中修改过的运行配置。
+
+本地显式运行同样只写指定报告及传输临时状态，不加载 `.env`：
+
+```bash
+export AGIDawn_DATA_DIR="$(mktemp -d)"
+export CURL_CFFI_PYTHON="$PWD/.data/curl-cffi/bin/python"
+node scripts/check-source-contracts.ts \
+  --output /tmp/source-contracts.json \
+  --markdown /tmp/source-contracts.md
+```
+
+该命令访问真实公开列表；`review-required` 以状态码2退出，`check-failed` 以1退出。自动测试通过本地替身覆盖报告与Issue生命周期，不访问真实来源。
+
 ## 常用配置
 
 RSS 使用 `feedUrl`，可用 `allowCategories` / `denyCategories` 限定范围。摘要不足正文时排入提取；只有来源明确说明摘要就是正文，才配置 `summaryIsBody=true`。不要把媒体文件地址当作文章页。

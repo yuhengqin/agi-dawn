@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chromium, webkit, expect } from "@playwright/test";
+import { chromium, webkit, expect } from "./browser.ts";
 import { fakeApi, itemDetail, startWebServer, visit, type WebServer } from "./web-server.ts";
 
 function outlineApi(item:ReturnType<typeof itemDetail>){

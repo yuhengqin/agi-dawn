@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chromium, webkit, expect } from "@playwright/test";
+import { chromium, webkit, expect } from "./browser.ts";
 import { fakeApi, feedItem, itemDetail, readerPage, startWebServer, visit, type WebServer } from "./web-server.ts";
 
 for(const engine of [chromium,webkit])test(`numbered pagination counts, jumps and switches page size without losing filters (${engine.name()})`,async()=>{

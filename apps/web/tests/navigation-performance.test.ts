@@ -1,7 +1,8 @@
 // Reader enhancements wait for visible code and update only the picture that loaded.
 import assert from "node:assert/strict";
 import { before, after, test } from "node:test";
-import { webkit, expect, type Browser } from "@playwright/test";
+import { expect, type Browser } from "@playwright/test";
+import { webkit } from "./browser.ts";
 import { fakeApi, itemDetail, startWebServer, visit, type WebServer } from "./web-server.ts";
 
 const codeSource='import json\n\nwith open("data.json") as file:\n    data = json.load(file)\n\nfor record in data:\n    print(record["title"])\n';
