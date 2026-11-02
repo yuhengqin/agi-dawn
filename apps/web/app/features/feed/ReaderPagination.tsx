@@ -1,10 +1,11 @@
 import {useEffect} from 'react';
-import {Form,Link,useSubmit} from 'react-router';
+import {Form,useSubmit} from 'react-router';
 import {READER_PAGE_SIZES} from '@agidawn/contracts/site';
 import type {ReaderPageData} from './reader.server';
 import {PreservedFilters} from './ReaderFilters';
 import {readerLink} from './ReaderNavigation';
 import {IconChevronLeft,IconChevronRight} from '../../components/icons';
+import {IntentLink} from '../../components/ui/IntentLink';
 
 type PaginationProps=Pick<ReaderPageData,'page'|'query'>;
 
@@ -48,21 +49,21 @@ export function ReaderPagination({page,query}:PaginationProps){
 
   return <div className="reader-pagination">
     {page.pageCount>1&&<nav aria-label="文章分页" className="reader-pagination-nav">
-      {page.page>1?<Link to={href(page.page-1)} prefetch="intent" rel="prev" aria-label="上一页" title="上一页（快捷键 ← 或 h）" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only sm:not-sr-only">上一页</span></Link>:<span aria-disabled="true" aria-label="上一页" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only sm:not-sr-only">上一页</span></span>}
+      {page.page>1?<IntentLink to={href(page.page-1)} rel="prev" aria-label="上一页" title="上一页（快捷键 ← 或 h）" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only sm:not-sr-only">上一页</span></IntentLink>:<span aria-disabled="true" aria-label="上一页" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only sm:not-sr-only">上一页</span></span>}
       {entries.map(entry=>{
         if(typeof entry==='number'){
-          return <Link key={entry} to={href(entry)} prefetch="intent" aria-label={`第 ${entry} 页`} aria-current={entry===page.page?'page':undefined} className="reader-page-control">{entry}</Link>;
+          return <IntentLink key={entry} to={href(entry)} aria-label={`第 ${entry} 页`} aria-current={entry===page.page?'page':undefined} className="reader-page-control">{entry}</IntentLink>;
         }
         const nextNumber=Number(entry.replace('gap-',''));
         const isBefore=nextNumber<=page.page;
         const target=isBefore?Math.max(1,Math.min(page.page-5,nextNumber-1)):Math.min(page.pageCount,Math.max(page.page+5,(numbers[numbers.indexOf(nextNumber)-1]??0)+1));
         const label=isBefore?`向前跳转至第 ${target} 页`:`向后跳转至第 ${target} 页`;
-        return <Link key={entry} to={href(target)} prefetch="intent" aria-label={label} title={label} className="reader-page-control reader-page-gap">
+        return <IntentLink key={entry} to={href(target)} aria-label={label} title={label} className="reader-page-control reader-page-gap">
           <span className="reader-gap-dots" aria-hidden="true">…</span>
           <span className="reader-gap-jump" aria-hidden="true">{isBefore?'«':'»'}</span>
-        </Link>;
+        </IntentLink>;
       })}
-      {page.page<page.pageCount?<Link to={href(page.page+1)} prefetch="intent" rel="next" aria-label="下一页" title="下一页（快捷键 → 或 l）" className="reader-page-control"><span className="sr-only sm:not-sr-only">下一页</span><IconChevronRight size={16}/></Link>:<span aria-disabled="true" aria-label="下一页" className="reader-page-control"><span className="sr-only sm:not-sr-only">下一页</span><IconChevronRight size={16}/></span>}
+      {page.page<page.pageCount?<IntentLink to={href(page.page+1)} rel="next" aria-label="下一页" title="下一页（快捷键 → 或 l）" className="reader-page-control"><span className="sr-only sm:not-sr-only">下一页</span><IconChevronRight size={16}/></IntentLink>:<span aria-disabled="true" aria-label="下一页" className="reader-page-control"><span className="sr-only sm:not-sr-only">下一页</span><IconChevronRight size={16}/></span>}
     </nav>}
     <div role="group" aria-label="文章分页控制" className="reader-pagination-controls">
       <p className="reader-pagination-total">{page.total>0&&<>第 {start}–{end} 篇<span className="mx-2 text-ink-4">/</span></>}共 {page.total} 篇</p>
