@@ -3,7 +3,7 @@ import {READER_PAGE_SIZES} from '@agidawn/contracts/site';
 import type {ReaderPageData} from './reader.server';
 import {PreservedFilters} from './ReaderFilters';
 import {readerLink} from './ReaderNavigation';
-import {IconChevronLeft,IconChevronRight} from '../../components/icons';
+import {IconChevronDown,IconChevronLeft,IconChevronRight} from '../../components/icons';
 import {IntentLink} from '../../components/ui/IntentLink';
 
 type PaginationProps=Pick<ReaderPageData,'page'|'query'>;
@@ -29,19 +29,9 @@ export function ReaderPagination({page,query}:PaginationProps){
   }
 
   return <div role="group" aria-label="文章分页控制" className="reader-pagination">
-    <div className="reader-pagination-info">
-      <Form method="get" action="/" className="reader-pagination-size" key={page.limit}>
-        <PreservedFilters query={query} except={['limit']}/>
-        <label htmlFor="reader-page-size">每页</label>
-        <select id="reader-page-size" name="limit" aria-label="每页篇数" defaultValue={page.limit} className="reader-pagination-field" onChange={event=>void submit(event.currentTarget.form)}>
-          {READER_PAGE_SIZES.map(size=><option key={size} value={size}>{size} 篇</option>)}
-        </select>
-        <noscript><button type="submit" className="reader-pagination-submit">应用数量</button></noscript>
-      </Form>
-      <p className="reader-pagination-total">{page.total>0&&<>第 {start}–{end} 篇<span className="mx-2 text-ink-4">/</span></>}共 {page.total} 篇</p>
-    </div>
-    {page.pageCount>1&&<div className="reader-pagination-actions">
-      <nav aria-label="文章分页" className="reader-pagination-nav" onKeyDown={event=>{
+    <p className="reader-pagination-total">{page.total>0&&<>显示第 {start} 篇–第 {end} 篇，</>}共 {page.total} 篇</p>
+    <div className="reader-pagination-actions">
+      {page.pageCount>1&&<nav aria-label="文章分页" className="reader-pagination-nav" onKeyDown={event=>{
         if(event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||event.nativeEvent.isComposing)return;
         const rel=event.key==='ArrowLeft'||event.key==='h'?'prev':event.key==='ArrowRight'||event.key==='l'?'next':null;
         const link=rel&&event.currentTarget.querySelector<HTMLAnchorElement>(`a[rel="${rel}"]`);
@@ -67,13 +57,24 @@ export function ReaderPagination({page,query}:PaginationProps){
           </IntentLink>;
         })}
         {page.page<page.pageCount?<IntentLink to={href(page.page+1)} rel="next" aria-label="下一页" title="下一页（分页链接聚焦时：→ 或 l）" className="reader-page-control"><span className="sr-only">下一页</span><IconChevronRight size={16}/></IntentLink>:<span aria-disabled="true" aria-label="下一页" className="reader-page-control"><span className="sr-only">下一页</span><IconChevronRight size={16}/></span>}
-      </nav>
+      </nav>}
       {entries.some(entry=>typeof entry==='string')&&<Form method="get" action="/" key={JSON.stringify(query)} className="reader-pagination-jump">
         <PreservedFilters query={query} except={[]}/>
         <label htmlFor="reader-page-jump">第</label>
         <input id="reader-page-jump" aria-label="跳转页码" type="number" name="page" min={1} max={page.pageCount} step={1} required defaultValue={page.page} inputMode="numeric" enterKeyHint="go" onFocus={event=>event.currentTarget.select()} autoComplete="off" className="reader-pagination-field"/>
         <span className="whitespace-nowrap">/ {page.pageCount} 页</span><button type="submit" title="跳转（也可在输入框内直接按回车）" className="reader-pagination-submit">跳转</button>
       </Form>}
-    </div>}
+      <Form method="get" action="/" className="reader-pagination-size" key={page.limit}>
+        <PreservedFilters query={query} except={['limit']}/>
+        <div className="reader-pagination-picker">
+          <label htmlFor="reader-page-size" className="sr-only">每页篇数</label>
+          <select id="reader-page-size" name="limit" defaultValue={page.limit} className="reader-pagination-field" onChange={event=>void submit(event.currentTarget.form)}>
+            {READER_PAGE_SIZES.map(size=><option key={size} value={size}>每页条数：{size}</option>)}
+          </select>
+          <IconChevronDown size={16}/>
+        </div>
+        <noscript><button type="submit" className="reader-pagination-submit">应用数量</button></noscript>
+      </Form>
+    </div>
   </div>;
 }
