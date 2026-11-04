@@ -1,4 +1,3 @@
-import {useEffect} from 'react';
 import {Form,useSubmit} from 'react-router';
 import {READER_PAGE_SIZES} from '@agidawn/contracts/site';
 import type {ReaderPageData} from './reader.server';
@@ -29,24 +28,6 @@ export function ReaderPagination({page,query}:PaginationProps){
     entries.push(number);
   }
 
-  useEffect(()=>{
-    const onKeyDown=(event:KeyboardEvent)=>{
-      if(event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
-      const target=event.target as HTMLElement|null;
-      if(target?.matches('input, textarea, select, [contenteditable="true"]'))return;
-      if(document.querySelector('[role="dialog"]'))return;
-      if(event.key==='ArrowLeft'||event.key==='h'){
-        const prev=document.querySelector<HTMLAnchorElement>('.reader-pagination-nav a[rel="prev"]');
-        if(prev){event.preventDefault();prev.click();}
-      }else if(event.key==='ArrowRight'||event.key==='l'){
-        const next=document.querySelector<HTMLAnchorElement>('.reader-pagination-nav a[rel="next"]');
-        if(next){event.preventDefault();next.click();}
-      }
-    };
-    window.addEventListener('keydown',onKeyDown);
-    return()=>window.removeEventListener('keydown',onKeyDown);
-  },[]);
-
   return <div role="group" aria-label="文章分页控制" className="reader-pagination">
     <div className="reader-pagination-info">
       <Form method="get" action="/" className="reader-pagination-size" key={page.limit}>
@@ -60,8 +41,18 @@ export function ReaderPagination({page,query}:PaginationProps){
       <p className="reader-pagination-total">{page.total>0&&<>第 {start}–{end} 篇<span className="mx-2 text-ink-4">/</span></>}共 {page.total} 篇</p>
     </div>
     {page.pageCount>1&&<div className="reader-pagination-actions">
-      <nav aria-label="文章分页" className="reader-pagination-nav">
-        {page.page>1?<IntentLink to={href(page.page-1)} rel="prev" aria-label="上一页" title="上一页（快捷键 ← 或 h）" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only">上一页</span></IntentLink>:<span aria-disabled="true" aria-label="上一页" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only">上一页</span></span>}
+      <nav aria-label="文章分页" className="reader-pagination-nav" onKeyDown={event=>{
+        if(event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||event.nativeEvent.isComposing)return;
+        const rel=event.key==='ArrowLeft'||event.key==='h'?'prev':event.key==='ArrowRight'||event.key==='l'?'next':null;
+        const link=rel&&event.currentTarget.querySelector<HTMLAnchorElement>(`a[rel="${rel}"]`);
+        if(link){
+          event.preventDefault();
+          // The destination page survives when a previous/next or gap link disappears.
+          Array.from(event.currentTarget.querySelectorAll<HTMLAnchorElement>('a')).find(candidate=>candidate!==link&&candidate.href===link.href)?.focus({preventScroll:true});
+          link.click();
+        }
+      }}>
+        {page.page>1?<IntentLink to={href(page.page-1)} rel="prev" aria-label="上一页" title="上一页（分页链接聚焦时：← 或 h）" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only">上一页</span></IntentLink>:<span aria-disabled="true" aria-label="上一页" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only">上一页</span></span>}
         {entries.map(entry=>{
           if(typeof entry==='number'){
             return <IntentLink key={entry} to={href(entry)} aria-label={`第 ${entry} 页`} aria-current={entry===page.page?'page':undefined} className="reader-page-control">{entry}</IntentLink>;
@@ -75,7 +66,7 @@ export function ReaderPagination({page,query}:PaginationProps){
             <span className="reader-gap-jump" aria-hidden="true">{isBefore?'«':'»'}</span>
           </IntentLink>;
         })}
-        {page.page<page.pageCount?<IntentLink to={href(page.page+1)} rel="next" aria-label="下一页" title="下一页（快捷键 → 或 l）" className="reader-page-control"><span className="sr-only">下一页</span><IconChevronRight size={16}/></IntentLink>:<span aria-disabled="true" aria-label="下一页" className="reader-page-control"><span className="sr-only">下一页</span><IconChevronRight size={16}/></span>}
+        {page.page<page.pageCount?<IntentLink to={href(page.page+1)} rel="next" aria-label="下一页" title="下一页（分页链接聚焦时：→ 或 l）" className="reader-page-control"><span className="sr-only">下一页</span><IconChevronRight size={16}/></IntentLink>:<span aria-disabled="true" aria-label="下一页" className="reader-page-control"><span className="sr-only">下一页</span><IconChevronRight size={16}/></span>}
       </nav>
       {entries.some(entry=>typeof entry==='string')&&<Form method="get" action="/" key={JSON.stringify(query)} className="reader-pagination-jump">
         <PreservedFilters query={query} except={[]}/>

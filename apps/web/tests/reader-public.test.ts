@@ -3,6 +3,56 @@ import { test } from "node:test";
 import { chromium, webkit, expect } from "./browser.ts";
 import { fakeApi, feedItem, itemDetail, readerPage, startWebServer, visit, type WebServer } from "./web-server.ts";
 
+for(const engine of [chromium,webkit])test(`pagination shortcuts only act while a pagination link has focus (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined;
+  const articles=Array.from({length:300},(_,i)=>feedItem({id:'shortcut-'+i,title:'Shortcut article '+i}));
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/articles')return readerPage(articles,url);
+      if(url.pathname==='/api/site/engagement')return {items:(url.searchParams.get('ids')??'').split(',').map(id=>({id,views:0,likes:0,liked:false}))};
+      if(url.pathname==='/api/site/categories'||url.pathname==='/api/site/sources')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900}});
+    await visit(page,web.origin+'/?page=2');
+    const nav=page.getByRole('navigation',{name:'文章分页',exact:true});
+    for(const key of ['h','l','ArrowLeft','ArrowRight']){
+      await page.getByRole('link',{name:'Shortcut article 25',exact:true}).press(key);
+      await page.waitForLoadState('networkidle');
+      await expect(page).toHaveURL(web.origin+'/?page=2');
+      await expect(nav.locator('[aria-current="page"]')).toHaveText('2');
+    }
+    for(const control of [page.getByRole('searchbox',{name:'搜索文章'}),page.getByRole('spinbutton',{name:'跳转页码'})]){
+      await control.press('ArrowLeft');await control.press('ArrowRight');
+      await page.waitForLoadState('networkidle');
+      await expect(page).toHaveURL(web.origin+'/?page=2');
+    }
+    await nav.getByRole('link',{name:'第 2 页',exact:true}).focus();
+    for(const [key,to] of [['l',3],['h',2],['ArrowRight',3],['ArrowLeft',2]] as const){
+      await page.keyboard.press(key);
+      await expect(nav.locator('[aria-current="page"]')).toHaveText(String(to));
+      await expect(page).toHaveURL(web.origin+`/?page=${to}`);
+      await expect(nav.getByRole('link',{name:`第 ${to} 页`,exact:true})).toBeFocused();
+    }
+    await nav.getByRole('link',{name:'第 2 页',exact:true}).press('Control+ArrowRight');
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(web.origin+'/?page=2');
+    await nav.getByRole('link',{name:'上一页',exact:true}).press('h');
+    await expect(nav.locator('[aria-current="page"]')).toHaveText('1');
+    await expect(nav.getByRole('link',{name:'第 1 页',exact:true})).toBeFocused();
+    await page.keyboard.press('h');
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(web.origin+'/');
+    await page.keyboard.press('l');
+    await expect(nav.locator('[aria-current="page"]')).toHaveText('2');
+    await nav.getByRole('link',{name:'第 12 页',exact:true}).press('Enter');
+    await expect(nav.locator('[aria-current="page"]')).toHaveText('12');
+    await nav.getByRole('link',{name:'第 12 页',exact:true}).press('l');
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(web.origin+'/?page=12');
+  }finally{await browser.close();await web?.stop();}
+});
+
 for(const engine of [chromium,webkit])test(`numbered pagination counts, jumps and switches page size without losing filters (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined;
   const articles=Array.from({length:165},(_,i)=>feedItem({id:'paged-'+i,title:'Paged article '+i}));
