@@ -70,7 +70,7 @@ reader 模块每五分钟翻译新收录且已取得正文的外文文章。新�
 
 浏览器仅使用 `agidawn-*` 品牌键，不再执行旧品牌 localStorage/sessionStorage 自动迁移。已使用当前键的偏好、草稿和搜索历史保留；仅存于旧键的外观偏好需要重新设置，旧条目不删除。文章、私人笔记、收藏和阅读位置仍保存在数据库中。
 
-当前先运行独立 web 预览服务：`http://127.0.0.1:3100` → 原有 API `http://127.0.0.1:3001` → 原数据库。原站 3000 端口及原 worker 继续运行；预览只启动 web，不启动第二个 API/worker，不运行数据库迁移、seed 或来源配置维护脚本。这一阶段验证新页面与前端标识，后端字段切换留待单独升级。网页正常访问仍经原 API 处理阅读统计及用户主动操作，不是数据库只读权限隔离。
+标识升级初期曾运行独立 web 预览服务：`http://127.0.0.1:3100` → 原有 API `http://127.0.0.1:3001` → 原数据库。以下预览步骤记录当时的对照方式；当前生产地址与端口以“服务管理”一节为准。预览只启动 web，不启动第二个 API/worker，不运行数据库迁移、seed 或来源配置维护脚本。网页正常访问仍经原 API 处理阅读统计及用户主动操作，不是数据库只读权限隔离。
 
 本机预览使用独立 transient systemd 用户服务，不加载 `.env`，不设置开机自启，也不重新构建或重启原服务。复现启动（先使用本机 Node 24.22.1 工具链，并确认 3100 空闲）：
 
@@ -110,7 +110,11 @@ node scripts/smoke.ts --base http://localhost:3000
 
 ### 服务管理
 
-本次Linux工作副本使用systemd用户服务托管API、生产构建web和worker，复用现有 `article-reader-pg` 容器。它是本机运行方式，始终绑定127.0.0.1，不开放公网端口。先完成上述初始化与构建，再在工作副本根目录运行：
+本次Linux工作副本使用systemd用户服务托管API、生产构建web和worker，复用现有 `article-reader-pg` 容器。它是本机运行方式，始终绑定127.0.0.1，不开放公网端口。
+
+本机生产网页使用 `http://localhost:4040`，API仍使用 `http://127.0.0.1:3001`，独立开发网页保留3000端口。生产web的systemd覆盖文件 `~/.config/systemd/user/agi-dawn-web.service.d/ports.conf` 设置 `WEB_PORT=4040 SITE_URL=http://localhost:4040`；私有 `.env` 的 `SITE_URL` 同步为该生产地址，使API和worker生成的链接一致。修改覆盖文件后执行 `systemctl --user daemon-reload`，重新构建web并重启生产API、web和worker；就绪后执行 `node scripts/smoke.ts --base http://localhost:4040`。独立开发服务不需要随生产更新重启。
+
+先完成上述初始化与构建，再在工作副本根目录运行：
 
 ```bash
 # 本机私有工具链；其他机器使用自己的Node24.22.1和PG17客户端
