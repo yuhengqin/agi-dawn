@@ -1,10 +1,11 @@
 import { data,redirect } from "react-router";
 import { READER_PAGE_SIZES, type ReaderListPage, type TopicSummary } from "@agidawn/contracts/site";
-import { loadOr404 } from "../../lib/api.server";
+import { beijingDate } from "@agidawn/contracts/time";
+import { apiGet,loadOr404 } from "../../lib/api.server";
 
 export interface ReaderSource { id:string;name:string;url:string|null;description:string|null;articles:number;fulltext:boolean;latestAt:string|null }
 export type ReaderTopic=TopicSummary;
-export interface ReaderPageData { page:ReaderListPage;sources:ReaderSource[];topics:ReaderTopic[];categories:Array<{id:string;name:string}>;query:Record<string,string> }
+export interface ReaderPageData { page:ReaderListPage;sources:ReaderSource[];topics:ReaderTopic[];categories:Array<{id:string;name:string}>;query:Record<string,string>;latestArticleDate:string|null }
 
 export async function loadReaderPage(request:Request) {
   const url=new URL(request.url);
@@ -29,6 +30,19 @@ export async function loadReaderPage(request:Request) {
     if(page.page===1)params.delete('page');else params.set('page',String(page.page));
     throw redirect(params.size?`/?${params}`:'/');
   }
-  return data<ReaderPageData>({page,sources:sources.items,topics:topics.topics,categories:categories.items,query:Object.fromEntries(params)},{headers:{"Cache-Control":"no-store"}});
+  let latestArticleDate:string|null=null;
+  if(page.total===0&&(params.has('from')||params.has('to'))){
+    const undated=new URLSearchParams(params);
+    for(const key of ['from','to','page'])undated.delete(key);
+    undated.set('limit',String(READER_PAGE_SIZES[0]));
+    try{
+      const alternatives=await apiGet<ReaderListPage>(`/api/site/articles?${undated}`,{signal:request.signal});
+      if(alternatives.items[0])latestArticleDate=beijingDate(alternatives.items[0].timelineAt);
+    }catch(error){
+      // A failed optional suggestion must not replace the successful empty result.
+      if(request.signal.aborted)throw error;
+    }
+  }
+  return data<ReaderPageData>({page,sources:sources.items,topics:topics.topics,categories:categories.items,query:Object.fromEntries(params),latestArticleDate},{headers:{"Cache-Control":"no-store"}});
 }
 export const readerHeaders=()=>({"Cache-Control":"no-store"});

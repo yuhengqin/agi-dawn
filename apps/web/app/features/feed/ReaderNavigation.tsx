@@ -1,4 +1,4 @@
-import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from "react";
+import {useEffect,useLayoutEffect,useRef,useState,type ReactNode,type Ref} from "react";
 import {Link,useLocation} from "react-router";
 import {ARTICLE_NAVIGATION} from "@agidawn/site";
 import {IconChevronDown} from "../../components/icons";
@@ -11,7 +11,7 @@ export function readerLink(query:Record<string,string>,changes:Record<string,str
 }
 
 /** Native disclosure remains usable without JS; the panel overlays the list. */
-export function ReaderPopover({label,triggerLabel,children,className='',panelClassName='',active=false,onOpen}:{label:ReactNode;triggerLabel?:string;children:ReactNode|((close:()=>void)=>ReactNode);className?:string;panelClassName?:string;active?:boolean;onOpen?:()=>void}){
+export function ReaderPopover({label,triggerLabel,triggerRef,children,className='',panelClassName='',active=false,onOpen}:{label:ReactNode;triggerLabel?:string;triggerRef?:Ref<HTMLElement>;children:ReactNode|((close:()=>void)=>ReactNode);className?:string;panelClassName?:string;active?:boolean;onOpen?:()=>void}){
   const ref=useRef<HTMLDetailsElement>(null),location=useLocation();
   const close=()=>{if(ref.current){ref.current.open=false;ref.current.querySelector('summary')?.focus();}};
   const fitPanel=()=>{
@@ -33,7 +33,7 @@ export function ReaderPopover({label,triggerLabel,children,className='',panelCla
   },[]);
   return <details ref={ref} name="reader-picker" className={`reader-popover ${className}`}
     onBlur={event=>{if(event.relatedTarget&&!event.currentTarget.contains(event.relatedTarget as Node))event.currentTarget.open=false;}}>
-    <summary aria-label={triggerLabel} title={triggerLabel} className={`flex min-h-11 cursor-pointer items-center justify-between gap-2 text-[13px] ${active?'text-accent':'text-ink-3'} hover:text-accent`} onClick={event=>{
+    <summary ref={triggerRef} aria-label={triggerLabel} title={triggerLabel} className={`flex min-h-11 cursor-pointer items-center justify-between gap-2 text-[13px] ${active?'text-accent':'text-ink-3'} hover:text-accent`} onClick={event=>{
       event.preventDefault();const details=ref.current!,opening=!details.open;
       if(opening)onOpen?.();details.open=opening;if(opening)fitPanel();
     }}

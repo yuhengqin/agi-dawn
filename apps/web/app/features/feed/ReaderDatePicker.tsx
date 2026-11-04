@@ -1,4 +1,4 @@
-import {useLayoutEffect,useRef,useState,type KeyboardEvent} from 'react';
+import {useLayoutEffect,useRef,useState,type KeyboardEvent,type Ref} from 'react';
 import {Form,useNavigate} from 'react-router';
 import {addDays,beijingDate,isValidDate,monthDay} from '@agidawn/contracts/time';
 import {ReaderPopover,readerLink} from './ReaderNavigation';
@@ -151,9 +151,9 @@ function DateDraft({query,close}:{query:Record<string,string>;close:()=>void}){
   </Form>;
 }
 
-export function ReaderDatePicker({query}:{query:Record<string,string>}){
+export function ReaderDatePicker({query,triggerRef}:{query:Record<string,string>;triggerRef?:Ref<HTMLElement>}){
   const [session,setSession]=useState(0);
-  return <ReaderPopover label={dateRangeLabel(query.from,query.to)} className="relative shrink-0" active={!!(query.from||query.to)} panelClassName="reader-date-panel" onOpen={()=>setSession(value=>value+1)}>
+  return <ReaderPopover label={dateRangeLabel(query.from,query.to)} triggerRef={triggerRef} className="relative shrink-0" active={!!(query.from||query.to)} panelClassName="reader-date-panel" onOpen={()=>setSession(value=>value+1)}>
     {close=><DateDraft key={`${query.from??''}:${query.to??''}:${session}`} query={query} close={close}/>}
   </ReaderPopover>;
 }

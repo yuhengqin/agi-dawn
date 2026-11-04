@@ -62,7 +62,7 @@ for(const engine of [chromium,webkit])test(`numbered pagination counts, jumps an
     await visit(page,web.origin+'/?q=missing&page=999&limit=100');
     await expect(page).toHaveURL(web.origin+'/?q=missing&limit=100');
     await expect(page.getByRole('status',{name:'文章分页信息'})).toContainText('共 0 篇');await expect(nav).toHaveCount(0);
-    await expect(controls.getByRole('combobox',{name:'每页篇数',exact:true})).toHaveValue('100');
+    await expect(controls).toHaveCount(0);
     await visit(page,web.origin+'/?q=single&limit=100');
     await expect(page.locator('main ol article')).toHaveCount(10);await expect(nav).toHaveCount(0);
     await controls.getByRole('combobox',{name:'每页篇数',exact:true}).selectOption('25');await expect(page).toHaveURL(/limit=25/);
@@ -115,6 +115,84 @@ for(const engine of [chromium,webkit])test(`numbered pagination counts, jumps an
     await plain.getByRole('spinbutton',{name:'跳转页码',exact:true}).fill('3');await plain.getByRole('button',{name:'跳转',exact:true}).click();
     await expect(plain).toHaveURL(/page=3/);await expect(plain.getByRole('link',{name:'Paged article 100',exact:true})).toBeVisible();
     for(const [key,value] of new URLSearchParams(manyFilters))assert.equal(new URL(plain.url()).searchParams.get(key),value);
+  }finally{await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`empty date results recover without losing filters and use the latest matching Beijing date (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined;const reads:URL[]=[];
+  const latest=feedItem({id:'latest-matching',title:'Latest matching article',publishedAt:null,discoveredAt:'2026-11-02T16:30:00Z',timelineAt:'2026-11-02T16:30:00Z'});
+  const filters={q:'tools',category:'coding',topic:'mcp',sourceId:'source',limit:'100'};
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/articles'){
+        reads.push(url);
+        const matches=Object.entries(filters).filter(([key])=>key!=='limit').every(([key,value])=>url.searchParams.get(key)===value);
+        const dated=url.searchParams.has('from')||url.searchParams.has('to');
+        return readerPage(matches&&(!dated||url.searchParams.get('from')==='2026-11-03'&&url.searchParams.get('to')==='2026-11-03')?[latest]:[],url);
+      }
+      if(url.pathname==='/api/site/categories')return {items:[{id:'coding',name:'AI 编程'}]};
+      if(url.pathname==='/api/site/sources')return {items:[{id:'source',name:'Source',url:null,description:null,articles:1,fulltext:false,latestAt:null}]};
+      if(url.pathname==='/api/site/topics')return {topics:[{slug:'mcp',name:'MCP',group:'field',definition:'',brand:null,total:1,recent:1,indexable:true,latest:null}]};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900},timezoneId:'America/Los_Angeles'});
+    const selected=new URLSearchParams({...filters,from:'2026-11-04'}),origin=web.origin;
+    await visit(page,origin+'/?'+selected);
+    await expect(page.getByRole('heading',{name:'2026-11-04 起暂无文章',exact:true})).toBeVisible();
+    await expect(page.getByRole('group',{name:'文章分页控制',exact:true})).toHaveCount(0);
+    const clear=page.getByRole('link',{name:'不限日期，查看文章',exact:true});
+    const recent=page.getByRole('link',{name:'查看 2026-11-03 的文章',exact:true});
+    await expect(clear).toBeVisible();await expect(recent).toBeVisible();
+    assert.equal(reads.length,2);
+    assert.deepEqual(Object.fromEntries(reads[1]!.searchParams),{...filters,limit:'25'});
+    await clear.click();await expect(page.getByRole('link',{name:latest.title,exact:true})).toBeVisible();
+    assert.deepEqual(Object.fromEntries(new URL(page.url()).searchParams),filters);
+    await expect(page.getByRole('combobox',{name:'每页篇数',exact:true})).toHaveValue('100');assert.equal(reads.length,3);
+    await page.goBack();await expect(page).toHaveURL(origin+'/?'+selected);
+    await recent.focus();await recent.press('Enter');await expect(page.getByRole('link',{name:latest.title,exact:true})).toBeVisible();
+    assert.deepEqual(Object.fromEntries(new URL(page.url()).searchParams),{...filters,from:'2026-11-03',to:'2026-11-03'});
+    const dateTrigger=page.locator('summary').filter({hasText:'2026-11-03 — 2026-11-03'});await expect(dateTrigger).toBeVisible();
+    await page.goBack();await expect(page).toHaveURL(origin+'/?'+selected);
+    const choose=page.getByRole('button',{name:'重新选择日期',exact:true});await choose.focus();await choose.press('Enter');
+    const trigger=page.locator('summary').filter({hasText:'2026-11-04 起'});
+    await expect(trigger).toBeFocused();await expect(page.getByLabel('起始日期',{exact:true})).toHaveValue('2026-11-04');
+    await page.getByLabel('起始日期',{exact:true}).fill('2026-10-01');await page.keyboard.press('Escape');await expect(trigger).toBeFocused();
+    await choose.click();await expect(page.getByLabel('起始日期',{exact:true})).toHaveValue('2026-11-04');await page.keyboard.press('Escape');
+    await page.setViewportSize({width:1100,height:800});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+    const plain=await browser.newPage({javaScriptEnabled:false,viewport:{width:1440,height:900}});
+    const response=await plain.goto(origin+'/?'+selected);assert.match(response!.headers()['cache-control']??'',/no-store/);
+    await plain.getByRole('link',{name:'查看 2026-11-03 的文章',exact:true}).click();await expect(plain.getByRole('link',{name:latest.title,exact:true})).toBeVisible();
+  }finally{await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`empty date results distinguish ranges and omit unavailable date suggestions (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined;let failSuggestion=false;const reads:URL[]=[];
+  try{
+    web=await startWebServer(fakeApi((url,res)=>{
+      if(url.pathname==='/api/site/articles'){
+        reads.push(url);if(failSuggestion&&!url.searchParams.has('from')&&!url.searchParams.has('to')){res.statusCode=503;return {code:'unavailable'};}
+        return readerPage([],url);
+      }
+      if(['/api/site/categories','/api/site/sources'].includes(url.pathname))return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900}});
+    for(const [dates,heading] of [
+      ['from=2026-11-04','2026-11-04 起暂无文章'],['to=2026-11-04','截至 2026-11-04 暂无文章'],
+      ['from=2026-11-04&to=2026-11-04','2026-11-04 暂无文章'],['from=2026-11-01&to=2026-11-04','2026-11-01 至 2026-11-04 暂无文章'],
+    ]){
+      await visit(page,web.origin+'/?q=missing&'+dates);
+      await expect(page.getByRole('heading',{name:heading,exact:true})).toBeVisible();
+      await expect(page.getByRole('link',{name:'不限日期，查看文章',exact:true})).toBeVisible();
+      await expect(page.getByRole('link',{name:/^查看 .* 的文章$/})).toHaveCount(0);
+      await expect(page.getByRole('group',{name:'文章分页控制',exact:true})).toHaveCount(0);
+    }
+    const before=reads.length;await visit(page,web.origin+'/?q=missing');assert.equal(reads.length,before+1);
+    await expect(page.getByRole('link',{name:'不限日期，查看文章',exact:true})).toHaveCount(0);
+    failSuggestion=true;
+    await visit(page,web.origin+'/?from=2026-11-04');
+    await expect(page.getByRole('link',{name:'不限日期，查看文章',exact:true})).toBeVisible();
+    await expect(page.getByRole('link',{name:/^查看 .* 的文章$/})).toHaveCount(0);
+    await expect(page.getByRole('heading',{name:'2026-11-04 起暂无文章',exact:true})).toBeVisible();
   }finally{await browser.close();await web?.stop();}
 });
 

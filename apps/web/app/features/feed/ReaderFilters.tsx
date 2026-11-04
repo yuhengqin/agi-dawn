@@ -1,4 +1,4 @@
-import {useEffect,useLayoutEffect,useRef,useState} from "react";
+import {useEffect,useLayoutEffect,useRef,useState,type Ref} from "react";
 import {Form,Link,useLocation,useNavigate,useNavigation,useNavigationType,useSubmit} from "react-router";
 import type {ReaderPageData} from "./reader.server";
 import {readerLink} from "./ReaderNavigation";
@@ -43,7 +43,7 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
   </Form>;
 }
 
-export function ReaderToolbar({query,sources}:Pick<ReaderPageData,'query'|'sources'>){
+export function ReaderToolbar({query,sources,datePickerTrigger}:Pick<ReaderPageData,'query'|'sources'>&{datePickerTrigger?:Ref<HTMLElement>}){
   const submit=useSubmit();
   return <div className="grid grid-cols-1 gap-2 pt-3 sm:grid-cols-[minmax(180px,400px)_minmax(0,auto)] sm:items-center sm:justify-between sm:gap-x-6 lg:pt-0">
     <ReaderSearch query={query}/>
@@ -54,7 +54,7 @@ export function ReaderToolbar({query,sources}:Pick<ReaderPageData,'query'|'sourc
           <option value="">全部来源</option>{sources.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
         <noscript><button type="submit">应用来源</button></noscript>
       </Form>
-      <ReaderDatePicker query={query}/>
+      <ReaderDatePicker query={query} triggerRef={datePickerTrigger}/>
     </div>
   </div>;
 }
