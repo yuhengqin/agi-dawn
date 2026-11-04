@@ -47,26 +47,8 @@ export function ReaderPagination({page,query}:PaginationProps){
     return()=>window.removeEventListener('keydown',onKeyDown);
   },[]);
 
-  return <div className="reader-pagination">
-    {page.pageCount>1&&<nav aria-label="文章分页" className="reader-pagination-nav">
-      {page.page>1?<IntentLink to={href(page.page-1)} rel="prev" aria-label="上一页" title="上一页（快捷键 ← 或 h）" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only sm:not-sr-only">上一页</span></IntentLink>:<span aria-disabled="true" aria-label="上一页" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only sm:not-sr-only">上一页</span></span>}
-      {entries.map(entry=>{
-        if(typeof entry==='number'){
-          return <IntentLink key={entry} to={href(entry)} aria-label={`第 ${entry} 页`} aria-current={entry===page.page?'page':undefined} className="reader-page-control">{entry}</IntentLink>;
-        }
-        const nextNumber=Number(entry.replace('gap-',''));
-        const isBefore=nextNumber<=page.page;
-        const target=isBefore?Math.max(1,Math.min(page.page-5,nextNumber-1)):Math.min(page.pageCount,Math.max(page.page+5,(numbers[numbers.indexOf(nextNumber)-1]??0)+1));
-        const label=isBefore?`向前跳转至第 ${target} 页`:`向后跳转至第 ${target} 页`;
-        return <IntentLink key={entry} to={href(target)} aria-label={label} title={label} className="reader-page-control reader-page-gap">
-          <span className="reader-gap-dots" aria-hidden="true">…</span>
-          <span className="reader-gap-jump" aria-hidden="true">{isBefore?'«':'»'}</span>
-        </IntentLink>;
-      })}
-      {page.page<page.pageCount?<IntentLink to={href(page.page+1)} rel="next" aria-label="下一页" title="下一页（快捷键 → 或 l）" className="reader-page-control"><span className="sr-only sm:not-sr-only">下一页</span><IconChevronRight size={16}/></IntentLink>:<span aria-disabled="true" aria-label="下一页" className="reader-page-control"><span className="sr-only sm:not-sr-only">下一页</span><IconChevronRight size={16}/></span>}
-    </nav>}
-    <div role="group" aria-label="文章分页控制" className="reader-pagination-controls">
-      <p className="reader-pagination-total">{page.total>0&&<>第 {start}–{end} 篇<span className="mx-2 text-ink-4">/</span></>}共 {page.total} 篇</p>
+  return <div role="group" aria-label="文章分页控制" className="reader-pagination">
+    <div className="reader-pagination-info">
       <Form method="get" action="/" className="reader-pagination-size" key={page.limit}>
         <PreservedFilters query={query} except={['limit']}/>
         <label htmlFor="reader-page-size">每页</label>
@@ -75,12 +57,32 @@ export function ReaderPagination({page,query}:PaginationProps){
         </select>
         <noscript><button type="submit" className="reader-pagination-submit">应用数量</button></noscript>
       </Form>
-      {page.pageCount>1&&<Form method="get" action="/" key={JSON.stringify(query)} className="reader-pagination-jump">
+      <p className="reader-pagination-total">{page.total>0&&<>第 {start}–{end} 篇<span className="mx-2 text-ink-4">/</span></>}共 {page.total} 篇</p>
+    </div>
+    {page.pageCount>1&&<div className="reader-pagination-actions">
+      <nav aria-label="文章分页" className="reader-pagination-nav">
+        {page.page>1?<IntentLink to={href(page.page-1)} rel="prev" aria-label="上一页" title="上一页（快捷键 ← 或 h）" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only">上一页</span></IntentLink>:<span aria-disabled="true" aria-label="上一页" className="reader-page-control"><IconChevronLeft size={16}/><span className="sr-only">上一页</span></span>}
+        {entries.map(entry=>{
+          if(typeof entry==='number'){
+            return <IntentLink key={entry} to={href(entry)} aria-label={`第 ${entry} 页`} aria-current={entry===page.page?'page':undefined} className="reader-page-control">{entry}</IntentLink>;
+          }
+          const nextNumber=Number(entry.replace('gap-',''));
+          const isBefore=nextNumber<=page.page;
+          const target=isBefore?Math.max(1,Math.min(page.page-5,nextNumber-1)):Math.min(page.pageCount,Math.max(page.page+5,(numbers[numbers.indexOf(nextNumber)-1]??0)+1));
+          const label=isBefore?`向前跳转至第 ${target} 页`:`向后跳转至第 ${target} 页`;
+          return <IntentLink key={entry} to={href(target)} aria-label={label} title={label} className="reader-page-control reader-page-gap">
+            <span className="reader-gap-dots" aria-hidden="true">…</span>
+            <span className="reader-gap-jump" aria-hidden="true">{isBefore?'«':'»'}</span>
+          </IntentLink>;
+        })}
+        {page.page<page.pageCount?<IntentLink to={href(page.page+1)} rel="next" aria-label="下一页" title="下一页（快捷键 → 或 l）" className="reader-page-control"><span className="sr-only">下一页</span><IconChevronRight size={16}/></IntentLink>:<span aria-disabled="true" aria-label="下一页" className="reader-page-control"><span className="sr-only">下一页</span><IconChevronRight size={16}/></span>}
+      </nav>
+      {entries.some(entry=>typeof entry==='string')&&<Form method="get" action="/" key={JSON.stringify(query)} className="reader-pagination-jump">
         <PreservedFilters query={query} except={[]}/>
         <label htmlFor="reader-page-jump">第</label>
         <input id="reader-page-jump" aria-label="跳转页码" type="number" name="page" min={1} max={page.pageCount} step={1} required defaultValue={page.page} inputMode="numeric" enterKeyHint="go" onFocus={event=>event.currentTarget.select()} autoComplete="off" className="reader-pagination-field"/>
         <span className="whitespace-nowrap">/ {page.pageCount} 页</span><button type="submit" title="跳转（也可在输入框内直接按回车）" className="reader-pagination-submit">跳转</button>
       </Form>}
-    </div>
+    </div>}
   </div>;
 }
