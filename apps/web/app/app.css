@@ -57,9 +57,17 @@
 .reader-pagination-field:hover { border-color: var(--line-strong); }
 select.reader-pagination-field { width: 84px; }
 .reader-pagination-picker { position: relative; }
-.reader-pagination-picker select { width: auto; min-width: 132px; padding-inline: 12px 32px; border-color: transparent; border-radius: 10px; appearance: none; background: var(--bg-sunk); font-size: 13px; cursor: pointer; }
-.reader-pagination-picker select:hover { border-color: transparent; background: var(--bg-muted); }
+.reader-pagination-picker select { width: 72px; padding-inline: 12px 28px; border-radius: 9999px; appearance: none; background: var(--surface); font-size: 13px; cursor: pointer; }
+.reader-pagination-picker select:hover { border-color: var(--line-strong); }
 .reader-pagination-picker > svg { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); pointer-events: none; }
+@supports (appearance: base-select) {
+  .reader-pagination-picker select { appearance: base-select; align-items: center; }
+  .reader-pagination-picker select::picker-icon { display: none; }
+  .reader-pagination-picker select::picker(select) { appearance: base-select; min-width: 144px; padding: 4px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-soft); font-size: 14px; line-height: 1.5; position-area: block-start span-inline-start; position-try-fallbacks: flip-block; inset: auto; margin-block: 4px; }
+  .reader-pagination-picker option { display: flex; align-items: center; gap: 16px; min-height: 28px; padding: 3px 8px; border-radius: 12px; font-weight: 400; cursor: pointer; }
+  .reader-pagination-picker option:is(:checked, :hover, :focus) { background: var(--reader-pagination-active-bg); color: var(--ink); }
+  .reader-pagination-picker option::checkmark { order: 1; margin-inline-start: auto; }
+}
 input.reader-pagination-field { width: 64px; text-align: center; -moz-appearance: textfield; }
 input.reader-pagination-field::-webkit-inner-spin-button,
 input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }

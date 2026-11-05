@@ -66,10 +66,10 @@ export function ReaderPagination({page,query}:PaginationProps){
       </Form>}
       <Form method="get" action="/" className="reader-pagination-size" key={page.limit}>
         <PreservedFilters query={query} except={['limit']}/>
+        <label htmlFor="reader-page-size">每页篇数</label>
         <div className="reader-pagination-picker">
-          <label htmlFor="reader-page-size" className="sr-only">每页篇数</label>
           <select id="reader-page-size" name="limit" defaultValue={page.limit} className="reader-pagination-field" onChange={event=>void submit(event.currentTarget.form)}>
-            {READER_PAGE_SIZES.map(size=><option key={size} value={size}>每页条数：{size}</option>)}
+            {READER_PAGE_SIZES.map(size=><option key={size} value={size}>{size}</option>)}
           </select>
           <IconChevronDown size={16}/>
         </div>
