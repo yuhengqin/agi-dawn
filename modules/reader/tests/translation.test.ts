@@ -16,13 +16,14 @@ import {requestTranslation} from '../translation/model.ts';
 import {translatePending} from '../translation/index.ts';
 import {translateMetadataPending} from '../translation/metadata.ts';
 
-let hold:ReturnType<typeof gate>|null=null,asked=gate(),invalidAnswers=false,onAnswer:(()=>void)|null=null;
+let hold:ReturnType<typeof gate>|null=null,asked=gate(),invalidAnswers=false,onAnswer:(()=>void)|null=null,addedMarkup=false,lastPrompt='';
 const provider=await stub((_hit,req)=>{
   const body=JSON.parse(req.body);
+  lastPrompt=body.messages[0].content;
   assert.equal(body.model,'translation-fixture');
   const {segments}=JSON.parse(body.messages[1].content) as {segments:string[]};
   asked.open();
-  const reply=()=>{onAnswer?.();return {id:'translation-fixture',choices:[{message:{content:JSON.stringify({t:invalidAnswers?[]:segments.map(s=>s.includes('never keeps')?'丢失了链接。':'中文译文：'+s)})}}]};};
+  const reply=()=>{onAnswer?.();return {id:'translation-fixture',choices:[{message:{content:JSON.stringify({t:invalidAnswers?[]:segments.map(s=>s.includes('never keeps')?'丢失了链接。':addedMarkup?'<a id="L0">中文译文：</a>'+s:'中文译文：'+s)})}}]};};
   return hold?hold.promise.then(reply):reply();
 });
 process.env.MODEL_CALLS_ENABLED='true';
@@ -166,6 +167,37 @@ test('metadata fills existing articles without retranslating saved bodies and pr
   await runAll();
   assert.deepEqual((await detail(old.articleId)).metadataTranslation,{title:'中文译文：An old article',summary:'这是已经保存的中文摘要。'});
   assert.equal((await detail(chinese.articleId)).metadataTranslation??null,null);
+});
+
+test('metadata uses a plain text prompt and rejects model-added markup while retaining literal source tags',async()=>{
+  const {articleId}=await upsertMaterial({...input(),title:'Use <model> with <code>',excerpt:'A < B & C > D',bodyHtml:undefined,bodyText:undefined,bodyStatus:'pending'});
+  await translateMetadataPending();
+  assert.match(lastPrompt,/纯文本/);assert.doesNotMatch(lastPrompt,/<a id="L0">/);
+  assert.deepEqual((await detail(articleId)).metadataTranslation,{title:'中文译文：Use <model> with <code>',summary:'中文译文：A < B & C > D'});
+  const bad=await upsertMaterial({...input(),title:'Reject new markup',bodyHtml:undefined,bodyText:undefined,bodyStatus:'pending'});
+  addedMarkup=true;
+  try{await translateMetadataPending();assert.equal((await detail(bad.articleId)).metadataTranslation??null,null);
+    const [state]=await sql`SELECT attempts FROM reader_metadata_translations WHERE article_id=${bad.articleId}`;assert.equal(state!.attempts,1);
+  }finally{addedMarkup=false;}
+});
+
+test('reading legacy metadata unwraps injected tags without model calls or storage changes',async()=>{
+  const {articleId}=await upsertMaterial({...input(),title:'Legacy metadata',excerpt:'An original summary.'});
+  await translateMetadataPending();
+  await sql`UPDATE reader_metadata_translations SET title='<a id="L0">旧标题</a>',summary='保留<a id="L1">摘要</a>。' WHERE article_id=${articleId}`;
+  const calls=provider.hits();assert.deepEqual((await detail(articleId)).metadataTranslation,{title:'旧标题',summary:'保留摘要。'});
+  const list=(await app.inject('/api/site/articles?sourceId='+source)).json();assert.deepEqual(list.items.find((entry:{id:string})=>entry.id===articleId).metadataTranslation,{title:'旧标题',summary:'保留摘要。'});
+  assert.equal(provider.hits(),calls);assert.match((await sql`SELECT summary FROM reader_metadata_translations WHERE article_id=${articleId}`)[0]!.summary,/<a id=/);
+});
+
+test('public cleanup renders matching original and translated bodies without invalidating saved translations',async()=>{
+  const material={...input('<p>Read <a href="https://example.org/docs">Docs<span>(opens in a new window)</span></a>.</p>'),url:'https://openai.com/index/'+tag()};
+  const {articleId}=await upsertMaterial(material);await run();
+  const translated='<p>阅读<a href="https://example.org/docs">文档<span>（在新窗口中打开）</span></a>。</p>';
+  await sql`UPDATE reader_translations SET body_html=${translated},complete=true WHERE article_id=${articleId}`;
+  const before=(await sql`SELECT source_html,body_html,body_revision,status FROM reader_translations WHERE article_id=${articleId}`)[0],calls=provider.hits();
+  const item=await detail(articleId);assert.doesNotMatch(item.bodyHtml,/opens in a new window/);assert.doesNotMatch(item.translation.bodyHtml,/在新窗口中打开/);assert.equal(item.translation.complete,true);
+  assert.deepEqual((await sql`SELECT source_html,body_html,body_revision,status FROM reader_translations WHERE article_id=${articleId}`)[0],before);assert.equal(provider.hits(),calls);
 });
 
 test('metadata follows effective publication values and rejects stale answers without changing body identity',async()=>{

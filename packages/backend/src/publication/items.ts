@@ -2,6 +2,7 @@ import {sql} from "../db.ts";
 import type {ReaderBodyState,ReaderItemSummary,BodyIssue} from "@agidawn/contracts/site";
 import {publicSourceName,displayTags} from "./rules.ts";
 import {serverModules} from '../modules.ts';
+import {cleanSummary} from '../content/snippets.ts';
 export interface ReaderRow {
   id:string;title:string;summary:string|null;source_id:string;source_name:string;author:string|null;
   url:string;published_at:Date|null;discovered_at:Date;sort_at:Date;category:string|null;tags:string[];
@@ -28,5 +29,10 @@ export function toReaderItem(row:ReaderRow):ReaderItemSummary{
 export async function withReaderMetadata(items:ReaderItemSummary[]){
   if(!items.length)return items;
   const translations=await serverModules().find(module=>module.publicationMetadata)?.publicationMetadata?.(items);
-  return translations?items.map(item=>({...item,metadataTranslation:translations.get(item.id)??null})):items;
+  return items.map(item=>{
+    const translated=translations?.get(item.id),context={title:item.title,url:item.links.original};
+    return {...item,summary:cleanSummary(item.summary,context),metadataTranslation:translated?{
+      title:translated.title,summary:cleanSummary(translated.summary,{...context,title:translated.title}),
+    }:null};
+  });
 }

@@ -40,7 +40,9 @@ Claude来源的 `.art-code.art-prompt` 保存为Prompt，其他 `.art-code` 从 
 
 声明式规则不足以表达来源结构时，可显式设置 `detail.bodyAdapter`；当前仅支持 `"browser-use"`，未知值会被拒绝。该适配器在正文识别与去样式之前，将作者名单整理为紧凑段落，将 Odysseys2 已知的完成数量、推理力度和双评判结果转换为表格，保留数值、列名与图注；同一图表的不同显示版本仅在数据一致时合并。无法完整校验的图表继续使用通用图形／文字降级并提示不完整，不猜测缺失数据。此规则不计算原站 CSS，也不执行页面脚本。模板已为 Browser Use 声明适配，已有实例仍须通过后台合并该配置；部署或刷新页面不会重写存量正文与译文。
 
-`detail.removeSelector` 是可选的非空 CSS 选择器，在正文识别和图表转换前移除匹配元素及其内容；只用于已核实的非正文控件，不按文字删除段落。Google Developers Blog 使用它排除底部 `.navigation-container`，并用 `preserve` 将 `.code-block:has(pre code)` 整体替换为 `pre code` 的内容，保留代码语言、清除重复语言标签和复制状态。来源模板只初始化新来源；已有来源需通过后台更新运行时配置，已有文章另行重新提取并更新译文。
+`detail.removeSelector` 是可选的非空 CSS 选择器，在正文识别和图表转换前移除匹配元素及其内容；只用于已核实的非正文控件，不按文字删除段落。Google Developers Blog 模板排除底部 `.navigation-container` 及头部 `.summary-container .published-date`，并用 `preserve` 将 `.code-block:has(pre code)` 整体替换为 `pre code` 的内容，保留代码语言、清除重复语言标签和复制状态。来源模板只初始化新来源；已有来源需通过后台更新运行时配置。需要持久化修改旧正文时另行授权重新提取；本次已确认的显示杂质由公开读取兼容清理，无需为此重提取或付费重译。
+
+RSS摘要按文章标题清理匹配的末尾 `The post … appeared first on …`，不使用通用长度阈值。公开展示另省略Uber的纯品牌占位，并对Huntley末尾残缺的实体预览保留最后完整句子；合法 `AT&T`、`A & B` 与短中文摘要保留。Ghost链接卡片只合并同卡片内完全相同的标题与说明，正文中的重复措辞不作全局删除。
 
 配置项按来源类型校验，未实现的项返回错误，不能靠填写未知字段扩展采集器。完整允许字段见 `packages/backend/src/sources/config-keys.ts`。
 

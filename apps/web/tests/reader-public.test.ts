@@ -3,6 +3,20 @@ import { test } from "node:test";
 import { chromium, webkit, expect } from "./browser.ts";
 import { fakeApi, feedItem, itemDetail, readerPage, startWebServer, visit, type WebServer } from "./web-server.ts";
 
+for(const engine of [chromium,webkit])test(`saved small figure legends remain inline and ordinary illustrations retain the viewer (${engine.name()})`,async()=>{
+  const picture=(size:number)=>'data:image/svg+xml;base64,'+Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size/2}" cy="${size/2}" r="${size/3}"/></svg>`).toString('base64');
+  const article=itemDetail({id:'inline-legend',title:'Inline legend',bodyHtml:`<figure><p><span id="legend-label"><img src="${picture(10)}" alt="Legend dot">Completed tasks</span></p></figure><p><img src="${picture(320)}" alt="Ordinary illustration"></p>`});
+  const browser=await engine.launch();let web:WebServer|undefined;
+  try{
+    web=await startWebServer(fakeApi(url=>{if(url.pathname==='/api/site/items/'+article.id)return article;if(url.pathname==='/api/site/engagement')return {items:[]};}));
+    const page=await browser.newPage({viewport:{width:1440,height:900}});await visit(page,web.origin+'/items/'+article.id);
+    const dot=page.getByRole('img',{name:'Legend dot',exact:true});await expect.poll(()=>dot.evaluate((img:HTMLImageElement)=>img.naturalWidth)).toBe(10);
+    await expect.poll(()=>dot.evaluate(img=>Math.abs(img.getBoundingClientRect().left-img.parentElement!.getBoundingClientRect().left))).toBeLessThan(3);
+    await expect(page.getByRole('button',{name:'查看大图：Legend dot'})).toHaveCount(0);
+    await expect(page.getByRole('button',{name:'查看大图：Ordinary illustration'})).toBeVisible();
+  }finally{await browser.close();await web?.stop();}
+});
+
 for(const engine of [chromium,webkit])test(`pagination shortcuts only act while a pagination link has focus (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined;
   const articles=Array.from({length:300},(_,i)=>feedItem({id:'shortcut-'+i,title:'Shortcut article '+i}));
@@ -515,8 +529,14 @@ for(const engine of [chromium,webkit])test(`article outline follows nested secti
     }));
     const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});await visit(page,web.origin+'/?q=reading');await page.getByRole('link',{name:article.title,exact:true}).click();
     const toc=page.getByRole('navigation',{name:'本文目录',exact:true});
-    await toc.getByRole('button',{name:'展开：First chapter',exact:true}).click();await toc.getByRole('button',{name:'展开：First detail',exact:true}).click();
+    await expect(toc.getByRole('link',{name:'Nested detail',exact:true})).toBeVisible();
+    await toc.getByRole('button',{name:'收起：First detail',exact:true}).click();await expect(toc.getByRole('link',{name:'Nested detail',exact:true})).toBeHidden();
+    await toc.getByRole('button',{name:'展开：First detail',exact:true}).click();
     await toc.getByRole('link',{name:'Nested detail',exact:true}).click();await expect(toc.getByRole('link',{name:'Nested detail',exact:true})).toHaveAttribute('aria-current','location');await expect(page.getByRole('heading',{name:'Nested detail',exact:true})).toBeFocused();
+    await toc.getByRole('button',{name:'收起：First chapter',exact:true}).click();await expect(toc.getByRole('link',{name:'Nested detail',exact:true})).toBeHidden();
+    await expect(toc.getByRole('link',{name:/First chapter.*当前章节/})).toHaveAttribute('aria-current','location');
+    await page.mouse.wheel(0,80);await expect(toc.getByRole('button',{name:'展开：First chapter',exact:true})).toHaveAttribute('aria-expanded','false');
+    await toc.getByRole('button',{name:'展开：First chapter',exact:true}).click();
     await page.getByRole('heading',{name:'Second chapter',exact:true}).evaluate(el=>el.scrollIntoView());await expect(toc.getByRole('link',{name:'Second chapter',exact:true})).toHaveAttribute('aria-current','location');
     await page.setViewportSize({width:390,height:844});await page.locator('summary[aria-label="展开文章目录"]').click();const mobile=page.getByRole('navigation',{name:'手机文章目录',exact:true});
     await mobile.getByRole('link',{name:'First chapter',exact:true}).click();await expect(mobile).toBeHidden();await expect(page.getByRole('heading',{name:'First chapter',exact:true})).toBeFocused();await expect(page.locator('summary[aria-label="展开文章目录"]')).toContainText('First chapter');
@@ -543,7 +563,7 @@ for(const engine of [chromium,webkit])test(`article progress and focus controls 
     await expect(page.getByRole('navigation',{name:'本文目录',exact:true}).getByRole('link',{name:'中文 Middle',exact:true})).toHaveAttribute('aria-current','location');
     await expect(region).toContainText('中文 Middle');
     await page.getByRole('button',{name:'开启专注模式',exact:true}).click();await expect(page.getByRole('navigation',{name:'本文目录',exact:true})).toBeHidden();await expect(page.getByRole('navigation',{name:'主导航',exact:true})).toBeHidden();await expect.poll(sectionRatio).toBeCloseTo(.35,1);
-    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('combobox',{name:'正文字号',exact:true}).selectOption('larger');await expect.poll(sectionRatio).toBeCloseTo(.35,1);await page.keyboard.press('Escape');
+    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'更大',exact:true}).check();await expect.poll(sectionRatio).toBeCloseTo(.35,1);await page.keyboard.press('Escape');
     await page.getByRole('button',{name:'退出专注模式',exact:true}).click();await expect(page.getByRole('navigation',{name:'本文目录',exact:true})).toBeVisible();await expect.poll(sectionRatio).toBeCloseTo(.35,1);
     await page.emulateMedia({reducedMotion:'no-preference'});await page.getByRole('button',{name:'开启专注模式',exact:true}).focus();
     for(let i=0;i<4;i++)await page.keyboard.press('Enter');
@@ -635,15 +655,16 @@ for(const engine of [chromium,webkit])test(`reading display preferences apply, p
       if(req.method!=='GET'&&url.pathname!=='/api/site/track')writes++;
     }));
     const context=await browser.newContext({viewport:{width:1920,height:900}}),page=await context.newPage();await visit(page,web.origin+'/items/display-ui');const body=page.locator('article .prose');
+    await page.getByLabel('阅读显示设置',{exact:true}).click();await expect(page.getByRole('button',{name:'恢复默认显示',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'恢复图表提示',exact:true})).toHaveCount(0);await page.keyboard.press('Escape');
     const font=()=>body.evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),height=()=>body.evaluate(el=>parseFloat(getComputedStyle(el).lineHeight)),width=()=>body.evaluate(el=>el.getBoundingClientRect().width);
-    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('combobox',{name:'正文字号',exact:true}).selectOption('large');await page.getByRole('combobox',{name:'正文行距',exact:true}).selectOption('loose');await page.getByRole('combobox',{name:'正文宽度',exact:true}).selectOption('narrow');await expect.poll(font).toBe(20);await expect.poll(height).toBe(40);assert(await width()<=641);const narrow=await width();
-    const second=await context.newPage();await visit(second,web.origin+'/items/display-ui');assert.equal(await second.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),20);await second.getByLabel('阅读显示设置',{exact:true}).click();await second.getByRole('combobox',{name:'正文字号',exact:true}).selectOption('larger');await second.getByRole('combobox',{name:'正文宽度',exact:true}).selectOption('wide');await expect.poll(font).toBe(22);await expect.poll(width).toBeGreaterThan(narrow+100);
-    await visit(page,page.url());await expect.poll(font).toBe(22);await expect.poll(height).toBe(44);await page.getByLabel('阅读显示设置',{exact:true}).click();await expect(page.getByRole('combobox',{name:'正文宽度',exact:true})).toHaveValue('wide');
+    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'较大',exact:true}).check();await page.getByRole('group',{name:'正文行距',exact:true}).getByRole('radio',{name:'宽松',exact:true}).check();await page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'窄',exact:true}).check();await expect.poll(font).toBe(20);await expect.poll(height).toBe(40);assert(await width()<=641);const narrow=await width();
+    const second=await context.newPage();await visit(second,web.origin+'/items/display-ui');assert.equal(await second.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),20);await second.getByLabel('阅读显示设置',{exact:true}).click();await second.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'更大',exact:true}).check();await second.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true}).check();await expect.poll(font).toBe(22);await expect.poll(width).toBeGreaterThan(narrow+100);
+    await visit(page,page.url());await expect.poll(font).toBe(22);await expect.poll(height).toBe(44);await page.getByLabel('阅读显示设置',{exact:true}).click();await expect(page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true})).toBeChecked();
     for(const size of [320,390,1440]){await page.setViewportSize({width:size,height:800});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));}
-    await page.getByRole('button',{name:'恢复默认显示',exact:true}).click();await expect(page.getByRole('combobox',{name:'正文字号',exact:true})).toHaveValue('default');await expect.poll(()=>second.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBe(18);assert.equal(writes,0);
+    await page.getByRole('button',{name:'恢复默认显示',exact:true}).click();await expect(page.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'默认',exact:true})).toBeChecked();await expect.poll(()=>second.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBe(18);assert.equal(writes,0);
     await page.evaluate(()=>localStorage.setItem('agi-dawn-reading-display-v1','{"size":"enormous","spacing":"loose","width":"wide"}'));await visit(page,page.url());await expect.poll(font).toBe(18);await expect.poll(height).toBe(36);
     await page.evaluate(()=>localStorage.setItem('agi-dawn-reading-display-v1','{'));await visit(page,page.url());await expect.poll(height).toBeCloseTo(32.4,1);assert.equal(writes,0);
-    const denied=await browser.newContext({viewport:{width:390,height:800}});await denied.addInitScript(()=>{Object.defineProperty(window,'localStorage',{get(){throw new DOMException('blocked','SecurityError');}});});const blocked=await denied.newPage();await visit(blocked,web.origin+'/items/display-ui');await blocked.getByLabel('阅读显示设置',{exact:true}).click();await blocked.getByRole('combobox',{name:'正文字号',exact:true}).selectOption('large');await expect.poll(()=>blocked.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBe(20);await expect(blocked.getByRole('status').filter({hasText:'当前标签页'})).toBeVisible();await visit(blocked,blocked.url());assert.equal(await blocked.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),17);await denied.close();
+    const denied=await browser.newContext({viewport:{width:390,height:800}});await denied.addInitScript(()=>{Object.defineProperty(window,'localStorage',{get(){throw new DOMException('blocked','SecurityError');}});});const blocked=await denied.newPage();await visit(blocked,web.origin+'/items/display-ui');await blocked.getByLabel('阅读显示设置',{exact:true}).click();await blocked.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'较大',exact:true}).check();await expect.poll(()=>blocked.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBe(20);await expect(blocked.getByRole('status').filter({hasText:'当前标签页'})).toBeVisible();await visit(blocked,blocked.url());assert.equal(await blocked.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),17);await denied.close();
   }finally{await browser.close();await web?.stop();}
 });
 
@@ -809,7 +830,7 @@ for(const engine of [chromium,webkit])test(`article rows show available localize
     await expect(page.locator('main article time')).toHaveText(['2026年10月25日','2026年10月24日','收录于 2026年10月24日','2025年10月25日']);
     await expect(page.getByText('中文摘要',{exact:true})).toBeVisible();
     await expect(page.getByText('固定摘要',{exact:true})).toHaveCount(2);
-    await expect(page.locator('main article').first().getByLabel('收藏暂未开放')).toHaveText('—');
+    await expect(page.getByLabel('收藏暂未开放')).toHaveCount(0);
   }finally{await browser.close();await web?.stop();}
 });
 

@@ -10,7 +10,7 @@ import { declaredLanguage, isPlainLanguage, languageLabel } from "./code-languag
 
 /** Pictures worth enlarging: not inside a link, not tiny icons. */
 function canZoom(img: HTMLImageElement): boolean {
-  return !img.closest("a") && !(img.naturalWidth && img.naturalWidth < 120);
+  return img.dataset.readerInline !== 'true' && !img.closest("a") && !(img.naturalWidth && img.naturalWidth < 120);
 }
 
 function zoomable(root: HTMLElement): HTMLImageElement[] {
@@ -157,6 +157,8 @@ export function ArticleBody({ html }: { html: string }) {
     const root = ref.current;
     if (!root) return;
     const mark = (img: HTMLImageElement) => {
+      // Older snapshots did not retain SVG legends' inline identity; their saved dimensions still do.
+      if(img.closest('figure span')&&img.parentElement?.textContent?.trim()&&img.naturalWidth>0&&img.naturalHeight>0&&Math.max(img.naturalWidth,img.naturalHeight)<=32)img.dataset.readerInline='true';
       if (canZoom(img)) {
         img.classList.add("zoomable");
         img.tabIndex = 0;

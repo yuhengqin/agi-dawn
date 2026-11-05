@@ -17,9 +17,15 @@ const pages: Record<string, string> = {
   '/cdata': `<title>New result</title><content type="html"><![CDATA[${body}]]></content>`,
   '/unsafe': `<title>New result</title><content type="xhtml">${xhtml(`${body}<script>alert(1)</script><p><a href="javascript:alert(1)" onclick="alert(1)">Unsafe link</a> &lt;img src=x onerror=alert(1)&gt;</p>`)}</content>`,
 };
+const microsoftUrl='https://blogs.microsoft.com/blog/update/';
+const microsoftTeaser=`<p>${'A preview of the article and its technical details. '.repeat(8)}</p><p>The post <a href="${microsoftUrl}">Microsoft update</a> appeared first on <a href="https://blogs.microsoft.com/">The Official Microsoft Blog</a>.</p>`;
+pages['/atom-teaser']=`<title>Microsoft update</title><summary>A short preview.</summary><content type="html">${escapeXml(microsoftTeaser)}</content>`;
 const server = http.createServer((req, res) => {
+  if(req.url==='/rss-teaser'){
+    res.setHeader('content-type','application/rss+xml');res.end(`<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Test</title><item><title>Microsoft update</title><link>${microsoftUrl}</link><description>A short preview.</description><content:encoded><![CDATA[${microsoftTeaser}]]></content:encoded></item></channel></rss>`);return;
+  }
   res.setHeader('content-type', 'application/atom+xml');
-  res.end(`<feed xmlns="http://www.w3.org/2005/Atom"><id>urn:test:feed</id><title>Test</title><updated>2026-09-29T00:00:00Z</updated><author><name>Test</name></author><entry><id>urn:test:entry</id><updated>2026-09-29T00:00:00Z</updated><link href="https://example.org/article"/>${pages[req.url!]}</entry></feed>`);
+  res.end(`<feed xmlns="http://www.w3.org/2005/Atom"><id>urn:test:feed</id><title>Test</title><updated>2026-09-29T00:00:00Z</updated><author><name>Test</name></author><entry><id>urn:test:entry</id><updated>2026-09-29T00:00:00Z</updated><link href="${req.url==='/atom-teaser'?microsoftUrl:'https://example.org/article'}"/>${pages[req.url!]}</entry></feed>`);
 });
 await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 const previousPrivateFetch = config.allowPrivateNetworkFetch;
@@ -40,6 +46,17 @@ test('Atom HTML and XHTML titles and summaries keep the article and its text in 
     assert.equal(items.length, 1);
     assert.equal(items[0]!.title, 'New research result');
     assert.equal(items[0]!.excerpt, 'First important result, then another.');
+  }
+});
+
+test('a matching RSS footer is removed before the summary is stored',async()=>{
+  pages['/footer']='<title>A new offer</title><summary type="html">A useful introduction. The post A new offer appeared first on The Official Microsoft Blog .</summary>';
+  const [item]=await read('/footer');assert.equal(item!.excerpt,'A useful introduction.');
+});
+
+test('cleaning a Microsoft footer never turns an RSS or Atom preview into a complete body',async()=>{
+  for(const path of ['/rss-teaser','/atom-teaser']){
+    const [item]=await read(path);assert.equal(item!.bodyStatus,'pending');assert.equal(item!.bodyHtml,null);assert.equal(item!.excerpt,'A short preview.');
   }
 });
 

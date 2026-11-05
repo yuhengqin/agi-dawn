@@ -2,6 +2,7 @@ import {sql} from '@agidawn/backend/db';
 import {emit} from '@agidawn/backend/modules';
 import {READER_FROM,readerVisible} from '@agidawn/backend/publication/items';
 import {isChineseText} from '@agidawn/backend/lib/text';
+import {cleanSummary,metadataAddsMarkup,plainMetadata} from '@agidawn/backend/content/snippets';
 import {shutdownSignal} from '@agidawn/backend/lib/shutdown';
 import {completeReceipt,rejectReceivedResponse,ModelOutputError,failureKind} from '@agidawn/backend/providers/receipts';
 import type {ReaderMetadataTranslation} from '@agidawn/contracts/site';
@@ -14,8 +15,10 @@ export async function publicationMetadata(items:readonly MetadataInput[]){
     WHERE article_id IN ${sql(items.map(item=>item.id))} AND status='translated'`;
   const current=new Map(items.map(item=>[item.id,item]));
   for(const row of rows){const item=current.get(String(row.article_id));
-    if(item&&item.title===row.source_title&&item.summary===row.source_summary&&row.title)
-      result.set(item.id,{title:String(row.title),summary:row.summary===null?null:String(row.summary)});
+    if(item&&item.title===row.source_title&&item.summary===row.source_summary&&row.title){
+      const title=plainMetadata(String(row.title),item.title);
+      if(title)result.set(item.id,{title,summary:row.summary===null?null:plainMetadata(String(row.summary),item.summary??'')});
+    }
   }
   return result;
 }
@@ -24,7 +27,7 @@ export async function publicationMetadata(items:readonly MetadataInput[]){
 export async function translateMetadataPending(started=Date.now(),durationMs=240_000){
   if(process.env.MODEL_CALLS_ENABLED!=='true')return {done:0};
   let done=0,processed=0;
-  const rows=await sql`SELECT p.article_id,p.title,p.summary ${READER_FROM}
+  const rows=await sql`SELECT p.article_id,p.title,p.summary,p.url ${READER_FROM}
     LEFT JOIN reader_metadata_translations t ON t.article_id=p.article_id
     WHERE ${readerVisible} AND (t.article_id IS NULL OR t.source_title IS DISTINCT FROM p.title
       OR t.source_summary IS DISTINCT FROM p.summary OR t.status='pending') ORDER BY p.sort_at DESC,p.article_id`;
@@ -38,12 +41,12 @@ export async function translateMetadataPending(started=Date.now(),durationMs=240
       WHERE reader_metadata_translations.source_title IS DISTINCT FROM EXCLUDED.source_title
         OR reader_metadata_translations.source_summary IS DISTINCT FROM EXCLUDED.source_summary`;
     // A Chinese product name alone cannot identify the language of a mixed-script field.
-    const values=[title,summary],indexes=values.flatMap((value,index)=>value?.trim()&&
+    const values=[title,cleanSummary(summary,{title,url:String(row.url)})],indexes=values.flatMap((value,index)=>value?.trim()&&
       (!isChineseText(value)||/\p{Letter}/u.test(value.replace(/\p{Script=Han}/gu,'')))?[index]:[]);
     try{
       const answer=indexes.length?await requestTranslation(id,0,indexes.map(index=>values[index]!),false,'translate_metadata'):null;
-      if(answer&&(!answer.t||answer.t.some(value=>!value.trim()))){
-        await rejectReceivedResponse(answer.receiptId,'translation returned empty or missing metadata');
+      if(answer&&(!answer.t||answer.t.some((value,at)=>!value.trim()||metadataAddsMarkup(values[indexes[at]!]!,value)))){
+        await rejectReceivedResponse(answer.receiptId,'translation returned empty metadata or added markup');
         throw new ModelOutputError('Translation returned unusable metadata',answer.receiptId);
       }
       for(const [at,index] of indexes.entries())values[index]=answer!.t![at]!.trim();

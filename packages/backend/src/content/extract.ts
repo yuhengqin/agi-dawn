@@ -13,6 +13,7 @@ import { articleUtcOffset, readPublicationDate, type PublicationDate } from "../
 import type { SourceRow } from "../sources/types.ts";
 import { onlyXArticleLink, xArticleText } from "../sources/x.ts";
 import { sanitizeBody, trimTrailingChrome } from "./sanitize.ts";
+import { cleanArticlePresentation } from './presentation.ts';
 import { contentHash, fillPublicationTime, reviseMaterial, updatePresentation,captureStoredMaterial, type MediaItem } from "./materials.ts";
 import {publishArticleTx} from "../publication/publish.ts";
 import { markdownBody } from "./markdown.ts";
@@ -169,7 +170,7 @@ export function readableDocument(document: Doc, url: string, rules: PageRules = 
   const keptIssues=new Set([...article.content.matchAll(/data-reader-issues="([\d,]+)"/g)].flatMap(match=>match[1]!.split(',').map(Number)));
   const issues=technical.issues.filter((_,index)=>keptIssues.has(index));
   if(article.content.includes('data-reader-figure-loss="true"'))issues.push({kind:"missing-figure",message:"图表依赖原站样式，保留了文字说明，请对照原文。"});
-  const clean = trimTrailingChrome(sanitizeBody(article.content, url));
+  const clean = trimTrailingChrome(cleanArticlePresentation(sanitizeBody(article.content, url),{url,publishedAt:date.publishedAt?.toISOString()}));
   const text = stripTags(clean);
   if (text.length < MIN_BODY_CHARS) return null;
   try { assertPageContent(article.title ?? "", text); }

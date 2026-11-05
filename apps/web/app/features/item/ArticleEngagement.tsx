@@ -1,6 +1,6 @@
 import {createContext,useContext,useEffect,useState,type ReactNode} from 'react';
 import type {ArticleEngagement,ReaderItemSummary} from '@agidawn/contracts/site';
-import {IconBookmark,IconHeart} from '../../components/icons';
+import {IconHeart} from '../../components/icons';
 
 type State={items:Record<string,ArticleEngagement>;ready:boolean;update:(item:ArticleEngagement)=>void};
 const EngagementContext=createContext<State|null>(null);
@@ -50,7 +50,6 @@ export function ArticleEngagementBar({item,compact=false}:{item:ReaderItemSummar
       className={`inline-flex items-center gap-1.5 hover:text-accent aria-pressed:text-accent disabled:cursor-wait ${compact?'min-h-7 [@media(pointer:coarse)]:min-h-11':'min-h-11'}`} title="同一浏览器可点赞一次，再点取消">
       <IconHeart size={15} fill={current?.liked?'currentColor':'none'}/><span>{counts.likes.toLocaleString('zh-CN')}</span>
     </button>
-    <span className="inline-flex items-center gap-1.5 text-ink-4" aria-label="收藏暂未开放" title="收藏暂未开放"><IconBookmark size={14}/><span>—</span></span>
     {error&&<span role="status" className="basis-full text-sm">{error}</span>}
   </div>;
 }

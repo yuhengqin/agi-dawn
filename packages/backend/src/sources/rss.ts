@@ -5,6 +5,8 @@ import { languageHeaders, requireOk } from "../lib/http-fetch.ts";
 import { fetchListing } from "./listing-fetch.ts";
 import { collapseWhitespace, escapeXml, stripTags } from "../lib/text.ts";
 import { sanitizeBody } from "../content/sanitize.ts";
+import { cleanSummary } from "../content/snippets.ts";
+import { cleanArticlePresentation } from '../content/presentation.ts';
 import { identityKeyFor } from "../content/materials.ts";
 import { sha256, stableJson } from "../lib/ids.ts";
 import { normalizeUrl } from "../lib/url.ts";
@@ -119,13 +121,16 @@ export function isTeaser(text: string): boolean {
  * page; an entry without a page has none. A short text is taken for a summary, unless the source
  * declares its summary to be the body.
  */
-function feedText(bodyHtml: string | null, summaryText: string | null, source: SourceRow, hasPage = true, plainBody: string | null = null): Pick<Candidate, "excerpt" | "bodyHtml" | "bodyText" | "bodyStatus"> {
+function feedText(bodyHtml: string | null, summaryText: string | null, source: SourceRow, hasPage = true, plainBody: string | null = null, context?:{title:string;url:string}): Pick<Candidate, "excerpt" | "bodyHtml" | "bodyText" | "bodyStatus"> {
   const bodyText = bodyHtml ? collapseWhitespace(plainBody ?? stripTags(bodyHtml)) : null;
   const teaser = !!bodyText && source.participation_mode === "editorial" && isTeaser(bodyText);
-  const excerpt = summaryText !== null ? collapseWhitespace(summaryText).slice(0, 2000) : teaser ? collapseWhitespace(bodyText!) : null;
-  return bodyText && (bodyText.length > 280 || source.config.summaryIsBody === true) && !teaser
-    ? { excerpt, bodyHtml, bodyText, bodyStatus: "ok" }
-    : { excerpt, bodyHtml: null, bodyText: null, bodyStatus: hasPage ? "pending" : "none" };
+  const excerpt = cleanSummary(summaryText !== null ? collapseWhitespace(summaryText).slice(0, 2000) : teaser ? collapseWhitespace(bodyText!) : null,context);
+  if(bodyText&&(bodyText.length>280||source.config.summaryIsBody===true)&&!teaser){
+    // Classify the original feed first: its footer can be the only proof this is a preview.
+    const html=plainBody===null&&context?cleanArticlePresentation(bodyHtml!,context):bodyHtml;
+    return {excerpt,bodyHtml:html,bodyText:plainBody!==null?bodyText:collapseWhitespace(stripTags(html!)),bodyStatus:'ok'};
+  }
+  return {excerpt,bodyHtml:null,bodyText:null,bodyStatus:hasPage?'pending':'none'};
 }
 
 interface RssValidator {
@@ -206,7 +211,7 @@ export async function fetchRss(source: SourceRow, opts: { force?: boolean } = {}
         title,
         author: text(it["dc:creator"]) || text(it.author) || null,
         ...readPublicationDate((text(it.pubDate) || text(it["dc:date"]) || text(it.published)).replace(/星期[一二三四五六日天]/, ""), source.config.publishedAtUtcOffset),
-        ...feedText(bodyHtml, description ? stripTags(description) : null, source, !mediaFile && !video),
+        ...feedText(bodyHtml, description ? stripTags(description) : null, source, !mediaFile && !video,null,{title,url:link}),
         ...(videoExcerpt ? { excerpt: videoExcerpt } : {}),
         media: media.slice(0, 6),
         categories: arr(it.category).map((c) => text(c)).filter(Boolean),
@@ -239,7 +244,7 @@ export async function fetchRss(source: SourceRow, opts: { force?: boolean } = {}
         // Atom updated describes a revision, not the original publication.
         ...readPublicationDate(text(e.published), source.config.publishedAtUtcOffset),
         sourceUpdatedAt: parseDate(text(e.updated)),
-        ...feedText(bodyHtml, summary, source, !video, plainBody),
+        ...feedText(bodyHtml, summary, source, !video, plainBody,{title,url:entryUrl}),
         ...(videoExcerpt ? { excerpt: videoExcerpt } : {}),
         media: bodyHtmlRaw ? imagesFrom(bodyHtmlRaw, entryUrl) : [],
         categories: arr(e.category).map((c: any) => c?.["@term"] ?? text(c)).filter(Boolean),

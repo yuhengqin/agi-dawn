@@ -1,6 +1,7 @@
 import type {ReaderItemDetail} from "@agidawn/contracts/site";
 import {sql} from "../db.ts";
 import {withOutline} from '../content/outline.ts';
+import {cleanArticlePresentation} from '../content/presentation.ts';
 import {materialRepresentationHash,serverModules,type MaterialCapture} from "../modules.ts";
 import {READER_COLUMNS,READER_FROM,readerVisible,toReaderItem,withReaderMetadata,type ReaderRow} from "./items.ts";
 import {listTopics} from "./topics.ts";
@@ -15,7 +16,7 @@ export async function loadItemDetail(id:string):Promise<{kind:"found";item:Reade
       publishedAt:row.raw_published_at?.toISOString()??null,discoveredAt:row.discovered_at.toISOString(),sourceId:row.source_id,sourceName:row.source_name,quality:row.body_quality==="partial"?"partial":"ready",issues:row.body_issues};
     const rewrite=serverModules().find(module=>module.publicationBody)?.publicationBody;
     const input={articleId:id,bodyRevision:row.body_revision,representationHash:materialRepresentationHash(capture),html:row.body_html};
-    const render=(html:string)=>rewrite?rewrite({...input,html}):Promise.resolve(html.replace(/<img\b[^>]*>/gi,''));
+    const render=async(html:string)=>cleanArticlePresentation(rewrite?await rewrite({...input,html}):html.replace(/<img\b[^>]*>/gi,''),{url:row.raw_url,publishedAt:row.raw_published_at?.toISOString()});
     body=await render(input.html);
     const translated=await serverModules().find(module=>module.publicationTranslation)?.publicationTranslation?.(input);
     if(translated){const outlined=withOutline(await render(translated.html));translation={bodyHtml:outlined.html,outline:outlined.outline,complete:translated.complete};}

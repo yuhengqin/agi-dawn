@@ -3,7 +3,7 @@ import {Form,Link,useLocation,useNavigate,useNavigation,useNavigationType,useSub
 import type {ReaderPageData} from "./reader.server";
 import {readerLink} from "./ReaderNavigation";
 import {ReaderDatePicker,dateRangeLabel} from "./ReaderDatePicker";
-import {IconSearch} from "../../components/icons";
+import {IconSearch,IconChevronDown} from "../../components/icons";
 
 export function PreservedFilters({query,except}:{query:Record<string,string>;except:string[]}){
   return Object.entries(query).filter(([key])=>key!=='page'&&!except.includes(key)).map(([key,value])=><input key={key} type="hidden" name={key} value={value}/>);
@@ -45,13 +45,18 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
 
 export function ReaderToolbar({query,sources,datePickerTrigger}:Pick<ReaderPageData,'query'|'sources'>&{datePickerTrigger?:Ref<HTMLElement>}){
   const submit=useSubmit();
+  const sourceName=sources.find(source=>source.id===query.sourceId)?.name??'全部来源';
   return <div className="grid grid-cols-1 gap-2 pt-3 sm:grid-cols-[minmax(180px,400px)_minmax(0,auto)] sm:items-center sm:justify-between sm:gap-x-6 lg:pt-0">
     <ReaderSearch query={query}/>
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-5 gap-y-1">
       <Form method="get" action="/" key={query.sourceId??''}>
         <PreservedFilters query={query} except={['sourceId']}/>
-        <select aria-label="来源" className="min-h-10 max-w-[180px] bg-transparent text-xs text-ink-3" name="sourceId" defaultValue={query.sourceId??''} onChange={event=>void submit(event.currentTarget.form)}>
-          <option value="">全部来源</option>{sources.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
+        <div className="reader-source-picker" data-active={query.sourceId?true:undefined}>
+          <span aria-hidden="true">{sourceName}</span>
+          <select aria-label="来源" name="sourceId" defaultValue={query.sourceId??''} onChange={event=>void submit(event.currentTarget.form)}>
+            <option value="">全部来源</option>{sources.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
+          <IconChevronDown size={16}/>
+        </div>
         <noscript><button type="submit">应用来源</button></noscript>
       </Form>
       <ReaderDatePicker query={query} triggerRef={datePickerTrigger}/>

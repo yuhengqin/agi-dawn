@@ -72,6 +72,11 @@ export function normalizeTechnicalMarkup(html:string,baseUrl:string,trackIssues=
     svg.attr("xmlns","http://www.w3.org/2000/svg");
     const clean=sanitizeHtml(drawing.xml(svg),{allowedTags:SVG_TAGS,allowedAttributes:{"*":SVG_ATTRIBUTES},allowedSchemes:[],nonTextTags:["script","style"],parser:{lowerCaseTags:false,lowerCaseAttributeNames:false}});
     const image=$("<img>").attr("src",`data:image/svg+xml;base64,${Buffer.from(clean).toString("base64")}`).attr("alt",label||"文章图表");
+    const pixels=(value:string|undefined)=>value&&/^\d+(?:\.\d+)?(?:px)?$/.test(value)?parseFloat(value):0;
+    const width=pixels(svg.attr('width')),height=pixels(svg.attr('height'));
+    if(width>0)image.attr('width',String(width));if(height>0)image.attr('height',String(height));
+    const parent=original.parent();
+    if(original.closest('figure').length&&parent.is('span')&&!original.text().trim()&&parent.clone().find('svg').remove().end().text().trim()&&width>0&&height>0&&Math.max(width,height)<=32)image.attr('data-reader-inline','true');
     for(const issue of imageIssues)mark(image,issue);
     original.replaceWith(image);
   });

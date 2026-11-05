@@ -49,7 +49,7 @@ export function sanitizeBody(html: string, baseUrl?: string): string {
     nonTextTags: DROP_WHOLE,
     allowedAttributes: {
       a: ["href", "title"],
-      img: ["src", "alt", "width", "height", "title"],
+      img: ["src", "alt", "width", "height", "title", "data-reader-inline"],
       video: ["src", "poster", "width", "height", "controls", "playsinline", "preload"],
       source: ["src", "type"],
       code: ["class"],

@@ -20,6 +20,22 @@ test("source-supplied plain text becomes safe readable HTML",async()=>{
   const item=(await detail(articleId)).json();assert.match(item.bodyHtml,/Original &lt;b&gt;text&lt;\/b&gt;/);assert.equal(item.bodyState.status,"ready");
 });
 
+test('public summaries clean legacy source noise without rewriting saved material',async()=>{
+  const excerpt='A useful introduction. The post A new offer appeared first on The Official Microsoft Blog .';
+  const {articleId}=await upsertMaterial({sourceId:source,url:'https://blogs.microsoft.com/blog/'+tag(),title:'A new offer',excerpt,via:'fetch'});
+  assert.equal((await detail(articleId)).json().summary,'A useful introduction.');
+  const list=(await app.inject('/api/site/articles?sourceId='+source)).json();assert.equal(list.items.find((item:{id:string})=>item.id===articleId).summary,'A useful introduction.');
+  assert.equal((await sql`SELECT excerpt FROM articles WHERE id=${articleId}`)[0]!.excerpt,excerpt);
+});
+
+test('public body cleanup preserves the stored original and body revision',async()=>{
+  const bodyHtml='<p>OCT. 29, 2026</p><p>On OCT. 29, 2026 we released a tool.</p>';
+  const {articleId}=await upsertMaterial({sourceId:source,url:'https://developers.googleblog.com/'+tag(),title:'A dated article',bodyHtml,bodyText:'OCT. 29, 2026 On OCT. 29, 2026 we released a tool.',bodyStatus:'ok',publishedAt:new Date('2026-10-29T00:00:00Z'),via:'fetch'});
+  const before=(await sql`SELECT body_html,body_revision,content_hash FROM articles WHERE id=${articleId}`)[0];
+  assert.equal((await detail(articleId)).json().bodyHtml,'<p>On OCT. 29, 2026 we released a tool.</p>');
+  assert.deepEqual((await sql`SELECT body_html,body_revision,content_hash FROM articles WHERE id=${articleId}`)[0],before);
+});
+
 test("raw material appears immediately, retains its language and needs no summary or publication date",async()=>{
   const id=await article(),response=await detail(id),item=response.json();
   assert.equal(response.statusCode,200);assert.equal(item.title,"Original technical title");assert.equal(item.summary,null);
