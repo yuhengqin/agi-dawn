@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from "react";
 import {Link,useBlocker} from "react-router";
-import {OwnerRequestError,ownerMe,ownerRequest,ownerDownload} from "../client.ts";
+import {OwnerRequestError,hasOwnerSession,OWNER_SESSION_ENDED,ownerRequest,ownerDownload} from "../client.ts";
 import type {ReaderState,ReaderNote} from "../contracts.ts";
 const button="min-h-11 rounded-control border border-line px-4 text-sm hover:bg-bg-sunk disabled:opacity-50";
 export default function OwnerTools({articleId}:{articleId:string}) {
@@ -8,8 +8,9 @@ export default function OwnerTools({articleId}:{articleId:string}) {
   const [checking,setChecking]=useState(true),[busy,setBusy]=useState(false),[serverNote,setServerNote]=useState<string|null>(null);
   const base="/api/admin/reader/articles/"+articleId;
   const downloadUrl=useRef<string|null>(null),generation=useRef(0);
+  const savedRef=useRef(saved);savedRef.current=saved;
   const invalidateDownload=()=>{generation.current++;if(downloadUrl.current){URL.revokeObjectURL(downloadUrl.current);downloadUrl.current=null;}};
-  const clear=()=>{invalidateDownload();setSaved(null);setDraft('');setServerNote(null);setMessage('');setError('');};
+  const clear=()=>{invalidateDownload();savedRef.current=null;setSaved(null);setDraft('');setServerNote(null);setMessage('');setError('');};
   useEffect(()=>()=>invalidateDownload(),[articleId]);
   const dirty=!!saved&&draft!==saved.note.text;
   const blocker=useBlocker(({currentLocation,nextLocation})=>dirty&&(currentLocation.pathname!==nextLocation.pathname||currentLocation.search!==nextLocation.search));
@@ -17,11 +18,18 @@ export default function OwnerTools({articleId}:{articleId:string}) {
   useEffect(()=>{if(!dirty)return;const protect=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue='';};window.addEventListener('beforeunload',protect);return()=>window.removeEventListener('beforeunload',protect);},[dirty]);
   useEffect(()=>{
     let active=true;const abort=new AbortController();
+    let loading:Promise<{state:ReaderState;note:ReaderNote}>|null=null;
+    const read=()=>loading??=(ownerRequest<{state:ReaderState;note:ReaderNote}>(base,'GET',undefined,{signal:abort.signal}).finally(()=>{loading=null;}));
+    const accept=(value:{state:ReaderState;note:ReaderNote},started:number)=>{
+      if(!active||started!==generation.current||savedRef.current)return;
+      savedRef.current=value;setSaved(value);setDraft(value.note.text);
+    };
     clear();setChecking(true);const started=generation.current;
-    ownerRequest<{state:ReaderState;note:ReaderNote}>(base).then(value=>{if(active&&started===generation.current){setSaved(value);setDraft(value.note.text);}}).catch(error=>{if(active&&!(error instanceof OwnerRequestError&&error.status===401))setError("私人空间暂不可用");}).finally(()=>{if(active)setChecking(false);});
-    const verify=async()=>{if(document.visibilityState==="hidden")return;setChecking(true);try{await ownerMe(abort.signal);}catch(error){if(active&&error instanceof OwnerRequestError&&error.status===401)clear();}finally{if(active)setChecking(false);}};
+    hasOwnerSession().then(async authenticated=>authenticated&&active?read():null).then(value=>{if(value)accept(value,started);}).catch(error=>{if(active&&!(error instanceof OwnerRequestError&&error.status===401))setError("私人空间暂不可用");}).finally(()=>{if(active)setChecking(false);});
+    const verify=async()=>{if(document.visibilityState==="hidden")return;setChecking(true);const checkingGeneration=generation.current;try{if(!await hasOwnerSession(true)){if(active)clear();}else if(active&&!savedRef.current)accept(await read(),checkingGeneration);}catch(error){if(active&&error instanceof OwnerRequestError&&error.status===401)clear();}finally{if(active)setChecking(false);}};
+    const expired=()=>{if(active){clear();setChecking(false);}};window.addEventListener(OWNER_SESSION_ENDED,expired);
     window.addEventListener("focus",verify);window.addEventListener("pageshow",verify);document.addEventListener("visibilitychange",verify);
-    return()=>{active=false;abort.abort();window.removeEventListener("focus",verify);window.removeEventListener("pageshow",verify);document.removeEventListener("visibilitychange",verify);};
+    return()=>{active=false;abort.abort();window.removeEventListener(OWNER_SESSION_ENDED,expired);window.removeEventListener("focus",verify);window.removeEventListener("pageshow",verify);document.removeEventListener("visibilitychange",verify);};
   },[base]);
   const command=async(work:()=>Promise<void>)=>{
     setBusy(true);setError("");setMessage("");

@@ -3,6 +3,90 @@ import { test } from "node:test";
 import { chromium, webkit, expect } from "./browser.ts";
 import { fakeApi, feedItem, itemDetail, readerPage, startWebServer, visit, type WebServer } from "./web-server.ts";
 
+test('desktop reading improvements expose search evidence, immediate presets and an article footer',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  const item=feedItem({id:'experience',title:'Agent cost guide',readingMinutes:4,matches:[{field:'body',language:'translation',snippet:'The cost of each task is visible here.'}],bodyState:{status:'partial',bodyRevision:1,refreshPending:false,issues:[{kind:'missing-figure',message:'部分图表未保存，请查看原文。'}]}});
+  const article=itemDetail({...item,body:{html:'<h2 id="sec-1">Section</h2><p>Readable article.</p>',outline:[{id:'sec-1',text:'Section',level:2}],language:'translation',complete:true,readingMinutes:4},intro:null,related:[feedItem({id:'related',title:'Another useful article'})]});
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/articles')return readerPage([item],url);
+      if(url.pathname==='/api/site/items/experience')return article;
+      if(url.pathname==='/api/site/engagement')return {items:[{id:item.id,views:0,likes:0,liked:false}]};
+      if(url.pathname==='/api/site/categories'||url.pathname==='/api/site/sources')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+      if(url.pathname==='/api/auth/session')return {authenticated:false};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900}});await visit(page,web.origin+'/?q=cost');
+    await expect(page.locator('main h2 mark')).toHaveText('cost');
+    await expect(page.getByText('正文译文命中：',{exact:false})).toContainText('cost of each task');
+    await expect(page.getByText('约 4 分钟',{exact:true})).toBeVisible();
+    await expect(page.getByText('正文不完整',{exact:true})).toHaveCount(0);
+    await expect(page.getByRole('button',{name:'点赞',exact:true})).toHaveText('');
+    await expect(page.getByText('阅读 0',{exact:true})).toHaveCount(0);
+    await page.locator('summary').filter({hasText:'不限日期'}).click();await page.getByRole('button',{name:'近7天',exact:true}).click();
+    await expect(page).toHaveURL(/from=\d{4}-\d{2}-\d{2}/);await expect(page.getByRole('button',{name:'应用日期',exact:true})).toBeHidden();
+    await page.locator('main ol > li').first().click({position:{x:10,y:5}});await expect(page).toHaveURL(web.origin+'/items/experience');
+    await expect(page.getByText('中文译文',{exact:true})).toBeVisible();
+    await expect(page.getByRole('contentinfo',{name:'文章后续阅读'})).toContainText('Another useful article');
+    await expect(page.getByRole('contentinfo',{name:'文章后续阅读'}).getByRole('link',{name:'文末打开原文',exact:true})).toBeVisible();
+  }finally{await browser.close();await web?.stop();}
+});
+
+test('desktop floating reading tools leave the outline and pagination clickable',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  const outline=Array.from({length:24},(_,n)=>({id:'sec-'+(n+1),text:'Section '+(n+1),level:n%4===1?3:2}));
+  const article=itemDetail({id:'tool-clearance',title:'Tool clearance',outline,bodyHtml:outline.map(entry=>`<h${entry.level} id="${entry.id}">${entry.text}</h${entry.level}><p>${'Article paragraph. '.repeat(80)}</p>`).join('')});
+  const articles=Array.from({length:60},(_,n)=>feedItem({id:'article-'+n,title:'Article '+n}));
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/items/tool-clearance')return article;
+      if(url.pathname==='/api/site/articles')return readerPage(articles,url);
+      if(url.pathname==='/api/site/categories'||url.pathname==='/api/site/sources')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+      if(url.pathname==='/api/site/engagement')return {items:[]};
+      if(url.pathname==='/api/auth/session')return {authenticated:false};
+    }));
+    const page=await browser.newPage({viewport:{width:1280,height:900},reducedMotion:'reduce'});await visit(page,web.origin+'/items/tool-clearance');
+    for(const width of [720,800,1024,1280,1366,1440]){
+      await page.setViewportSize({width,height:900});await page.evaluate(()=>scrollTo(0,1500));
+      const nav=page.getByRole('navigation',{name:'本文目录',exact:true});
+      const bodyBox=await page.getByRole('region',{name:'文章正文',exact:true}).boundingBox(),toolBox=await page.getByLabel('阅读显示设置',{exact:true}).boundingBox();
+      assert(bodyBox&&toolBox&&bodyBox.x+bodyBox.width+8<=toolBox.x,'body leaves a separate column for floating tools at '+width);
+      if(await nav.isVisible()){const navBox=await nav.boundingBox();assert(navBox&&toolBox&&navBox.x+navBox.width+8<=toolBox.x,'outline leaves a separate column for floating tools');await nav.getByRole('link',{name:'Section 20',exact:true}).click({trial:true,timeout:1500});}
+    }
+    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true}).check();await page.keyboard.press('Escape');
+    await page.getByRole('navigation',{name:'本文目录',exact:true}).getByRole('link',{name:'Section 20',exact:true}).click({trial:true,timeout:1500});
+    await page.setViewportSize({width:1280,height:900});await visit(page,web.origin+'/');await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));
+    await page.getByRole('combobox',{name:'每页篇数',exact:true}).click({trial:true,timeout:1500});
+  }finally{await browser.close();await web?.stop();}
+});
+
+test('anonymous article navigation uses one quiet session probe and the viewer can enlarge and pan figures',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined,me=0,probes=0;
+  const picture='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="658" height="1200"><rect width="658" height="1200" fill="white"/><text x="10" y="50">Technical diagram</text></svg>').toString('base64');
+  try{
+    web=await startWebServer(fakeApi((url,res)=>{
+      if(/^\/api\/site\/items\/(?:first|second)$/.test(url.pathname))return itemDetail({id:url.pathname.split('/').at(-1)!,title:'Image reading',bodyHtml:`<p><img src="${picture}" alt="Tall diagram"></p>`});
+      if(url.pathname==='/api/site/articles')return readerPage([feedItem({id:'first',title:'First article'}),feedItem({id:'second',title:'Second article'})],url);
+      if(url.pathname==='/api/site/categories'||url.pathname==='/api/site/sources')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+      if(url.pathname==='/api/auth/session'){probes++;return {authenticated:false};}
+      if(url.pathname==='/api/admin/me'){me++;res.statusCode=401;return {};}
+      if(url.pathname==='/api/site/engagement')return {items:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900}});await visit(page,web.origin+'/');await page.getByRole('link',{name:'First article',exact:true}).click();await page.waitForLoadState('networkidle');
+    await page.goBack();await page.getByRole('link',{name:'Second article',exact:true}).click();await page.waitForLoadState('networkidle');assert.equal(me,0);assert.equal(probes,1);
+    await page.getByRole('button',{name:'查看大图：Tall diagram',exact:true}).click();
+    const image=page.getByRole('dialog').getByRole('img'),before=await image.boundingBox();
+    await page.getByRole('button',{name:'放大图片',exact:true}).click();
+    await expect.poll(async()=>(await image.boundingBox())!.height).toBeGreaterThan(before!.height+100);
+    const stage=page.getByRole('region',{name:'可滚动图片',exact:true});await expect(stage).toHaveAttribute('tabindex','0');
+    const box=(await stage.boundingBox())!;await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2-120,{steps:6});await page.mouse.up();await expect.poll(()=>stage.evaluate(element=>element.scrollTop)).toBeGreaterThan(80);
+    await page.getByRole('button',{name:'原尺寸',exact:true}).click();await expect.poll(()=>image.evaluate((element:HTMLImageElement)=>Math.abs(element.getBoundingClientRect().width-element.naturalWidth))).toBeLessThan(1);
+    await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'查看大图：Tall diagram',exact:true})).toBeFocused();
+  }finally{await browser.close();await web?.stop();}
+});
+
 for(const engine of [chromium,webkit])test(`saved small figure legends remain inline and ordinary illustrations retain the viewer (${engine.name()})`,async()=>{
   const picture=(size:number)=>'data:image/svg+xml;base64,'+Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size/2}" cy="${size/2}" r="${size/3}"/></svg>`).toString('base64');
   const article=itemDetail({id:'inline-legend',title:'Inline legend',bodyHtml:`<figure><p><span id="legend-label"><img src="${picture(10)}" alt="Legend dot">Completed tasks</span></p></figure><p><img src="${picture(320)}" alt="Ordinary illustration"></p>`});
@@ -315,11 +399,14 @@ for(const engine of [chromium,webkit])test(`date drafts validate after editing, 
     await fromInput.fill('2026/10/3');await fromInput.press('Tab');await expect(fromInput).toHaveValue('2026-10-03');await expect(page.getByRole('alert')).toHaveCount(0);
     await toInput.fill('2026/10/8');await toInput.press('Enter');await expect(page).toHaveURL(/from=2026-10-03&to=2026-10-08/);
     await page.locator('summary').filter({hasText:'2026-10-03'}).click();await page.getByRole('button',{name:'近7天',exact:true}).click();
-    const from=await page.getByLabel('起始日期',{exact:true}).inputValue(),to=await page.getByLabel('结束日期',{exact:true}).inputValue();assert.equal((Date.parse(to)-Date.parse(from))/86400000,6);
+    await expect(page).not.toHaveURL(/from=2026-10-03/);
+    const preset=new URL(page.url()),from=preset.searchParams.get('from')!,to=preset.searchParams.get('to')!;assert.equal((Date.parse(to)-Date.parse(from))/86400000,6);
+    await page.locator('summary').filter({hasText:from}).click();
     await expect(page.getByRole('button',{name:'近7天',exact:true})).toHaveAttribute('aria-pressed','true');
     await toInput.fill('2026-10-');await expect(page.getByRole('button',{name:'近7天',exact:true})).toHaveAttribute('aria-pressed','false');
     await expect(page.getByRole('alert')).toHaveCount(0);await toInput.press('Tab');await expect(page.getByRole('alert')).toContainText('完整日期');await expect(apply).toBeDisabled();
-    await page.keyboard.press('Escape');await expect(page.locator('summary').filter({hasText:'2026-10-03'})).toBeFocused();
+    await page.keyboard.press('Escape');await expect(page.locator('summary').filter({hasText:from})).toBeFocused();
+    await page.locator('summary').filter({hasText:from}).click();await fromInput.fill('2026-10-03');await toInput.fill('2026-10-08');await apply.click();
     await page.locator('summary').filter({hasText:'2026-10-03'}).click();await page.getByRole('button',{name:'2026年10月3日',exact:true}).focus();await page.keyboard.press('ArrowRight');
     await expect(page.getByRole('button',{name:'2026年10月4日',exact:true})).toBeFocused();await page.keyboard.press('PageUp');await expect(page.getByRole('button',{name:'2026年9月4日',exact:true})).toBeFocused();
     await page.keyboard.press('Escape');await page.setViewportSize({width:320,height:700});await page.locator('summary').filter({hasText:'2026-10-03'}).click();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await expect(page.getByRole('button',{name:'应用日期',exact:true})).toBeVisible();
@@ -329,7 +416,7 @@ for(const engine of [chromium,webkit])test(`date drafts validate after editing, 
   }finally{await browser.close();await web?.stop();}
 });
 
-for(const engine of [chromium,webkit])test(`date calendar edits the active endpoint, previews without saving and clears only on apply (${engine.name()})`,async()=>{
+for(const engine of [chromium,webkit])test(`date calendar edits drafts while explicit presets clear immediately (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined,reads=0;
   try{
     web=await datePickerServer(()=>reads++);
@@ -344,15 +431,14 @@ for(const engine of [chromium,webkit])test(`date calendar edits the active endpo
     await expect(page.getByRole('status',{name:'日期范围预览'})).toContainText('共8天');await expect(to).toHaveValue('2026-10-08');assert.equal(reads,1);
     await page.getByRole('button',{name:'2026年10月3日',exact:true}).click();await expect(page.getByRole('status',{name:'已选日期范围'})).toContainText('共1天');
     await apply.click();await expect(page).toHaveURL(/from=2026-10-03&to=2026-10-03/);assert(!new URL(page.url()).searchParams.has('page'));
-    const current=page.locator('summary').filter({hasText:'2026-10-03'});await current.click();await all.click();await expect(from).toHaveValue('');await expect(to).toHaveValue('');
-    await expect(page).toHaveURL(/from=2026-10-03/);await page.getByRole('button',{name:'取消',exact:true}).click();await current.click();await expect(to).toHaveValue('2026-10-03');
-    await all.click();await page.getByRole('button',{name:'2026年10月5日',exact:true}).click();await expect(apply).toBeEnabled();await apply.click();
+    const current=page.locator('summary').filter({hasText:'2026-10-03'});await current.click();await all.click();await expect(page).toHaveURL(web.origin+'/?q=tools');
+    await page.locator('summary').filter({hasText:'不限日期'}).click();await from.fill('2026-10-05');await expect(apply).toBeEnabled();await apply.click();
     await expect(page).toHaveURL(/from=2026-10-05/);
     assert.equal(new URL(page.url()).searchParams.get('from'),'2026-10-05');assert(!new URL(page.url()).searchParams.has('to'));
-    await page.locator('summary').filter({hasText:'2026-10-05'}).click();await all.click();await to.click();await page.getByRole('button',{name:'2026年10月8日',exact:true}).click();await apply.click();
+    await page.locator('summary').filter({hasText:'2026-10-05'}).click();await all.click();await expect(page).toHaveURL(web.origin+'/?q=tools');await page.locator('summary').filter({hasText:'不限日期'}).click();await to.fill('2026-10-08');await apply.click();
     await expect(page).toHaveURL(/to=2026-10-08/);
     assert.equal(new URL(page.url()).searchParams.get('to'),'2026-10-08');assert(!new URL(page.url()).searchParams.has('from'));
-    await page.locator('summary').filter({hasText:'2026-10-08'}).click();await all.click();await apply.click();await expect(page).toHaveURL(web.origin+'/?q=tools');
+    await page.locator('summary').filter({hasText:'2026-10-08'}).click();await all.click();await expect(page).toHaveURL(web.origin+'/?q=tools');
   }finally{await browser.close();await web?.stop();}
 });
 
@@ -431,7 +517,7 @@ for(const engine of [chromium,webkit])test(`anonymous likes persist with failure
     await page.getByRole('button',{name:'点赞',exact:true}).click();await expect(page.getByRole('button',{name:'取消点赞',exact:true})).toHaveText('1');
     await page.reload();await expect(page.getByRole('button',{name:'取消点赞',exact:true})).toHaveAttribute('aria-pressed','true');assert.equal(views,0);
     failLike=true;await page.getByRole('button',{name:'取消点赞',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'点赞未能保存'})).toBeVisible();await expect(page.getByRole('button',{name:'取消点赞',exact:true})).toHaveText('1');
-    failLike=false;await page.getByRole('button',{name:'取消点赞',exact:true}).click();await expect(page.getByRole('button',{name:'点赞',exact:true})).toHaveText('0');
+    failLike=false;await page.getByRole('button',{name:'取消点赞',exact:true}).click();await expect(page.getByRole('button',{name:'点赞',exact:true})).toHaveText('');
     await page.addInitScript(()=>Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true}));
     await visit(page,web.origin+'/items/engagement-ui');await expect(page.getByRole('button',{name:'点赞',exact:true})).toBeVisible();assert.equal(releaseView,undefined);
     await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});document.dispatchEvent(new Event('visibilitychange'));});
@@ -615,7 +701,7 @@ for(const engine of [chromium,webkit])test(`short articles finish their visible 
 
 for(const engine of [chromium,webkit])test(`stored translation displays title, summary, body and outline with one original link (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined,writes=0;
-  const article={...itemDetail({id:'translation-ui',title:'A translated article',summary:'An original summary.',bodyHtml:'<h2 id="sec-1">Original heading</h2><p>Original words.</p>',outline:[{id:'sec-1',text:'Original heading',level:2}]}),metadataTranslation:{title:'翻译后的文章标题',summary:'已经翻译的文章摘要。'},translation:{bodyHtml:'<h2 id="sec-1">中文标题</h2><p>已经保存的中文译文。</p>',outline:[{id:'sec-1',text:'中文标题',level:2}],complete:false}};
+  const article=itemDetail({id:'translation-ui',title:'A translated article',summary:'An original summary.',metadataTranslation:{title:'翻译后的文章标题',summary:'已经翻译的文章摘要。'},body:{html:'<h2 id="sec-1">中文标题</h2><p>已经保存的中文译文。</p>',outline:[{id:'sec-1',text:'中文标题',level:2}],language:'translation',complete:false,readingMinutes:1}});
   try{
     web=await startWebServer(fakeApi((url,res,req)=>{if(url.pathname==='/api/site/articles')return readerPage([article,feedItem({id:'not-translated',title:'Untranslated title'})],url);if(['/api/site/categories','/api/site/sources'].includes(url.pathname))return {items:[]};if(url.pathname==='/api/site/topics')return {topics:[]};if(url.pathname==='/api/site/items/translation-ui')return article;if(url.pathname==='/api/admin/me'){res.statusCode=401;return {};}if(req.method!=='GET'&&url.pathname!=='/api/site/track')writes++;}));
     const page=await browser.newPage({viewport:{width:390,height:800}});await visit(page,web.origin+'/');

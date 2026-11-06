@@ -26,6 +26,9 @@ export function normalizeTechnicalMarkup(html:string,baseUrl:string,trackIssues=
     const index=issues.push(issue)-1;
     if(trackIssues)element.attr('data-reader-issues',[element.attr('data-reader-issues'),index].filter(value=>value!==undefined).join(','));
   };
+  $('figure[data-reader-figure-loss="true"]').each((_,node)=>{
+    mark($(node),{kind:'missing-figure',message:'图表未能完整保存，请对照原文。'});
+  });
   $("pre").each((_,node)=>{
     const pre=$(node),code=pre.find("code").first();
     const declared=pre.attr("data-language")??/(?:^|\s)language-([\w-]+)/.exec(code.attr("class")??"")?.[1]
@@ -77,7 +80,7 @@ export function normalizeTechnicalMarkup(html:string,baseUrl:string,trackIssues=
     if(width>0)image.attr('width',String(width));if(height>0)image.attr('height',String(height));
     const parent=original.parent();
     if(original.closest('figure').length&&parent.is('span')&&!original.text().trim()&&parent.clone().find('svg').remove().end().text().trim()&&width>0&&height>0&&Math.max(width,height)<=32)image.attr('data-reader-inline','true');
-    for(const issue of imageIssues)mark(image,issue);
+    for(const issue of imageIssues)mark(original.closest('figure').length?original.closest('figure'):image,issue);
     original.replaceWith(image);
   });
   $('script[type^="math/tex"],mjx-container:not(:has(math))').each((_,node)=>{
@@ -85,6 +88,6 @@ export function normalizeTechnicalMarkup(html:string,baseUrl:string,trackIssues=
     mark(replacement,{kind:"missing-formula",message:"部分公式保留为源文本，请对照原文。"});
     $(node).replaceWith(replacement);
   });
-  $("iframe,object,embed").each((_,node)=>{const replacement=$("<p>").text('互动内容请访问原文查看。');mark(replacement,{kind:"unsupported-embed",message:"互动内容无法离线保存，请访问原文。"});$(node).replaceWith(replacement);});
+  $("iframe,object,embed").each((_,node)=>{const replacement=$("<p>").attr('data-reader-embed','true').append($('<a>').attr('href',baseUrl).text('互动内容请访问原文查看。'));mark(replacement,{kind:"unsupported-embed",message:"互动内容无法离线保存，请访问原文。"});$(node).replaceWith(replacement);});
   return {html:$.html(),issues};
 }

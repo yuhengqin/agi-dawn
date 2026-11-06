@@ -1,8 +1,48 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
 import {chromium,webkit,expect} from "./browser.ts";
-import {fakeApi,startWebServer,visit,type WebServer} from "./web-server.ts";
+import {fakeApi,itemDetail,startWebServer,visit,type WebServer} from "./web-server.ts";
 import type {SavedReaderView,ReaderPosition} from "../../../modules/reader/contracts.ts";
+
+test('initial owner loading merges focus rechecks and never replaces a newly edited draft',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined,reads=0,releaseFirst=()=>{},releaseSecond=()=>{},begun=()=>{};
+  const first=new Promise<void>(resolve=>releaseFirst=resolve),second=new Promise<void>(resolve=>releaseSecond=resolve),started=new Promise<void>(resolve=>begun=resolve);
+  const value={state:{articleId:'initial-owner',starred:false,status:'to-read',version:0,updatedAt:null},note:{articleId:'initial-owner',text:'Saved note',version:1,updatedAt:null}};
+  try{
+    web=await startWebServer(fakeApi(async(url)=>{
+      if(url.pathname==='/api/site/items/initial-owner')return itemDetail({id:'initial-owner',title:'Concurrent owner loading'});
+      if(url.pathname==='/api/auth/session')return {authenticated:true};
+      if(url.pathname==='/api/admin/me')return {name:'Owner',csrf:'test-csrf'};
+      if(url.pathname==='/api/admin/reader/articles/initial-owner'){reads++;if(reads===1){begun();await first;}else await second;return value;}
+      if(url.pathname==='/api/site/engagement')return {items:[]};
+    }));
+    const page=await browser.newPage();await visit(page,web.origin+'/items/initial-owner');await started;
+    const checked=page.waitForResponse(response=>response.url().endsWith('/api/auth/session'));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await(await checked).finished();await page.waitForTimeout(100);
+    releaseFirst();await page.getByLabel('私人笔记').fill('Keep this newly edited draft');
+    const late=reads>1?page.waitForResponse(response=>response.url().endsWith('/articles/initial-owner')):null;releaseSecond();if(late)await(await late).finished();await page.waitForLoadState('networkidle');
+    await expect(page.getByLabel('私人笔记')).toHaveValue('Keep this newly edited draft');assert.equal(reads,1);
+  }finally{releaseFirst();releaseSecond();await browser.close();await web?.stop();}
+});
+
+test('late private saves cannot restore owner state after the quiet session probe expires',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined,expired=false,release=()=>{},begun=()=>{};
+  const pending=new Promise<void>(resolve=>release=resolve),started=new Promise<void>(resolve=>begun=resolve);
+  const state={articleId:'late-state',starred:false,status:'to-read',version:0,updatedAt:null},note={articleId:'late-state',text:'Private sentinel note',version:1,updatedAt:null};
+  try{
+    web=await startWebServer(fakeApi(async(url,res,req)=>{
+      if(url.pathname==='/api/site/items/late-state')return itemDetail({id:'late-state',title:'Late private response'});
+      if(url.pathname==='/api/auth/session')return {authenticated:!expired};
+      if(url.pathname==='/api/admin/me'){if(expired){res.statusCode=401;return {};}return {name:'Owner',csrf:'test-csrf'};}
+      if(url.pathname==='/api/admin/reader/articles/late-state/state'&&req.method==='PATCH'){begun();await pending;return {...state,starred:true,version:1};}
+      if(url.pathname==='/api/admin/reader/articles/late-state')return {state,note};
+      if(url.pathname==='/api/site/engagement')return {items:[]};
+    }));
+    const context=await browser.newContext();await context.addCookies([{name:'testowner',value:'1',url:web.origin}]);const page=await context.newPage();await visit(page,web.origin+'/items/late-state');await expect(page.getByLabel('私人笔记')).toHaveValue(note.text);
+    await page.getByRole('button',{name:'收藏文章',exact:true}).click();await started;expired=true;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByLabel('私人笔记')).toHaveCount(0);
+    const returned=page.waitForResponse(response=>response.url().endsWith('/late-state/state'));release();await(await returned).finished();await page.waitForLoadState('networkidle');
+    await expect(page.getByLabel('私人笔记')).toHaveCount(0);assert(!(await page.content()).includes(note.text));
+  }finally{release();await browser.close();await web?.stop();}
+});
 
 for(const engine of [chromium,webkit])test(`private reading navigation resumes saved sections across visits and layout changes (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined,position:ReaderPosition|null={snapshotId:'resume-snapshot',bodyRevision:2,anchor:'sec-1',offset:0.25,progress:0.15,version:1,updatedAt:'2026-10-28T00:00:00Z'},puts=0,otherWrites=0;
@@ -82,7 +122,7 @@ test('Markdown download exports the saved server note, keeps drafts and reports 
   const note={articleId:'export-ui',text:'Old saved note',version:1,updatedAt:null},state={articleId:'export-ui',starred:true,status:'reading',version:1,updatedAt:null};
   try{
     web=await startWebServer(fakeApi((url,res,req)=>{
-      if(url.pathname==='/api/site/items/export-ui')return {id:'export-ui',title:'Export article',summary:null,source:{id:'ui',name:'UI'},author:null,links:{original:'https://example.com'},publishedAt:null,discoveredAt:'2026-10-27T02:00:00Z',timelineAt:'2026-10-27T02:00:00Z',category:null,tags:[],engagement:{views:0,likes:0},bodyState:{status:'not-permitted',bodyRevision:null,refreshPending:false,issues:[]},bodyHtml:null,outline:[],topics:[]};
+      if(url.pathname==='/api/site/items/export-ui')return {id:'export-ui',title:'Export article',summary:null,source:{id:'ui',name:'UI'},author:null,links:{original:'https://example.com'},publishedAt:null,discoveredAt:'2026-10-27T02:00:00Z',timelineAt:'2026-10-27T02:00:00Z',category:null,tags:[],engagement:{views:0,likes:0},bodyState:{status:'not-permitted',bodyRevision:null,refreshPending:false,issues:[]},body:null,intro:null,related:[],topics:[]};
       if(url.pathname.startsWith('/api/admin/')){
         if(!req.headers.cookie?.includes('testowner=1')){res.statusCode=401;return {};}
         if(req.method!=='GET')writes++;
@@ -104,7 +144,8 @@ test('a late successful note export is discarded after session verification clea
   const pending=new Promise<void>(resolve=>release=resolve),begun=new Promise<void>(resolve=>authorized=resolve);
   try{
     web=await startWebServer(fakeApi(async(url,res,req)=>{
-      if(url.pathname==='/api/site/items/late-export')return {id:'late-export',title:'Late export',summary:null,source:{id:'ui',name:'UI'},author:null,links:{original:'https://example.com'},publishedAt:null,discoveredAt:'2026-10-27T02:00:00Z',timelineAt:'2026-10-27T02:00:00Z',category:null,tags:[],engagement:{views:0,likes:0},bodyState:{status:'not-permitted',bodyRevision:null,refreshPending:false,issues:[]},bodyHtml:null,outline:[],topics:[]};
+      if(url.pathname==='/api/site/items/late-export')return {id:'late-export',title:'Late export',summary:null,source:{id:'ui',name:'UI'},author:null,links:{original:'https://example.com'},publishedAt:null,discoveredAt:'2026-10-27T02:00:00Z',timelineAt:'2026-10-27T02:00:00Z',category:null,tags:[],engagement:{views:0,likes:0},bodyState:{status:'not-permitted',bodyRevision:null,refreshPending:false,issues:[]},body:null,intro:null,related:[],topics:[]};
+      if(url.pathname==='/api/auth/session')return {authenticated:!expired};
       if(url.pathname.startsWith('/api/admin/')){
         if(expired||!req.headers.cookie?.includes('testowner=1')){res.statusCode=401;return {};}
         if(url.pathname==='/api/admin/me')return {name:'Owner',csrf:'test-csrf'};
@@ -123,7 +164,7 @@ test("private notes keep a conflicting draft and disappear when the session ends
   let state={articleId:"private-ui",starred:false,status:"to-read",version:0,updatedAt:null};
   const article={id:"private-ui",title:"Private reading UI",summary:null,source:{id:"ui",name:"UI"},author:null,links:{original:"https://example.com"},
     publishedAt:null,discoveredAt:"2026-10-27T02:00:00Z",timelineAt:"2026-10-27T02:00:00Z",category:null,tags:[],
-    engagement:{views:0,likes:0},bodyState:{status:"not-permitted",bodyRevision:null,refreshPending:false,issues:[]},bodyHtml:null,outline:[],topics:[]};
+    engagement:{views:0,likes:0},bodyState:{status:"not-permitted",bodyRevision:null,refreshPending:false,issues:[]},body:null,intro:null,related:[],topics:[]};
   const browser=await chromium.launch();let web:WebServer|undefined;
   try {
     web=await startWebServer(fakeApi(async(url,res,req)=>{

@@ -17,10 +17,10 @@ test("empty, link-only and prose posts retain their original address, text and i
     const candidate=tweetToCandidate({id_str:tweet,tweet_created_at:new Date().toISOString(),full_text:text,lang:"en",user:{name:"Fixture",screen_name:"fixture"},extended_entities:{media:[{type:"photo",media_url_https:"https://example.org/image.png"}]}} as Parameters<typeof tweetToCandidate>[0]);
     const {articleId}=await upsertMaterial({...candidate,sourceId:source,via:"fetch"}),response=await app.inject("/api/site/items/"+articleId),item=response.json();
     assert.equal(response.statusCode,200);assert.equal(item.links.original,"https://x.com/fixture/status/"+tweet);
-    assert.ok(item.bodyHtml,"confirmed original posts keep a readable representation");
-    assert.doesNotMatch(item.bodyHtml,/<script>/);assert.match(item.bodyHtml,/图片正在保存/);
+    assert.ok(item.body.html,"confirmed original posts keep a readable representation");
+    assert.doesNotMatch(item.body.html,/<script>/);assert.match(item.body.html,/图片正在保存/);
     assert.match((await sql`SELECT body_html FROM articles WHERE id=${articleId}`)[0]!.body_html,/<img/);
-    if(text)assert.ok(item.bodyHtml.includes(text.startsWith("http")?"https://example.org/release":"Original prose"));
+    if(text)assert.ok(item.body.html.includes(text.startsWith("http")?"https://example.org/release":"Original prose"));
     assert.equal(item.summary,null);assert.equal("hasTranslation" in item,false);
   }
 });

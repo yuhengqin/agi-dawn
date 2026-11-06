@@ -8,7 +8,7 @@ import {captureReadingPoint,restoreReadingPoint,type ReadingPoint} from '../../l
 
 export function useArticleReading(outline:OutlineEntry[],html:string|null,focus:boolean){
   const scope=useRef<HTMLDivElement>(null),body=useRef<HTMLDivElement>(null),toolbar=useRef<HTMLDivElement>(null);
-  const [progress,setProgress]=useState(0),[current,go]=useCurrentSection(outline.map(entry=>entry.id),!!html);
+  const [progress,setProgress]=useState(0),[current,go]=useCurrentSection(outline.map(entry=>entry.id),!!html,0.25);
   const held=useRef<{point:ReadingPoint;bySection:boolean}|null>(null);
   const ids=useRef(outline.map(entry=>entry.id));ids.current=outline.map(entry=>entry.id);
   const stop=()=>{held.current=null;};

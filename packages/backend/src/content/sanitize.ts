@@ -49,6 +49,8 @@ export function sanitizeBody(html: string, baseUrl?: string): string {
     nonTextTags: DROP_WHOLE,
     allowedAttributes: {
       a: ["href", "title"],
+      figure: ['data-reader-card','data-reader-figure-status','data-reader-figure-loss'],
+      p: ['data-reader-embed'],
       img: ["src", "alt", "width", "height", "title", "data-reader-inline"],
       video: ["src", "poster", "width", "height", "controls", "playsinline", "preload"],
       source: ["src", "type"],

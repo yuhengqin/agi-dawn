@@ -8,6 +8,58 @@ import * as pool from "@agidawn/backend/publication/pool";
 
 after(async () => { await stopBoss(); await closeDb(); });
 
+test('SQL body search strips complete quoted tags, joins inline text and decodes entities once',async()=>{
+  const {htmlSearchText,metadataSearchText}=await import('@agidawn/backend/publication/search-text');
+  const examples=[
+    ['<p>人工<em>智能</em></p><p>边界</p>','人工智能 边界'],
+    ['<ul><li>Parent<ul><li>Child</li></ul>Trailing</li></ul>','Parent Child Trailing'],
+    ['<p>Before<br>After</p>','Before After'],
+    ['<p data-reader-embed="<p no end">Visible <em>text</em></p>','Visible text'],
+    ['<p><a href="https://secret.example" title="Platforms > Xbox">Visible</a></p>','Visible'],
+    ['<p data-reader-embed="<a no end">Visible <em>text</em></p>','Visible text'],
+    ['<p data-reader-embed="<em>attribute only</em>">Actual text</p>','Actual text'],
+    ['<p>&amp;lt;literal&amp;gt; &lt;code&gt; &nbsp; &amp;</p>','&lt;literal&gt; <code> &'],
+  ];
+  for(const [html,expected] of examples){const [row]=await sql`SELECT ${htmlSearchText(sql`${html}`)} AS text`;assert.equal(row!.text,expected,html);}
+  const [metadata]=await sql`SELECT ${metadataSearchText(sql`${'使用 <model> 和 <a id="L0">标签</a>'}`,sql`${'Use <model>.'}`)} AS text`;
+  assert.equal(metadata!.text,'使用 <model> 和 标签');
+});
+
+test('public search matches current translated text, technical words and mixed languages without leaking revoked bodies',async()=>{
+  const {installModules,serverModules}=await import('@agidawn/backend/modules');
+  const {default:reader}=await import('../modules/reader/server.ts');
+  const installed=serverModules();installModules([reader]);
+  try{
+    const sourceId='translated-public-search';
+    await sql`INSERT INTO sources(id,name,kind,site_fulltext) VALUES(${sourceId},'Search fixture','rss',true)`;
+    const {articleId:id}=await upsertMaterial({sourceId,title:'An ad stack for agents',excerpt:'Original summary',url:'https://example.org/public-search',bodyHtml:'<p>Original body content.</p>',bodyText:'Original body content.',bodyStatus:'ok',via:'fetch'});
+    const [a]=await sql`SELECT body_html,body_revision FROM articles WHERE id=${id}`;
+    await sql`INSERT INTO reader_metadata_translations(article_id,source_title,source_summary,title,summary,status) VALUES(${id},'An ad stack for agents','Original summary','每任务成本与广告系统','中文摘要','translated') ON CONFLICT(article_id) DO UPDATE SET source_title=excluded.source_title,source_summary=excluded.source_summary,title=excluded.title,summary=excluded.summary,status=excluded.status`;
+    await sql`INSERT INTO reader_translations(article_id,body_revision,source_html,body_html,status,complete) VALUES(${id},${a!.body_revision},${a!.body_html},'<p>人工<em>智能</em> 稳定译文 &amp;lt;token&amp;gt;</p><p><a title="secretattribute > boundary" href="https://secreturl.example">可见文字</a></p>','translated',true) ON CONFLICT(article_id) DO UPDATE SET body_revision=excluded.body_revision,source_html=excluded.source_html,body_html=excluded.body_html,status=excluded.status,complete=true`;
+    const search=(q:string)=>pool.loadReaderList({sourceId,q});
+    for(const q of ['每任务成本','中文摘要','人工智能','ad 智能','可见文字'])assert.equal((await search(q)).total,1,q);
+    for(const q of ['read','secretattribute','secreturl'])assert.equal((await search(q)).total,0,q);
+    const match=(await search('人工智能')).items[0]!;
+    assert.ok(match.matches?.some(hit=>hit.field==='body'&&hit.language==='translation'&&hit.snippet.includes('人工智能')));
+    await sql`UPDATE reader_translations SET body_html='<p>另一份新译文</p>' WHERE article_id=${id}`;
+    assert.equal((await search('稳定译文')).total,0);assert.equal((await search('新译文')).total,1);
+    await sql`UPDATE sources SET site_fulltext=false WHERE id=${sourceId}`;
+    assert.equal((await search('新译文')).total,0);assert.equal((await search('每任务成本')).total,1);
+    await sql`UPDATE sources SET site_fulltext=true WHERE id=${sourceId}`;
+    await sql`UPDATE articles SET body_revision=body_revision+1 WHERE id=${id}`;
+    assert.equal((await search('新译文')).total,0);
+    await sql`UPDATE publications SET title='Changed title' WHERE article_id=${id}`;
+    assert.equal((await search('每任务成本')).total,0);
+  }finally{installModules(installed);}
+});
+
+test('English search respects word edges while preserving technical punctuation',async()=>{
+  const sourceId='word-edge-search';await sql`INSERT INTO sources(id,name,kind) VALUES(${sourceId},'Word fixture','rss')`;
+  for(const title of ['Read and load a stack','An ad stack','C++ foo.bar agent-tools'])await upsertMaterial({sourceId,title,url:'https://example.org/words/'+encodeURIComponent(title),bodyStatus:'pending',via:'fetch'});
+  assert.equal((await pool.loadReaderList({sourceId,q:'ad stack'})).total,1);
+  for(const q of ['C++','foo.bar','agent-tools'])assert.equal((await pool.loadReaderList({sourceId,q})).total,1,q);
+});
+
 test("reader numbered pages count matching articles, jump directly and protect restricted body search", async () => {
   assert.equal(typeof pool.loadReaderList, "function");
   await sql`INSERT INTO sources (id,name,kind,tier,participation_mode,site_fulltext,tags)

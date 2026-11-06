@@ -18,6 +18,7 @@ import {readPosition,savePosition} from './positions.ts';
 import {withOutline} from '@agidawn/backend/content/outline';
 import {registerTranslation,captureTranslation,publicationTranslation,translatePending} from './translation/index.ts';
 import {publicationMetadata,translateMetadataPending} from './translation/metadata.ts';
+import {publicationSearch} from './public-search.ts';
 
 async function privateSnapshot(id:string){
   const snapshot=await readSnapshot(id);if(!snapshot)throw missing();
@@ -26,7 +27,7 @@ async function privateSnapshot(id:string){
   return {...snapshot,resources,bodyHtml:await snapshotBody({...snapshot,bodyHtml:outlined.html},true),outline:outlined.outline};
 }
 
-export default defineServerModule({ name: "reader",on:{articleCreated:registerTranslation,articleMaterialStored:async(capture,tx)=>{await captureSnapshot(capture,tx);await captureTranslation(capture,tx);}},publicationBody,publicationTranslation,publicationMetadata,
+export default defineServerModule({ name: "reader",on:{articleCreated:registerTranslation,articleMaterialStored:async(capture,tx)=>{await captureSnapshot(capture,tx);await captureTranslation(capture,tx);}},publicationBody,publicationTranslation,publicationMetadata,publicationSearch,
   schedules:[{name:'reader.translate',cron:'*/5 * * * *',run:async()=>({metadata:await translateMetadataPending(Date.now(),120_000),body:await translatePending(Date.now(),120_000)})}],queues:[archiveQueue],backupDirectories:["reader-archives/assets"],backupVerify:verifyReaderArchive,http(app,{adminHandler,sendFile}) {
   const id=(req:{params:unknown})=>(req.params as {id:string}).id;
   app.get("/api/admin/reader/views",adminHandler(async()=>({items:await listViews()})));

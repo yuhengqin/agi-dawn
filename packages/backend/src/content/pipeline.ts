@@ -96,6 +96,10 @@ function describeFigureDrawings(document: Doc) {
   for (const svg of document.querySelectorAll("figure svg")) {
     const figure = svg.closest("figure");
     if (!figure) continue;
+    // Readability may discard aria-hidden drawing holders. Keep the quality marker on
+    // the visible figure, even when its alternative text already occurs in the caption.
+    const styled=!!svg.querySelector('style,[class]')||svg.hasAttribute('class')||/var\(/.test(svg.outerHTML);
+    if(styled)figure.setAttribute('data-reader-figure-loss','true');
     const holder = svg.closest('[role="img"]');
     const held = holder && holder !== figure && figure.contains(holder) ? holder : null;
     const drawing = held && onlyDrawings(held) ? held : svg;
@@ -138,6 +142,20 @@ export function preparePageContent(document: Doc, url: string, rules: ContentRul
   settleInlineVisibility(document);
   if (rules.bodyAdapter) bodyAdapters[rules.bodyAdapter](document);
   preserveWidgets(document, rules.preserve ?? []);
+  for(const figure of document.querySelectorAll('figure')){
+    if(figure.querySelector('table,pre,blockquote,video,picture,img:not([data-reader-inline])'))continue;
+    const chart=figure.querySelector('canvas,[role="img"],[class*="chart"],[class*="diagram"],[class*="graph"],[class*="plot"]');
+    if(chart&&!figure.querySelector('svg')){
+      figure.setAttribute('data-reader-figure-loss','true');
+      const alternative=drawingText(document,chart).join(' ');
+      if(alternative&&!words(figure.textContent??'').includes(words(alternative))){const note=document.createElement('p');note.textContent=alternative;figure.prepend(note);}
+      for(const control of figure.querySelectorAll('canvas,button,input,select,[role="button"]'))control.remove();
+      // Keep ordinary explanations/captions out of Readability's conditional div pruning.
+      for(const holder of [...figure.querySelectorAll('div')].reverse()){
+        if(hiddenIn(holder,figure))holder.remove();else holder.replaceWith(...holder.childNodes);
+      }
+    }
+  }
   describeFigureDrawings(document);
   const technical = normalizeTechnicalMarkup(document.body.innerHTML, url, true);
   document.body.innerHTML = technical.html;

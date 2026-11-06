@@ -65,8 +65,7 @@ function DateDraft({query,close}:{query:Record<string,string>;close:()=>void}){
     if(active==='from')setActive('to');
   };
   const setRange=(start:string,end:string)=>{
-    setDraft({from:start,to:end});setTouched({from:false,to:false});setActive('from');setEdited('from');setPreview(null);setJumpOpen(false);
-    if(start||end)show(start||end);
+    void navigate(readerLink(query,{from:start||null,to:end||null}));close();
   };
   const jump=()=>{
     if(!/^\d{1,4}$/.test(jumpYear)||Number(jumpYear)<1){setJumpError('请输入1至9999之间的年份。');return;}

@@ -36,7 +36,7 @@ export function EngagementProvider({items,trackView,children}:{items:ReaderItemS
     {children}
   </EngagementContext.Provider>;
 }
-export function ArticleEngagementBar({item,compact=false}:{item:ReaderItemSummary;compact?:boolean}){
+export function ArticleEngagementBar({item,compact=false,labelPrefix='',showViews=true}:{item:ReaderItemSummary;compact?:boolean;labelPrefix?:string;showViews?:boolean}){
   const state=useContext(EngagementContext),current=state?.items[item.id],counts=current??item.engagement;
   const [pending,setPending]=useState(false),[error,setError]=useState('');
   async function toggle(){
@@ -45,10 +45,10 @@ export function ArticleEngagementBar({item,compact=false}:{item:ReaderItemSummar
     catch{setError('点赞未能保存，请重试。');}finally{setPending(false);}
   }
   return <div className={`flex flex-wrap items-center gap-x-4 text-ink-3 tabular-nums ${compact?'text-xs':'text-[13px]'}`}>
-    <span title="本站详情打开次数，同一浏览器30分钟内去重">阅读 {counts.views.toLocaleString('zh-CN')}</span>
-    <button type="button" aria-label={current?.liked?'取消点赞':'点赞'} aria-pressed={current?.liked??false} disabled={!state?.ready||!current||pending} onClick={()=>void toggle()}
+    {showViews&&counts.views>0&&<span title="本站详情打开次数，同一浏览器30分钟内去重">阅读 {counts.views.toLocaleString('zh-CN')}</span>}
+    <button type="button" aria-label={labelPrefix+(current?.liked?'取消点赞':'点赞')} aria-pressed={current?.liked??false} disabled={!state?.ready||!current||pending} onClick={()=>void toggle()}
       className={`inline-flex items-center gap-1.5 hover:text-accent aria-pressed:text-accent disabled:cursor-wait ${compact?'min-h-7 [@media(pointer:coarse)]:min-h-11':'min-h-11'}`} title="同一浏览器可点赞一次，再点取消">
-      <IconHeart size={15} fill={current?.liked?'currentColor':'none'}/><span>{counts.likes.toLocaleString('zh-CN')}</span>
+      <IconHeart size={15} fill={current?.liked?'currentColor':'none'}/>{counts.likes>0&&<span>{counts.likes.toLocaleString('zh-CN')}</span>}
     </button>
     {error&&<span role="status" className="basis-full text-sm">{error}</span>}
   </div>;

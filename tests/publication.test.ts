@@ -15,9 +15,14 @@ after(async()=>{await app.close();await stopBoss();await closeDb();});
 async function article(){return (await upsertMaterial({sourceId:source,url:`https://example.org/${tag()}`,title:"Original technical title",bodyText:"Original saved body",bodyHtml:"<h2>Original heading</h2><p>Original saved body</p>",bodyStatus:"ok",via:"fetch"})).articleId;}
 const detail=(id:string)=>app.inject(`/api/site/items/${id}`);
 
+test('anonymous session presence is a quiet non-sensitive response without private credentials',async()=>{
+  const response=await app.inject('/api/auth/session');assert.equal(response.statusCode,200);assert.equal(response.headers['cache-control'],'no-store');
+  assert.deepEqual(response.json(),{authenticated:false});assert.equal((await app.inject('/api/admin/me')).statusCode,401);
+});
+
 test("source-supplied plain text becomes safe readable HTML",async()=>{
   const {articleId}=await upsertMaterial({sourceId:source,url:"https://example.org/"+tag(),title:"Plain text",bodyText:"Original <b>text</b>",bodyStatus:"ok",via:"fetch"});
-  const item=(await detail(articleId)).json();assert.match(item.bodyHtml,/Original &lt;b&gt;text&lt;\/b&gt;/);assert.equal(item.bodyState.status,"ready");
+  const item=(await detail(articleId)).json();assert.match(item.body?.html,/Original &lt;b&gt;text&lt;\/b&gt;/);assert.equal(item.bodyState.status,"ready");
 });
 
 test('public summaries clean legacy source noise without rewriting saved material',async()=>{
@@ -32,7 +37,7 @@ test('public body cleanup preserves the stored original and body revision',async
   const bodyHtml='<p>OCT. 29, 2026</p><p>On OCT. 29, 2026 we released a tool.</p>';
   const {articleId}=await upsertMaterial({sourceId:source,url:'https://developers.googleblog.com/'+tag(),title:'A dated article',bodyHtml,bodyText:'OCT. 29, 2026 On OCT. 29, 2026 we released a tool.',bodyStatus:'ok',publishedAt:new Date('2026-10-29T00:00:00Z'),via:'fetch'});
   const before=(await sql`SELECT body_html,body_revision,content_hash FROM articles WHERE id=${articleId}`)[0];
-  assert.equal((await detail(articleId)).json().bodyHtml,'<p>On OCT. 29, 2026 we released a tool.</p>');
+  assert.equal((await detail(articleId)).json().body?.html,'<p>On OCT. 29, 2026 we released a tool.</p>');
   assert.deepEqual((await sql`SELECT body_html,body_revision,content_hash FROM articles WHERE id=${articleId}`)[0],before);
 });
 
@@ -40,7 +45,7 @@ test("raw material appears immediately, retains its language and needs no summar
   const id=await article(),response=await detail(id),item=response.json();
   assert.equal(response.statusCode,200);assert.equal(item.title,"Original technical title");assert.equal(item.summary,null);
   assert.equal(item.publishedAt,null);assert.equal(typeof item.discoveredAt,"string");assert.equal(item.bodyState.status,"ready");
-  assert.match(item.bodyHtml,/Original saved body/);assert.equal(item.outline[0].text,"Original heading");
+  assert.match(item.body?.html,/Original saved body/);assert.equal(item.body.outline[0].text,"Original heading");
   assert.equal((await processArticle(id)).state,"ready");
   assert.equal((await sql`SELECT body_revision FROM articles WHERE id=${id}`)[0]!.body_revision,1);
   for(const field of ["score","selected","hasTranslation","note","starred","readingStatus"])assert.equal(field in item,false,field);
@@ -60,11 +65,11 @@ test("manual wording and visibility survive recollection, body processing and so
 
 test("summary-only and current source permission suppress bodies before a queued republish runs",async()=>{
   const id=await article();await setVisibility(id,{visibility:"summary-only",version:0,reason:"metadata only"},"test");
-  let item=(await detail(id)).json();assert.equal(item.bodyHtml,null);assert.equal(item.bodyState.status,"not-permitted");assert.deepEqual(item.outline,[]);
+  let item=(await detail(id)).json();assert.equal(item.body,null);assert.equal(item.bodyState.status,"not-permitted");
   await setVisibility(id,{visibility:"public",version:1,reason:"restore visibility"},"test");
-  assert.match((await detail(id)).json().bodyHtml,/Original saved body/);
+  assert.match((await detail(id)).json().body?.html,/Original saved body/);
   try{await sql`UPDATE sources SET site_fulltext=false WHERE id=${source}`;
-    item=(await detail(id)).json();assert.equal(item.bodyHtml,null);assert.equal(item.bodyState.status,"not-permitted");
+    item=(await detail(id)).json();assert.equal(item.body,null);assert.equal(item.bodyState.status,"not-permitted");
   }finally{await sql`UPDATE sources SET site_fulltext=true WHERE id=${source}`;}
 });
 

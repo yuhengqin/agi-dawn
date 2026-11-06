@@ -43,7 +43,7 @@ test("archived images freeze a version and every public read checks current perm
     assert.equal(asset!.status,"ready");
     const route=`/api/reader/articles/${articleId}/assets/${snapshot!.id}/${asset!.asset_key}`;
     const detail=(await app.inject(`/api/site/items/${articleId}`)).json();
-    assert.ok(detail.bodyHtml.includes(route),"published HTML points at its exact archived representation");
+    assert.ok(detail.body.html.includes(route),"published HTML points at its exact archived representation");
     const first=await app.inject(route);
     assert.equal(first.statusCode,200);
     assert.equal(first.headers["cache-control"],"no-store");

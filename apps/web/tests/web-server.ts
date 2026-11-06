@@ -29,10 +29,13 @@ export function readerPage(items:ReaderItemSummary[],url:URL):ReaderListPage{
 }
 
 /** A report as its article page shows it; the fields a test does not name are fixed. */
-export function itemDetail(fields: Partial<ReaderItemDetail> & Pick<ReaderItemDetail, "id" | "title">): ReaderItemDetail {
+type DetailFixture=Partial<ReaderItemDetail>&Pick<ReaderItemDetail,'id'|'title'>&{bodyHtml?:string|null;outline?:import('@agidawn/contracts/site').OutlineEntry[];translation?:{bodyHtml:string;outline:import('@agidawn/contracts/site').OutlineEntry[];complete:boolean}|null};
+export function itemDetail(fields:DetailFixture): ReaderItemDetail {
+  const {bodyHtml='<p>固定正文</p>',outline=[],translation,...rest}=fields;
   return {
-    ...feedItem({ id: fields.id, title: fields.title }),bodyHtml:"<p>固定正文</p>",outline:[],topics:[],
-    ...fields,
+    ...feedItem({id:fields.id,title:fields.title}),topics:[],related:[],intro:fields.metadataTranslation?.summary??fields.summary??'固定摘要',
+    body:translation?{html:translation.bodyHtml,outline:translation.outline,complete:translation.complete,language:'translation',readingMinutes:1}:bodyHtml?{html:bodyHtml,outline,complete:true,language:'original',readingMinutes:1}:null,
+    ...rest,
   };
 }
 
@@ -49,6 +52,7 @@ export function fakeApi(route: (url: URL, res: ServerResponse, req: IncomingMess
     if (res.writableEnded) return;
     if (body !== undefined) return res.end(JSON.stringify(body));
     if (url.pathname === "/api/site/meta") return res.end(JSON.stringify({ changelogVersion: "fixture" }));
+    if(url.pathname==='/api/auth/session')return res.end(JSON.stringify({authenticated:req.headers.cookie?.includes('testowner=1')??false}));
     if (url.pathname === "/api/site/track") { res.statusCode = 204; return res.end(); }
     if (url.pathname === "/api/health") return res.end("{}");
     res.statusCode = 404;

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect,useRef,useState } from "react";
 import { createPortal } from "react-dom";
 import { Presence } from "./Presence";
 import { useModal } from "./modal";
@@ -17,6 +17,9 @@ export interface LightboxImage {
  */
 export function Lightbox({ images, index, onIndex, onClose }: { images: LightboxImage[]; index: number | null; onIndex: (i: number) => void; onClose: () => void }) {
   const open = index !== null && !!images[index];
+  const [enlarged,setEnlarged]=useState(false),[scale,setScale]=useState(1),[dimensions,setDimensions]=useState({width:0,height:0});
+  const stage=useRef<HTMLDivElement>(null),pan=useRef<{x:number;y:number;left:number;top:number}|null>(null);
+  useEffect(()=>{setEnlarged(false);setScale(1);setDimensions({width:0,height:0});if(stage.current){stage.current.scrollTop=0;stage.current.scrollLeft=0;}},[index,open]);
   const dialog = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const state = useRef({ index, count: images.length, onIndex, onClose });
@@ -28,6 +31,7 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
     initialFocus: closeButton,
     onClose,
     onKeyDown: (e) => {
+      if(enlarged)return;
       if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
       const { index: at, count, onIndex: go } = state.current;
       if (at !== null && count > 1) go((at + (e.key === "ArrowRight" ? 1 : -1) + count) % count);
@@ -114,9 +118,22 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
         onTouchCancel={cancelDrag}
         className="fixed inset-0 z-[80] grid cursor-zoom-out touch-pinch-zoom place-items-center bg-black/85 p-4 sm:p-10"
       >
-        {current && (
-          <img ref={img} key={current.src} src={current.src} decoding="async" alt={current.alt ?? ""} className="lightbox-img anim-zoom-in min-h-0 min-w-0 max-h-[calc(100dvh-5rem)] max-w-full rounded-control object-contain shadow-2xl" />
-        )}
+        <div ref={stage} role="region" aria-label="可滚动图片" tabIndex={enlarged?0:-1} className={`lightbox-stage${enlarged?' is-enlarged':''}`}
+          onClick={event=>{if(enlarged){event.stopPropagation();tappedAfterDrag();}}}
+          onPointerDown={event=>{if(!enlarged||event.pointerType!=='mouse'||event.button!==0)return;const box=event.currentTarget;pan.current={x:event.clientX,y:event.clientY,left:box.scrollLeft,top:box.scrollTop};box.setPointerCapture(event.pointerId);event.preventDefault();}}
+          onPointerMove={event=>{const held=pan.current;if(!held)return;const dx=event.clientX-held.x,dy=event.clientY-held.y;if(Math.hypot(dx,dy)>3)suppressTap.current=true;event.currentTarget.scrollLeft=held.left-dx;event.currentTarget.scrollTop=held.top-dy;}}
+          onPointerUp={event=>{pan.current=null;if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);}}
+          onPointerCancel={()=>{pan.current=null;}}>
+          {current&&<img ref={img} key={current.src} src={current.src} decoding="async" alt={current.alt??''} draggable={false}
+            onLoad={event=>setDimensions({width:event.currentTarget.naturalWidth,height:event.currentTarget.naturalHeight})}
+            style={enlarged?{width:dimensions.width*scale}:undefined}
+            className="lightbox-img rounded-control object-contain shadow-2xl"/>}
+        </div>
+        <div className="absolute left-5 top-5 flex gap-1 rounded-control bg-black/60 text-sm text-white" onClick={event=>event.stopPropagation()}>
+          <button type="button" className="min-h-11 px-3 hover:bg-white/10" aria-pressed={!enlarged} onClick={()=>{setEnlarged(false);setScale(1);}}>适应窗口</button>
+          <button type="button" className="min-h-11 px-3 hover:bg-white/10" aria-pressed={enlarged&&scale===1} disabled={!dimensions.width} onClick={()=>{setEnlarged(true);setScale(1);}}>原尺寸</button>
+          <button type="button" className="min-h-11 px-3 hover:bg-white/10" aria-label="放大图片" disabled={!dimensions.width||scale>=4} onClick={()=>{setEnlarged(true);setScale(value=>Math.min(4,value*2));}}>＋</button>
+        </div>
         <button ref={closeButton} type="button" aria-label="关闭" onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute right-[max(16px,env(safe-area-inset-right))] top-[max(16px,env(safe-area-inset-top))] grid size-11 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
           <IconClose size={18} />
         </button>

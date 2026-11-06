@@ -1,4 +1,4 @@
-// Admin sign-in and the /api/admin guard. Public routes never read the session.
+// Admin sign-in, a non-sensitive session-presence probe, and the /api/admin guard.
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import type { AdminMe } from "@agidawn/contracts/admin";
@@ -82,6 +82,10 @@ function feishuRedirect(reply: FastifyReply, returnTo: string) {
 }
 
 export function registerAdminAuth(app: FastifyInstance) {
+  app.get('/api/auth/session',async(req,reply)=>{
+    reply.header('Cache-Control','no-store');
+    return {authenticated:!!await sessionPrincipal(req.headers.cookie)};
+  });
   // The web admin sends a signed-out visitor here with ?return=, a reverse proxy with the site's header.
   // With Feishu as the only way in, sign-in starts there at once; otherwise the sign-in page (in the web
   // app) offers the ways in.

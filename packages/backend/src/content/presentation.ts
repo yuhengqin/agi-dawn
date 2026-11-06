@@ -1,6 +1,11 @@
 import * as cheerio from 'cheerio';
 import {beijingDate} from '@agidawn/contracts/time';
 import {collapseWhitespace} from '../lib/text.ts';
+import type {BodyIssue} from '@agidawn/contracts/site';
+
+export function figurePresentationIssues(html:string):BodyIssue[]{
+  return html.includes('data-reader-figure-status="missing"')?[{kind:'missing-figure',message:'部分图表未保存，请通过图示旁的链接查看原文。'}]:[];
+}
 
 const months=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 function dateOnly(value:string):string|null {
@@ -12,7 +17,7 @@ function dateOnly(value:string):string|null {
 }
 
 /** Deterministic display cleanup for confirmed publisher chrome, including already saved bodies. */
-export function cleanArticlePresentation(html:string,context:{url:string;publishedAt?:string|null}):string {
+export function cleanArticlePresentation(html:string,context:{url:string;publishedAt?:string|null;issues?:readonly BodyIssue[]}):string {
   let page:URL;try{page=new URL(context.url);}catch{return html;}
   const host=page.hostname.replace(/^www\./,''),$=cheerio.load(html,null,false);let changed=false;
   const day=context.publishedAt?beijingDate(context.publishedAt):null;
@@ -30,6 +35,38 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
     if(paragraphs.length===2&&!paragraphs.find('img,video,picture').length&&collapseWhitespace(paragraphs.eq(0).text())===collapseWhitespace(paragraphs.eq(1).text())){
       paragraphs.eq(1).remove();changed=true;
     }
+  });
+  if(host==='ghuntley.com')$('a').each((_,node)=>{
+    const link=$(node),blocks=link.children('p,h2,h3,h4').filter((_,block)=>!!$(block).text().trim()),images=link.find('img').clone();
+    if(!link.closest('figure').length||blocks.length<1||link.find('video').length||images.length&&blocks.length<2||!link.attr('href'))return;
+    const title=collapseWhitespace(blocks.first().text());if(!title)return;
+    const card=link.closest('figure').attr('data-reader-card','true');
+    const head=$('<p>').append($('<a>').attr('href',link.attr('href')!).text(title));
+    const description=blocks.slice(1).map((_,block)=>collapseWhitespace($(block).text())).get().filter(text=>text&&text!==title);
+    const thumbnails=images.toArray().map(image=>$('<a>').attr('href',link.attr('href')!).append(image));
+    link.replaceWith(thumbnails.flatMap(image=>image.toArray()).concat(head.toArray(),description.flatMap(text=>$('<p>').text(text).toArray())));
+    card.find('figcaption').remove();changed=true;
+  });
+  $('figure').each((_,node)=>{
+    const figure=$(node);if(figure.is('[data-reader-card]')||figure.find('table,pre,blockquote,video,picture').length)return;
+    const usefulImage=figure.find('img').toArray().some(image=>{
+      const img=$(image),width=Number(img.attr('width')),height=Number(img.attr('height'));
+      return img.attr('data-reader-inline')!=='true'&&!(width>0&&height>0&&Math.max(width,height)<=32);
+    });
+    if(usefulImage)return;
+    const copy=figure.clone();copy.find('figcaption,h2,h3,h4,[data-reader-embed]').remove();
+    const captionOnly=!!figure.find('figcaption').length&&!copy.text().trim();
+    const knownDrawing=(host==='openai.com'||host==='claude.dev')&&figure.find('figcaption').length>0&&!figure.find('a').length;
+    const recordedLoss=figure.is('[data-reader-figure-loss="true"]')||!!figure.find('figcaption').length&&context.issues?.some(issue=>issue.kind==='missing-figure');
+    if(!captionOnly&&!knownDrawing&&!recordedLoss&&!figure.is('[data-reader-figure-status="missing"]'))return;
+    if(figure.is('[data-reader-figure-status="missing"]'))return;
+    figure.attr('data-reader-figure-status','missing').removeAttr('data-reader-figure-loss');
+    if(knownDrawing)figure.find('p,span').filter((_,element)=>/^(?:Select a branch to include|选择一个分支以包含|Held\s*Fetch\s*Missing|已持有获取缺失的分支依赖项)/i.test(collapseWhitespace($(element).text()))).remove();
+    figure.prepend($('<p>').append($('<a>').attr('href',page.href).text('此图未保存，查看原文')));changed=true;
+  });
+  $('p').each((_,node)=>{
+    const p=$(node);if(p.find('a').length||!/^互动内容请访问原文查看[。.]?$/.test(p.text().trim()))return;
+    p.attr('data-reader-embed','true').empty().append($('<a>').attr('href',page.href).text('互动内容请访问原文查看。'));changed=true;
   });
   if(host==='browser-use.com'){
     const first=$.root().children().first();

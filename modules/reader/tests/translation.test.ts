@@ -46,21 +46,22 @@ async function detail(id:string){return (await app.inject('/api/site/items/'+id)
 test('only newly collected foreign bodies translate, without model calls on page reads or old republication',async()=>{
   installModules([]);const old=await upsertMaterial(input());installModules([reader]);await publishArticle(old.articleId);
   const fresh=await upsertMaterial(input()),chinese=await upsertMaterial({...input('<p>这是已经用中文写好的文章。</p>'),language:'zh'});
-  assert.equal((await detail(fresh.articleId)).translation??null,null);const before=provider.hits();
+  assert.ok((await detail(fresh.articleId)).body?.language !== 'translation');const before=provider.hits();
   await run();
   assert.equal(provider.hits(),before+1);
-  const item=await detail(fresh.articleId);assert.match(item.bodyHtml,/Original section/);assert.match(item.translation.bodyHtml,/中文译文/);
-  assert.equal(item.translation.complete,true);assert.match(item.translation.outline[0].text,/中文译文/);
-  assert.equal((await detail(old.articleId)).translation??null,null);assert.equal((await detail(chinese.articleId)).translation??null,null);
+  const item=await detail(fresh.articleId);assert.equal(item.body?.language,'translation');assert.match(item.body.html,/中文译文/);
+  assert.equal('bodyHtml' in item,false);assert.equal('translation' in item,false);
+  assert.equal(item.body.complete,true);assert.match(item.body.outline[0].text,/中文译文/);
+  assert.ok((await detail(old.articleId)).body?.language !== 'translation');assert.ok((await detail(chinese.articleId)).body?.language !== 'translation');
   const calls=provider.hits();await run();await detail(fresh.articleId);assert.equal(provider.hits(),calls);
 });
 
 test('delayed bodies are eligible; code, images and link destinations survive translation',async()=>{
   const material=input('<h2>Technical section</h2><p>Read <a href="https://example.org/docs">the docs</a>, run <code>npm test</code>.<img src="https://example.org/diagram.png" alt="Diagram"></p><pre data-code-kind="prompt" data-language="text"><code>const x = 1;</code></pre>');
   const pending=await upsertMaterial({...material,bodyHtml:undefined,bodyText:undefined,bodyStatus:'pending'});
-  await run();assert.equal((await detail(pending.articleId)).translation??null,null);
+  await run();assert.ok((await detail(pending.articleId)).body?.language !== 'translation');
   await upsertMaterial(material);await run();
-  const item=await detail(pending.articleId);assert.match(item.translation.bodyHtml,/href="https:\/\/example.org\/docs"/);assert.match(item.translation.bodyHtml,/<code>npm test<\/code>/);assert.match(item.translation.bodyHtml,/const x = 1;/);
+  const item=await detail(pending.articleId);assert.match(item.body.html,/href="https:\/\/example.org\/docs"/);assert.match(item.body.html,/<code>npm test<\/code>/);assert.match(item.body.html,/const x = 1;/);
   const [stored]=await sql`SELECT body_html FROM reader_translations WHERE article_id=${pending.articleId}`;assert.match(stored!.body_html,/src="https:\/\/example.org\/diagram.png"/);
   assert.match(stored!.body_html,/data-code-kind="prompt"/);assert.match(stored!.body_html,/data-language="text"/);
 });
@@ -68,7 +69,7 @@ test('delayed bodies are eligible; code, images and link destinations survive tr
 test('missing protected content is retried once, then retained as original and labelled partial',async()=>{
   const {articleId}=await upsertMaterial(input('<p>A good paragraph.</p><p>This never keeps <a href="https://example.org/safe">the link</a>.</p>'));
   await run();const item=await detail(articleId);
-  assert.equal(item.translation.complete,false);assert.match(item.translation.bodyHtml,/中文译文/);assert.match(item.translation.bodyHtml,/This never keeps/);
+  assert.equal(item.body.complete,false);assert.match(item.body.html,/中文译文/);assert.match(item.body.html,/This never keeps/);
 });
 
 test('switches and missing or stopped budgets leave work pending without sending or consuming attempts',async()=>{
@@ -77,14 +78,14 @@ test('switches and missing or stopped budgets leave work pending without sending
   await sql`DELETE FROM budgets WHERE service='llm'`;await run();assert.equal(provider.hits(),before);
   await sql`INSERT INTO budgets(service,per_minute,per_hour,per_day) VALUES('llm',0,0,0)`;await run();assert.equal(provider.hits(),before);
   assert.equal((await sql`SELECT attempts FROM reader_translations WHERE article_id=${articleId}`)[0]!.attempts,0);
-  await sql`UPDATE budgets SET per_minute=1000,per_hour=1000,per_day=1000 WHERE service='llm'`;await run();assert.ok((await detail(articleId)).translation);
+  await sql`UPDATE budgets SET per_minute=1000,per_hour=1000,per_day=1000 WHERE service='llm'`;await run();assert.ok((await detail(articleId)).body?.language === 'translation');
 });
 
 test('saved paid answers repair business storage without a second request and licence withdrawal hides the result',async()=>{
   const {articleId}=await upsertMaterial(input());await run();const before=provider.hits();
-  await sql`UPDATE reader_translations SET status='pending',body_html=NULL WHERE article_id=${articleId}`;await run();assert.equal(provider.hits(),before);assert.ok((await detail(articleId)).translation);
+  await sql`UPDATE reader_translations SET status='pending',body_html=NULL WHERE article_id=${articleId}`;await run();assert.equal(provider.hits(),before);assert.ok((await detail(articleId)).body?.language === 'translation');
   await sql`UPDATE sources SET site_fulltext=false WHERE id=${source}`;
-  try{const item=await detail(articleId);assert.equal(item.bodyHtml,null);assert.equal(item.translation,null);}finally{await sql`UPDATE sources SET site_fulltext=true WHERE id=${source}`;}
+  try{const item=await detail(articleId);assert.equal(item.body,null);}finally{await sql`UPDATE sources SET site_fulltext=true WHERE id=${source}`;}
 });
 
 test('a source revised while the model answers never displays the previous body translation',async()=>{
@@ -92,20 +93,20 @@ test('a source revised while the model answers never displays the previous body 
   hold=gate();asked=gate();const active=run();await asked.promise;
   const revised={...material,bodyHtml:'<h2>After revision</h2><p>The new price is twenty.</p>',bodyText:'After revision The new price is twenty.'};
   try{
-    await upsertMaterial(revised);assert.equal((await detail(articleId)).translation,null);
+    await upsertMaterial(revised);assert.ok((await detail(articleId)).body?.language !== 'translation');
   }finally{const release=hold;hold=null;release.open(undefined);}
-  await active;assert.equal((await detail(articleId)).translation,null);
-  await run();assert.match((await detail(articleId)).translation.bodyHtml,/new price is twenty/);
+  await active;assert.ok((await detail(articleId)).body?.language !== 'translation');
+  await run();assert.match((await detail(articleId)).body.html,/new price is twenty/);
 });
 
 test('nested list and quotation text outside child paragraphs is included before declaring a complete translation',async()=>{
   const {articleId}=await upsertMaterial(input('<ul><li>Parent explanation<ul><li>Child detail</li></ul>Trailing explanation</li></ul><blockquote>Quoted introduction<p>Quoted paragraph</p>Quoted conclusion</blockquote>'));
   await run();const item=await detail(articleId);
-  assert.match(item.translation.bodyHtml,/中文译文：Parent explanation/);
-  assert.match(item.translation.bodyHtml,/中文译文：Trailing explanation/);
-  assert.match(item.translation.bodyHtml,/中文译文：Quoted introduction/);
-  assert.match(item.translation.bodyHtml,/中文译文：Quoted conclusion/);
-  assert.equal(item.translation.complete,true);
+  assert.match(item.body.html,/中文译文：Parent explanation/);
+  assert.match(item.body.html,/中文译文：Trailing explanation/);
+  assert.match(item.body.html,/中文译文：Quoted introduction/);
+  assert.match(item.body.html,/中文译文：Quoted conclusion/);
+  assert.equal(item.body.complete,true);
 });
 
 test('an unknown paid receipt waits without another request until the existing recovery mechanism releases it',async()=>{
@@ -116,7 +117,7 @@ test('an unknown paid receipt waits without another request until the existing r
   const before=provider.hits();await run();assert.equal(provider.hits(),before);
   assert.equal((await sql`SELECT attempts FROM reader_translations WHERE article_id=${articleId}`)[0]!.attempts,0);
   await sql.begin(tx=>releaseUnknownReceipt(tx,Number(receipt.id),'confirmed local test release'));
-  await run();assert.equal(provider.hits(),before+1);assert.ok((await detail(articleId)).translation);
+  await run();assert.equal(provider.hits(),before+1);assert.ok((await detail(articleId)).body?.language === 'translation');
 });
 
 test('a budget stop between batches resumes from saved answers without paying for the first batch twice',async()=>{
@@ -124,10 +125,10 @@ test('a budget stop between batches resumes from saved answers without paying fo
   const {articleId}=await upsertMaterial(input(html)),[count]=await sql`SELECT count(*)::int AS n FROM receipt_attempts WHERE service='llm' AND origin='live' AND started_at>now()-interval '1 minute'`;
   await sql`UPDATE budgets SET per_minute=${Number(count!.n)+1} WHERE service='llm'`;
   const before=provider.hits();
-  try{await run();assert.equal(provider.hits(),before+1);assert.equal((await detail(articleId)).translation,null);}
+  try{await run();assert.equal(provider.hits(),before+1);assert.ok((await detail(articleId)).body?.language !== 'translation');}
   finally{await sql`UPDATE budgets SET per_minute=1000 WHERE service='llm'`;}
   const [saved]=await sql`SELECT id FROM receipts WHERE purpose='translate_body' AND subject=${'article:'+articleId+'@1'}`;
-  await run();assert.ok((await detail(articleId)).translation);assert.equal((await sql`SELECT attempts FROM receipts WHERE id=${saved!.id}`)[0]!.attempts,1);
+  await run();assert.ok((await detail(articleId)).body?.language === 'translation');assert.equal((await sql`SELECT attempts FROM receipts WHERE id=${saved!.id}`)[0]!.attempts,1);
 });
 
 test('model requests use the configured outbound proxy rather than attempting a direct connection',async()=>{
@@ -147,7 +148,7 @@ test('title and summary translate for summary-only articles without fetching or 
     const item=await detail(articleId);
     assert.deepEqual(item.metadataTranslation,{title:'中文译文：Metadata without full text',summary:'中文译文：A short original summary.'});
     assert.equal(item.title,'Metadata without full text');assert.equal(item.summary,'A short original summary.');
-    assert.equal(item.bodyHtml,null);assert.equal(item.translation,null);
+    assert.equal(item.body,null);
     const list=(await app.inject('/api/site/articles?sourceId='+source)).json();
     assert.deepEqual(list.items.find((entry:{id:string})=>entry.id===articleId).metadataTranslation,item.metadataTranslation);
     const before=provider.hits();await detail(articleId);await app.inject('/api/site/articles');assert.equal(provider.hits(),before);
@@ -196,7 +197,7 @@ test('public cleanup renders matching original and translated bodies without inv
   const translated='<p>阅读<a href="https://example.org/docs">文档<span>（在新窗口中打开）</span></a>。</p>';
   await sql`UPDATE reader_translations SET body_html=${translated},complete=true WHERE article_id=${articleId}`;
   const before=(await sql`SELECT source_html,body_html,body_revision,status FROM reader_translations WHERE article_id=${articleId}`)[0],calls=provider.hits();
-  const item=await detail(articleId);assert.doesNotMatch(item.bodyHtml,/opens in a new window/);assert.doesNotMatch(item.translation.bodyHtml,/在新窗口中打开/);assert.equal(item.translation.complete,true);
+  const item=await detail(articleId);assert.doesNotMatch(item.body.html,/opens in a new window/);assert.doesNotMatch(item.body.html,/在新窗口中打开/);assert.equal(item.body.complete,true);
   assert.deepEqual((await sql`SELECT source_html,body_html,body_revision,status FROM reader_translations WHERE article_id=${articleId}`)[0],before);assert.equal(provider.hits(),calls);
 });
 
@@ -238,7 +239,7 @@ test('metadata respects switches and budgets, replays paid answers and waits on 
 test('a metadata backlog still lets a newly collected body translate in the same scheduled run',async()=>{
   const {articleId}=await upsertMaterial({...input(),title:'Fair translation scheduling'}),now=Date.now;let elapsed=0;
   Date.now=()=>now()+elapsed;onAnswer=()=>{elapsed+=241_000;onAnswer=null;};
-  try{await runAll();const item=await detail(articleId);assert.ok(item.metadataTranslation);assert.ok(item.translation);}
+  try{await runAll();const item=await detail(articleId);assert.ok(item.metadataTranslation);assert.ok(item.body?.language === 'translation');}
   finally{Date.now=now;onAnswer=null;}
 });
 

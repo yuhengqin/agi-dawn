@@ -7,6 +7,8 @@ import type {Db} from "./db.ts";
 import type {QueueOptions} from "./jobs/queue.ts";
 import type {Finding} from "./notify/feishu.ts";
 import {sha256,stableJson} from "./lib/ids.ts";
+import type {SearchSql} from './publication/search-text.ts';
+export interface PublicationSearchInput {articleId:SearchSql;title:SearchSql;summary:SearchSql;bodyRevision:SearchSql;bodyHtml:SearchSql;bodyAllowed:SearchSql}
 export interface MaterialCapture {
   articleId:string;bodyRevision:number;bodyHtml:string;title:string;author:string|null;originalUrl:string;
   publishedAt:string|null;discoveredAt:string;sourceId:string;sourceName:string;quality:"ready"|"partial";issues:BodyIssue[];
@@ -33,6 +35,8 @@ export interface ServerModule {
   publicationBody?:(input:PublishedBodyInput)=>Promise<string>;
   publicationTranslation?:(input:PublishedBodyInput)=>Promise<{html:string;complete:boolean}|null>;
   publicationMetadata?:(items:readonly {id:string;title:string;summary:string|null}[])=>Promise<Map<string,ReaderMetadataTranslation>>;
+  /** A parameterized, at-most-one-row SELECT of title, summary and body plain text. */
+  publicationSearch?:(input:PublicationSearchInput)=>SearchSql;
   backupDirectories?:readonly string[];
   backupVerify?:(dataDir:string)=>Promise<unknown>;
   http?:(app:FastifyInstance,context:ModuleHttpContext)=>void;

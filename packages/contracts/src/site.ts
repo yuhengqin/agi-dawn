@@ -12,13 +12,17 @@ export interface ReaderItemSummary {
   publishedAt:string|null;discoveredAt:string;timelineAt:string;category:string|null;tags:string[];bodyState:ReaderBodyState;
   engagement:ArticleCounts;
   metadataTranslation?:ReaderMetadataTranslation|null;
+  matches?:ReaderMatch[];
+  readingMinutes?:number|null;
+  summaryTruncated?:boolean;
 }
+export interface ReaderMatch {field:'title'|'summary'|'source'|'topic'|'body';language:'original'|'translation';snippet:string}
 export interface ReaderMetadataTranslation {title:string;summary:string|null}
 export interface ArticleCounts {views:number;likes:number}
 export interface ArticleEngagement extends ArticleCounts {id:string;liked:boolean}
 export interface OutlineEntry {id:string;text:string;level:number}
-export interface ReaderTranslation {bodyHtml:string;outline:OutlineEntry[];complete:boolean}
-export interface ReaderItemDetail extends ReaderItemSummary {bodyHtml:string|null;outline:OutlineEntry[];topics:TopicLink[];translation?:ReaderTranslation|null}
+export interface ReaderArticleBody {html:string;outline:OutlineEntry[];language:'original'|'translation';complete:boolean;readingMinutes:number|null}
+export interface ReaderItemDetail extends ReaderItemSummary {body:ReaderArticleBody|null;intro:string|null;topics:TopicLink[];related:ReaderItemSummary[]}
 export const READER_PAGE_SIZES=[25,50,100] as const;
 export interface ReaderListQuery {sourceId?:string;category?:string;topic?:string;from?:string;to?:string;q?:string;page?:number;limit?:number}
 export interface ReaderListPage {items:ReaderItemSummary[];total:number;page:number;limit:number;pageCount:number}

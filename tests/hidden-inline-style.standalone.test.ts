@@ -155,3 +155,28 @@ test('local SVG xlink references survive as visible static image content',async(
   const pixels=await sharp(svg).ensureAlpha().raw().toBuffer();
   assert.ok(pixels.some((value,index)=>index%4===3&&value>0),'the diagram contains visible pixels');
 });
+
+test('a drawing hidden from assistive technology cannot silently leave only its caption',()=>{
+  const body=readable(page('<figure><div aria-hidden="true"><svg class="chart" viewBox="0 0 20 20"><title>Costs by quarter</title><path d="M0 0L20 20"/></svg></div><figcaption>Costs by quarter</figcaption></figure>'),'https://openai.com/index/example');
+  assert.ok(body);assert.equal(body.quality,'partial');
+  assert.ok(body.issues.some(issue=>issue.kind==='missing-figure'));
+  assert.match(body.html,/href="https:\/\/openai.com\/index\/example"/);
+  assert.match(body.html,/此图未保存/);
+});
+
+test('HTML chart controls are replaced by an honest linked static fallback',()=>{
+  const body=readable(page('<figure><h3>Interactive branches</h3><div class="chart"><canvas></canvas><button>Select a branch</button><p>Held Fetch Missing dependencies</p></div><figcaption>Branch dependencies</figcaption></figure>'),'https://openai.com/index/example');
+  assert.ok(body);assert.equal(body.quality,'partial');
+  assert.match(body.html,/此图未保存/);assert.doesNotMatch(body.html,/Select a branch/);
+});
+
+test('chart fallback retains nested captions, reliable descriptions and source links',()=>{
+  const body=readable(page('<figure><div><h3>Chart title</h3><div role="img" aria-label="Revenue increased by forty percent"><canvas></canvas><button>Choose a period</button></div><p>Quarterly revenue rose from 100 to 140.</p><p><a href="https://example.org/data">Download source data</a></p><figcaption>Annual report evidence</figcaption></div></figure>'),'https://example.com/article');
+  assert.ok(body);assert.equal(body.quality,'partial');assert.match(body.html,/Revenue increased by forty percent/);assert.match(body.html,/Quarterly revenue rose from 100 to 140/);
+  assert.match(body.html,/Download source data/);assert.match(body.html,/Annual report evidence/);assert.match(body.html,/此图未保存/);assert.doesNotMatch(body.html,/Choose a period/);
+});
+
+test('styled SVG descriptions have a local original link for every publisher',()=>{
+  const body=readable(page(`<figure><div role="img" aria-label="${description}">${drawing('only')}</div><figcaption>Evidence chart</figcaption></figure>`),'https://example.com/article');
+  assert.match(body!.html,/此图未保存/);assert.match(body!.html,/href="https:\/\/example.com\/article"/);assert.match(body!.text,/Six layers/);
+});

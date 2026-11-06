@@ -37,7 +37,7 @@ export function scrollToAnchor(id: string) {
  * landing, so a jump to a section marks it. Several short sections can share the bottom of the page: there
  * the one just jumped to is marked (scrolling away forgets it), or else the last. `go` jumps to a section.
  */
-export function useCurrentSection(ids: string[], watch = true): [string | null, (id: string) => void] {
+export function useCurrentSection(ids: string[], watch = true,activationFraction=0): [string | null, (id: string) => void] {
   const [current, setCurrent] = useState<string | null>(null);
   const jumped = useRef<{ id: string; landed: boolean } | null>(null);
   const key = ids.join(" ");
@@ -49,12 +49,16 @@ export function useCurrentSection(ids: string[], watch = true): [string | null, 
       for (const id of sections) {
         const el = document.getElementById(id);
         // Fractional positions need one pixel of tolerance.
-        if (el && el.getBoundingClientRect().top <= landing(el) + 1) at = id;
+        if (el && el.getBoundingClientRect().top <= Math.max(landing(el)+1,window.innerHeight*activationFraction)) at = id;
       }
       const bottom = window.scrollY > 0 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
       if (bottom) {
         at = jumped.current?.id ?? sections.at(-1)!;
         if (jumped.current) jumped.current.landed = true;
+      } else if(activationFraction&&jumped.current){
+        const target=document.getElementById(jumped.current.id),distance=target?Math.abs(target.getBoundingClientRect().top-landing(target)):Infinity;
+        if(jumped.current.landed&&distance>4)jumped.current=null;
+        else {if(distance<=4)jumped.current.landed=true;at=jumped.current.id;}
       } else if (jumped.current?.landed) jumped.current = null;
       setCurrent(at);
     };
@@ -62,19 +66,23 @@ export function useCurrentSection(ids: string[], watch = true): [string | null, 
     window.addEventListener("scroll", update, { passive: true });
     window.addEventListener("resize", update);
     const resized = new ResizeObserver(update);
+    const release=()=>{if(activationFraction)jumped.current=null;};
+    const keydown=(event:KeyboardEvent)=>{if(['ArrowDown','ArrowUp','PageDown','PageUp','Home','End',' '].includes(event.key))release();};
+    window.addEventListener('wheel',release,{passive:true});window.addEventListener('touchmove',release,{passive:true});window.addEventListener('keydown',keydown);
     resized.observe(document.body);
     return () => {
       window.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
       resized.disconnect();
+      window.removeEventListener('wheel',release);window.removeEventListener('touchmove',release);window.removeEventListener('keydown',keydown);
     };
-  }, [key, watch]);
+  }, [key, watch,activationFraction]);
   const go = (id: string) => {
     const el = document.getElementById(id);
     if (!el) return;
     const max = document.documentElement.scrollHeight - window.innerHeight;
     const destination = window.scrollY + el.getBoundingClientRect().top - landing(el);
-    jumped.current = destination >= max - 1 ? { id, landed: false } : null;
+    jumped.current = activationFraction||destination >= max - 1 ? { id, landed: false } : null;
     setCurrent(id);
     scrollToAnchor(id);
   };

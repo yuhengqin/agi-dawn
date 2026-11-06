@@ -54,7 +54,7 @@ export function ReaderPopover({label,triggerLabel,triggerRef,children,className=
 const navLink="flex min-h-10 items-center rounded-mark px-3 py-2 text-[13px] text-ink-3 hover:bg-bg-sunk hover:text-ink aria-[current=page]:bg-accent/10 aria-[current=page]:font-semibold aria-[current=page]:text-accent";
 export function CategoryNavigation({categories,query,currentCategory=query.category??''}:Pick<ReaderPageData,'categories'|'query'>&{currentCategory?:string|null}){
   const rank=(name:string)=>{const index=ARTICLE_NAVIGATION.categoryOrder.indexOf(name);return index<0?ARTICLE_NAVIGATION.categoryOrder.length:index;};
-  const ordered=[...categories].sort((a,b)=>rank(a.name)-rank(b.name));
+  const ordered=[...categories].sort((a,b)=>a.id==='uncategorized'?1:b.id==='uncategorized'?-1:rank(a.name)-rank(b.name));
   return <nav aria-label="文章类别" className="flex flex-col gap-0.5">
     {[{id:'',name:'全部类别'},...ordered].map(c=><Link key={c.id} to={readerLink(query,{category:c.id})} aria-current={currentCategory===c.id?'page':undefined} className={navLink}>{c.name}</Link>)}
   </nav>;
@@ -79,7 +79,7 @@ export function ReaderNavigation({categories,topics,query}:Pick<ReaderPageData,'
   const visible=primary.slice(0,visibleCount),extraSelected=selected&&!visible.includes(selected);
   const topicLinks=<nav aria-label="全部技术主题" className="grid grid-cols-2 gap-1">
     <Link className={navLink} to={readerLink(query,{topic:null})} aria-current={!query.topic?'page':undefined}>全部主题</Link>
-    {topics.map(t=><Link key={t.slug} className={navLink} to={readerLink(query,{topic:t.slug})} aria-current={query.topic===t.slug?'page':undefined}>{t.name}</Link>)}
+    {[...primary,...topics.filter(t=>!primary.includes(t))].map(t=><Link key={t.slug} className={`${navLink} justify-between gap-3${visible.includes(t)?' lg:hidden':''}`} to={readerLink(query,{topic:t.slug})} aria-label={t.name} aria-description={`共${t.total}篇文章`} aria-current={query.topic===t.slug?'page':undefined}><span>{t.name}</span><span aria-hidden="true" className="text-xs tabular-nums text-ink-4">{t.total}</span></Link>)}
   </nav>;
   const tab="flex min-h-11 shrink-0 items-center whitespace-nowrap border-b-2 border-transparent py-2 text-[13px] text-ink-3 hover:text-accent aria-[current=page]:border-accent aria-[current=page]:font-semibold aria-[current=page]:text-accent";
   return <div ref={container} className="reader-navigation relative mt-5 grid grid-cols-2 gap-4 border-b border-line lg:flex lg:gap-5">

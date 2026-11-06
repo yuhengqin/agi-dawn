@@ -28,7 +28,7 @@ export const ALERTS={quietMinutes:1440,usualFlow:null as string|null,workerLogs:
 export const SOURCE_DEFAULTS={intervalMinutes:720,siteFulltext:false};
 // Homepage shortcuts; unlisted categories keep their stored order after these entries.
 export const ARTICLE_NAVIGATION={
-  categoryOrder:['智能体工程','AI 编程','产品与应用','评测与安全','系统与性能','观点与方法','待分类'] as string[],
+  categoryOrder:['Agent','AI Coding','产品与应用','Evaluating','系统与性能','观点与方法','待分类'] as string[],
   topicShortcuts:['harness-long-running','mcp-tool-use','skills-extensions'] as string[],
 };
 export const CARDS:Record<string,{kicker:string;title:string;subtitle:string;accent?:"hot"|"amber"}>={

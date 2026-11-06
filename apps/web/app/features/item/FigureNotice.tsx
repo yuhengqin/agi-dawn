@@ -23,7 +23,8 @@ export function FigureNotice({issues,onDismiss}:{issues:BodyIssue[];onDismiss:()
     setExpanded(false);setMessage(saved?'':'已在当前标签页隐藏，浏览器未能记住设置。');onDismiss();
   };
   if(!issues.length||(hidden&&!message))return null;
-  const label=<><IconInfo size={16}/><span>部分图表可能显示不完整</span></>;
+  const missing=issues.some(issue=>/部分图表未保存|此图未保存/.test(issue.message));
+  const label=<><IconInfo size={16}/><span>{missing?'部分图表未保存':'部分图表可能显示不完整'}</span></>;
   return <div className="article-figure-notice">
     {!hidden&&<>
       <div className="flex items-center gap-2">
