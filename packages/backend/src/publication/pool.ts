@@ -9,7 +9,7 @@ import {beijingMidnight} from "@agidawn/contracts/time";
 import {searchWords,searchPattern,matchRanges} from '@agidawn/contracts/search';
 import type {ReaderMatch,ReaderMetadataTranslation} from '@agidawn/contracts/site';
 import {serverModules} from '../modules.ts';
-import {searchSnippet} from './search-text.ts';
+import {htmlSearchText,searchSnippet,sourceSearchText,summarySearchText} from './search-text.ts';
 export class ReaderQueryError extends Error {readonly statusCode=400;}
 export class SearchBusyError extends Error {readonly retryAfter:number;constructor(retryAfter:number){super("search capacity exhausted");this.retryAfter=retryAfter;}}
 let running=0;const waiters:Array<()=>void>=[];
@@ -49,9 +49,13 @@ export async function loadReaderList(query:ReaderListQuery):Promise<ReaderListPa
   const extension=serverModules().find(module=>module.publicationSearch)?.publicationSearch?.({articleId:sql`p.article_id`,title:sql`p.title`,summary:sql`p.summary`,bodyRevision:sql`a.body_revision`,bodyHtml:sql`a.body_html`,bodyAllowed:allowed})??sql`SELECT NULL::text AS title,NULL::text AS summary,NULL::text AS body`;
   const joins=sql`LEFT JOIN LATERAL (${extension}) AS translated ON true
     LEFT JOIN LATERAL (SELECT string_agg(t.name,' ') AS names FROM article_topics t WHERE p.tags && t.tags) AS topic ON true
+    LEFT JOIN LATERAL (SELECT ${summarySearchText(sql`p.summary`,sql`p.title`,sql`p.url`)} AS summary,
+      ${summarySearchText(sql`translated.summary`,sql`translated.title`,sql`p.url`)} AS translated_summary,
+      ${sourceSearchText(sql`s.name`)} AS source_name) AS searchable ON true
     LEFT JOIN pool_search ps ON ps.article_id=p.article_id`;
-  const match=terms.reduce((acc,term)=>sql`${acc} AND (p.search_text ~* ${term} OR topic.names ~* ${term}
-    OR translated.title ~* ${term} OR translated.summary ~* ${term} OR (${allowed} AND (ps.body ~* ${term} OR translated.body ~* ${term})))`,sql`TRUE`);
+  const originalBody=sql`CASE WHEN ${allowed} THEN CASE WHEN a.body_html IS NOT NULL THEN ${htmlSearchText(sql`a.body_html`)} ELSE ps.body END ELSE NULL END`;
+  const match=terms.reduce((acc,term)=>sql`${acc} AND (p.title ~* ${term} OR searchable.summary ~* ${term} OR searchable.source_name ~* ${term} OR topic.names ~* ${term}
+    OR translated.title ~* ${term} OR searchable.translated_summary ~* ${term} OR (${allowed} AND (${originalBody} ~* ${term} OR translated.body ~* ${term})))`,sql`TRUE`);
   // One statement keeps totals and the selected page on the same database snapshot.
   const run=async(db:Db)=>db<ReaderPageRow[]>`WITH matches AS MATERIALIZED (
     SELECT p.article_id,p.sort_at ${READER_FROM} ${joins} WHERE ${readerVisible} AND ${match}
@@ -68,7 +72,7 @@ export async function loadReaderList(query:ReaderListQuery):Promise<ReaderListPa
     LIMIT ${limit} OFFSET (SELECT (page-1)*${limit}::bigint FROM pagination)
   ), content AS (
     SELECT ${READER_COLUMNS},translated.title AS translated_title,translated.summary AS translated_summary,
-      translated.body AS translated_body,CASE WHEN ${allowed} THEN ps.body ELSE NULL END AS search_body,topic.names AS topic_names
+      translated.body AS translated_body,${originalBody} AS search_body,topic.names AS topic_names
       ${READER_FROM} JOIN selected ON selected.article_id=p.article_id ${joins}
   ) SELECT pagination.*,content.* FROM pagination LEFT JOIN content ON true ORDER BY content.sort_at DESC,content.id DESC`;
   const key=JSON.stringify([query.sourceId??null,query.category??null,query.topic??null,query.from??null,query.to??null,query.q?.trim()??"",page,limit]);

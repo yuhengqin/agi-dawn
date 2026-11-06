@@ -8,6 +8,82 @@ import * as pool from "@agidawn/backend/publication/pool";
 
 after(async () => { await stopBoss(); await closeDb(); });
 
+test('public search joins original inline words and ignores text absent from the current HTML',async()=>{
+  const sourceId='original-inline-search';
+  await sql`INSERT INTO sources(id,name,kind,site_fulltext) VALUES(${sourceId},'Inline fixture','rss',true)`;
+  await upsertMaterial({sourceId,title:'Visible text',url:'https://example.org/inline-search',
+    bodyHtml:'<p>人工<em>智能</em>技术 re<strong>ad</strong> carefully.</p><p><a title="attributeonly" href="https://secreturl.example">First</a></p><p>Second</p>',
+    bodyText:'人工 智能 技术 re ad carefully. First Second staleindexonly',bodyStatus:'ok',via:'fetch'});
+  for(const q of ['人工智能','read','人工智能 read']){
+    const page=await pool.loadReaderList({sourceId,q});assert.equal(page.total,1,q);
+    assert.ok(page.items[0]!.matches?.some(hit=>hit.field==='body'&&hit.language==='original'&&hit.snippet.includes('人工智能技术 read')));
+  }
+  for(const q of ['ad','FirstSecond','attributeonly','secreturl','staleindexonly'])assert.equal((await pool.loadReaderList({sourceId,q})).total,0,q);
+  await sql`UPDATE sources SET site_fulltext=false WHERE id=${sourceId}`;
+  assert.equal((await pool.loadReaderList({sourceId,q:'人工智能'})).total,0);
+});
+
+test('public search counts and paginates cleaned summaries in both languages',async()=>{
+  const {installModules,serverModules}=await import('@agidawn/backend/modules'),{default:reader}=await import('../modules/reader/server.ts');
+  const installed=serverModules();installModules([reader]);
+  try{
+    const sourceId='clean-summary-search';await sql`INSERT INTO sources(id,name,kind) VALUES(${sourceId},'Summary fixture','rss')`;
+    for(let n=0;n<27;n++){
+      const title='A new offer '+n,summary=`Useful introduction ${n}. The post ${title} appeared first on Tailonly publisher .`;
+      const {articleId:id}=await upsertMaterial({sourceId,title,excerpt:summary,url:'https://blogs.microsoft.com/blog/summary-'+n,via:'fetch'});
+      await sql`INSERT INTO reader_metadata_translations(article_id,source_title,source_summary,title,summary,status)
+        VALUES(${id},${title},${summary},${'新计划'+n},${'有效摘要。 《新计划'+n+'》一文首次发布于尾注独有站点。'},'translated')`;
+    }
+    const {articleId:real}=await upsertMaterial({sourceId,title:'The word appeared is visible',excerpt:'An independent introduction.',url:'https://example.org/real-word',via:'fetch'});
+    const genuine=await pool.loadReaderList({sourceId,q:'appeared',page:2});
+    assert.equal(genuine.total,1);assert.equal(genuine.pageCount,1);assert.equal(genuine.page,1);assert.deepEqual(genuine.items.map(item=>item.id),[real]);
+    assert.ok(genuine.items[0]!.matches?.some(hit=>hit.field==='title'&&hit.snippet.includes('appeared')));
+    for(const q of ['Tailonly','尾注独有'])assert.equal((await pool.loadReaderList({sourceId,q})).total,0,q);
+    for(const [q,language] of [['introduction Useful','original'],['有效摘要','translation']] as const){
+      const page=await pool.loadReaderList({sourceId,q,page:2});assert.equal(page.total,27);assert.equal(page.pageCount,2);assert.equal(page.items.length,2);
+      for(const item of page.items){
+        const hit=item.matches?.find(hit=>hit.field==='summary'&&hit.language===language);assert.ok(hit);
+        assert.doesNotMatch(hit.snippet,/appeared first|首次发布于/);
+      }
+    }
+  }finally{installModules(installed);}
+});
+
+test('public source search uses the displayed name and returns source evidence',async()=>{
+  const sourceId='public-source-search';await sql`INSERT INTO sources(id,name,kind) VALUES(${sourceId},'X: Ada（内部（注释）内容） (@ada)','rss')`;
+  await upsertMaterial({sourceId,title:'Source name example',url:'https://example.org/source-name',via:'fetch'});
+  const page=await pool.loadReaderList({sourceId,q:'Ada'});assert.equal(page.total,1);assert.equal(page.items[0]!.source.name,'Ada');
+  assert.ok(page.items[0]!.matches?.some(hit=>hit.field==='source'&&hit.snippet==='Ada'));
+  assert.equal((await pool.loadReaderList({sourceId,q:'内部'})).total,0);
+});
+
+test('SQL search summaries and source names match their displayed text cleanup',async()=>{
+  const {summarySearchText,sourceSearchText}=await import('@agidawn/backend/publication/search-text');
+  const {cleanSummary}=await import('@agidawn/backend/content/snippets'),{publicSourceName}=await import('@agidawn/backend/publication/rules');
+  const examples:Array<[string|null,string,string,string|null]>=[
+    [null,'Title','https://example.org',null],
+    [' \tUseful\u00a0summary\uFEFF ','Title','https://example.org','Useful summary'],
+    ['Useful summary. The post C++ [x] (.*) \\ guide appeared first on Publisher .','C++ [x] (.*) \\ guide','https://example.org','Useful summary.'],
+    ['Useful summary. The post Another title appeared first on Publisher .','Title','https://example.org','Useful summary. The post Another title appeared first on Publisher .'],
+    ['有效摘要。 《C++ [x]》一文首次发布于站点。','C++ [x]','https://www.blogs.microsoft.com/post','有效摘要。'],
+    ['有效摘要。 《Title》一文首次发布于站点。','Title','https://example.org','有效摘要。 《Title》一文首次发布于站点。'],
+    ['Uber.','Title','https://www.uber.com/post',null],
+    ['Uber.','Title','https://example.org','Uber.'],
+    ['Complete sentence. An incomplete apostrophe&','Title','https://ghuntley.com/post','Complete sentence.'],
+    ['First sentence. Last intact sentence! Another fragment&','Title','https://ghuntley.com/post','First sentence. Last intact sentence!'],
+    ['Fragment&','Title','https://ghuntley.com/post','Fragment'],
+    ['Fragment &','Title','https://ghuntley.com/post','Fragment &'],
+  ];
+  for(const [summary,title,url,expected] of examples){
+    assert.equal(cleanSummary(summary,{title,url}),expected);
+    const [row]=await sql`SELECT ${summarySearchText(sql`${summary}`,sql`${title}`,sql`${url}`)} AS text`;assert.equal(row!.text,expected,summary??'null');
+  }
+  for(const [name,expected] of [['X: Ada（内部（注释）内容） (@ada)','Ada'],['X: (@owner)','@owner'],[' （说明） ','（说明）'],['Ordinary source','Ordinary source']]){
+    assert.equal(publicSourceName(name!),expected);
+    const [row]=await sql`SELECT ${sourceSearchText(sql`${name}`)} AS text`;assert.equal(row!.text,expected,name);
+  }
+});
+
 test('SQL body search strips complete quoted tags, joins inline text and decodes entities once',async()=>{
   const {htmlSearchText,metadataSearchText}=await import('@agidawn/backend/publication/search-text');
   const examples=[

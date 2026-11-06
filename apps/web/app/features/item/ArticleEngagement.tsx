@@ -1,8 +1,8 @@
-import {createContext,useContext,useEffect,useState,type ReactNode} from 'react';
+import {createContext,useContext,useEffect,useRef,useState,type ReactNode} from 'react';
 import type {ArticleEngagement,ReaderItemSummary} from '@agidawn/contracts/site';
 import {IconHeart} from '../../components/icons';
 
-type State={items:Record<string,ArticleEngagement>;ready:boolean;update:(item:ArticleEngagement)=>void};
+type State={items:Record<string,ArticleEngagement>;ready:boolean;pending:ReadonlySet<string>;toggle:(id:string)=>Promise<void>};
 const EngagementContext=createContext<State|null>(null);
 async function request<T>(url:string,init:RequestInit={}):Promise<T>{
   const response=await fetch(url,{...init,credentials:'same-origin'});
@@ -10,6 +10,7 @@ async function request<T>(url:string,init:RequestInit={}):Promise<T>{
 }
 export function EngagementProvider({items,trackView,children}:{items:ReaderItemSummary[];trackView?:string;children:ReactNode}){
   const [values,setValues]=useState<Record<string,ArticleEngagement>>({}),[ready,setReady]=useState(false),[error,setError]=useState(''),[attempt,setAttempt]=useState(0);
+  const inFlight=useRef(new Set<string>()),[pending,setPending]=useState<ReadonlySet<string>>(new Set());
   const ids=items.map(i=>i.id).join(',');
   useEffect(()=>{
     if(!ids)return;
@@ -31,18 +32,27 @@ export function EngagementProvider({items,trackView,children}:{items:ReaderItemS
     }).catch(()=>{if(!controller.signal.aborted)setError('互动数据暂时无法加载。');});
     return()=>{controller.abort();document.removeEventListener('visibilitychange',view);};
   },[ids,trackView,attempt]);
-  return <EngagementContext.Provider value={{items:values,ready,update:item=>setValues(previous=>({...previous,[item.id]:{...item,views:Math.max(previous[item.id]?.views??0,item.views)}}))}}>
+  async function toggle(id:string){
+    const current=values[id];if(!ready||!current||inFlight.current.has(id))return;
+    // Both article controls share this guard, including clicks before React has rendered pending.
+    inFlight.current.add(id);setPending(new Set(inFlight.current));
+    try{
+      const item=await request<ArticleEngagement>(`/api/site/items/${id}/like`,{method:current.liked?'DELETE':'PUT',headers:{'Content-Type':'application/json'},body:'{}'});
+      setValues(previous=>({...previous,[id]:{...item,views:Math.max(previous[id]?.views??0,item.views)}}));
+    }finally{inFlight.current.delete(id);setPending(new Set(inFlight.current));}
+  }
+  return <EngagementContext.Provider value={{items:values,ready,pending,toggle}}>
     {error&&<p role="status" className="my-2 text-sm text-ink-3">{error}<button type="button" className="ml-2 min-h-11 underline" onClick={()=>setAttempt(n=>n+1)}>重试</button></p>}
     {children}
   </EngagementContext.Provider>;
 }
 export function ArticleEngagementBar({item,compact=false,labelPrefix='',showViews=true}:{item:ReaderItemSummary;compact?:boolean;labelPrefix?:string;showViews?:boolean}){
   const state=useContext(EngagementContext),current=state?.items[item.id],counts=current??item.engagement;
-  const [pending,setPending]=useState(false),[error,setError]=useState('');
+  const pending=state?.pending.has(item.id)??false,[error,setError]=useState('');
   async function toggle(){
-    if(!current||pending)return;setPending(true);setError('');
-    try{state?.update(await request<ArticleEngagement>(`/api/site/items/${item.id}/like`,{method:current.liked?'DELETE':'PUT',headers:{'Content-Type':'application/json'},body:'{}'}));}
-    catch{setError('点赞未能保存，请重试。');}finally{setPending(false);}
+    if(!current||pending)return;setError('');
+    try{await state?.toggle(item.id);}
+    catch{setError('点赞未能保存，请重试。');}
   }
   return <div className={`flex flex-wrap items-center gap-x-4 text-ink-3 tabular-nums ${compact?'text-xs':'text-[13px]'}`}>
     {showViews&&counts.views>0&&<span title="本站详情打开次数，同一浏览器30分钟内去重">阅读 {counts.views.toLocaleString('zh-CN')}</span>}

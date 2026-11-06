@@ -3,6 +3,33 @@ import { test } from "node:test";
 import { chromium, webkit, expect } from "./browser.ts";
 import { fakeApi, feedItem, itemDetail, readerPage, startWebServer, visit, type WebServer } from "./web-server.ts";
 
+test('article like controls share pending requests and recover together after a failure',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined,release=()=>{},begun=()=>{},fail=false,liked=false;
+  let pending=Promise.resolve(),started=Promise.resolve();const methods:string[]=[];
+  const gate=()=>{pending=new Promise<void>(resolve=>release=resolve);started=new Promise<void>(resolve=>begun=resolve);};
+  try{
+    web=await startWebServer(fakeApi(async(url,res,req)=>{
+      if(url.pathname==='/api/site/items/shared-like')return itemDetail({id:'shared-like',title:'Shared likes',bodyHtml:'<p>Short article.</p>'});
+      if(url.pathname==='/api/site/engagement')return {items:[{id:'shared-like',views:1,likes:liked?1:0,liked}]};
+      if(url.pathname==='/api/site/items/shared-like/view')return {id:'shared-like',views:1,likes:liked?1:0,liked};
+      if(url.pathname==='/api/site/items/shared-like/like'){
+        methods.push(req.method!);begun();await pending;if(fail){res.statusCode=503;return {};}
+        liked=req.method==='PUT';return {id:'shared-like',views:1,likes:liked?1:0,liked};
+      }
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});await visit(page,web.origin+'/items/shared-like');
+    const top=page.getByRole('button',{name:/^(?:取消)?点赞$/}),bottom=page.getByRole('contentinfo',{name:'文章后续阅读'}).getByRole('button');
+    gate();await bottom.click();await started;await expect(top).toBeDisabled();await expect(bottom).toBeDisabled();assert.deepEqual(methods,['PUT']);
+    release();await expect(top).toHaveAttribute('aria-pressed','true');await expect(bottom).toHaveAttribute('aria-pressed','true');await expect(top).toBeEnabled();
+    gate();await top.click();await started;await expect(bottom).toBeDisabled();release();
+    await expect(top).toHaveAttribute('aria-pressed','false');await expect(bottom).toHaveAttribute('aria-pressed','false');assert.deepEqual(methods,['PUT','DELETE']);
+    fail=true;gate();await bottom.click();await started;await expect(top).toBeDisabled();release();
+    await expect(page.getByRole('status')).toContainText('点赞未能保存');await expect(top).toBeEnabled();await expect(bottom).toBeEnabled();
+    await expect(top).toHaveAttribute('aria-pressed','false');await expect(bottom).toHaveAttribute('aria-pressed','false');
+    fail=false;gate();await top.click();await started;release();await expect(top).toHaveAttribute('aria-pressed','true');await expect(bottom).toHaveAttribute('aria-pressed','true');
+  }finally{release();await browser.close();await web?.stop();}
+});
+
 test('desktop reading improvements expose search evidence, immediate presets and an article footer',async()=>{
   const browser=await chromium.launch();let web:WebServer|undefined;
   const item=feedItem({id:'experience',title:'Agent cost guide',readingMinutes:4,matches:[{field:'body',language:'translation',snippet:'The cost of each task is visible here.'}],bodyState:{status:'partial',bodyRevision:1,refreshPending:false,issues:[{kind:'missing-figure',message:'部分图表未保存，请查看原文。'}]}});
