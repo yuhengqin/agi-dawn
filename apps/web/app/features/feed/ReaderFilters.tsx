@@ -4,31 +4,39 @@ import type {ReaderPageData} from "./reader.server";
 import {readerLink} from "./ReaderNavigation";
 import {ReaderDatePicker,dateRangeLabel} from "./ReaderDatePicker";
 import {IconSearch,IconChevronDown} from "../../components/icons";
+import {useReaderQuery} from './useReaderQuery';
 
 export function PreservedFilters({query,except}:{query:Record<string,string>;except:string[]}){
-  return Object.entries(query).filter(([key])=>key!=='page'&&!except.includes(key)).map(([key,value])=><input key={key} type="hidden" name={key} value={value}/>);
+  const target=useReaderQuery(query);
+  return Object.entries(target).filter(([key])=>key!=='page'&&!except.includes(key)).map(([key,value])=><input key={key} type="hidden" name={key} value={value}/>);
 }
 
 export function ReaderSearch({query}:{query:Record<string,string>}){
   const location=useLocation(),navigate=useNavigate(),navigation=useNavigation(),navigationType=useNavigationType();
   const [draft,setDraft]=useState(query.q??''),input=useRef<HTMLInputElement>(null),timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
-  const composing=useRef(false),submitted=useRef<string|null>(null);
+  const composing=useRef(false),submitted=useRef<string|null>(null),editedFor=useRef<string|null>(null);
+  const target=useReaderQuery(query),latestQuery=useRef(target);
+  useLayoutEffect(()=>{latestQuery.current=target;},[target]);
   const cancel=()=>{clearTimeout(timer.current);timer.current=undefined;};
   const search=(value:string,replace:boolean)=>{
-    cancel();const href=readerLink(query,{q:value.trim()||null});
+    cancel();editedFor.current=null;const href=readerLink(latestQuery.current,{q:value.trim()||null});
     if(href===location.pathname+location.search&&navigation.state==='idle')return;
-    submitted.current=href;void navigate(href,{replace,preventScrollReset:true});
+    // A debounced navigation runs outside a discrete input event; update sibling forms before the next change.
+    submitted.current=href;void navigate(href,{replace,preventScrollReset:true,flushSync:true});
   };
   useLayoutEffect(()=>{
-    if(navigationType!=='POP'&&submitted.current===location.pathname+location.search)return;
-    cancel();submitted.current=null;setDraft(query.q??'');
+    const ownSearch=navigationType!=='POP'&&submitted.current===location.pathname+location.search;
+    submitted.current=null;
+    // Only edits made for this history entry survive its response, even when URLs are identical.
+    if(editedFor.current===location.key||ownSearch)return;
+    cancel();editedFor.current=null;setDraft(query.q??'');
   },[location.key]);
-  useEffect(()=>{
-    if(navigation.location&&navigation.location.pathname+navigation.location.search!==submitted.current)cancel();
+  useLayoutEffect(()=>{
+    if(navigation.location){cancel();editedFor.current=null;}
   },[navigation.location]);
   useEffect(()=>()=>cancel(),[]);
   const changed=(value:string)=>{
-    setDraft(value);cancel();if(composing.current)return;
+    setDraft(value);editedFor.current=navigation.location?.key??location.key;cancel();if(composing.current)return;
     if(!value)search('',true);else timer.current=setTimeout(()=>search(value,true),300);
   };
   const busy=navigation.state!=='idle'&&navigation.location?.pathname==='/'&&navigation.location.search!==location.search;
@@ -44,9 +52,15 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
 }
 
 export function ReaderToolbar({query,sources,datePickerTrigger}:Pick<ReaderPageData,'query'|'sources'>&{datePickerTrigger?:Ref<HTMLElement>}){
-  const submit=useSubmit();
+  const submit=useSubmit(),toolbar=useRef<HTMLDivElement>(null);
+  useLayoutEffect(()=>{
+    const root=document.documentElement;
+    const update=()=>root.style.setProperty('--reader-toolbar-height',`${toolbar.current!.getBoundingClientRect().height}px`);
+    const observer=new ResizeObserver(update);observer.observe(toolbar.current!);update();
+    return()=>{observer.disconnect();root.style.removeProperty('--reader-toolbar-height');};
+  },[]);
   const sourceName=sources.find(source=>source.id===query.sourceId)?.name??'全部来源';
-  return <div className="grid grid-cols-1 gap-2 pt-3 sm:grid-cols-[minmax(180px,400px)_minmax(0,auto)] sm:items-center sm:justify-between sm:gap-x-6 lg:pt-0">
+  return <div ref={toolbar} role="group" aria-label="文章检索工具" className="reader-toolbar grid grid-cols-1 gap-2 pt-3 sm:grid-cols-[minmax(180px,400px)_minmax(0,auto)] sm:items-center sm:justify-between sm:gap-x-6 lg:pt-0">
     <ReaderSearch query={query}/>
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-5 gap-y-1">
       <Form method="get" action="/" key={query.sourceId??''}>
@@ -65,6 +79,7 @@ export function ReaderToolbar({query,sources,datePickerTrigger}:Pick<ReaderPageD
 }
 
 export function ReaderFilters({query,sources,topics,categories}:Pick<ReaderPageData,'query'|'sources'|'topics'|'categories'>){
+  const target=useReaderQuery(query);
   const choices:Array<{key:string;value:string|undefined;label:string;changes:Record<string,null>}>= [
     {key:'category',value:query.category&&(categories.find(c=>c.id===query.category)?.name??query.category),label:'类别',changes:{category:null}},
     {key:'topic',value:query.topic&&(topics.find(t=>t.slug===query.topic)?.name??query.topic),label:'主题',changes:{topic:null}},
@@ -75,7 +90,7 @@ export function ReaderFilters({query,sources,topics,categories}:Pick<ReaderPageD
   const filters=choices.filter(filter=>filter.value);
   if(filters.length<2)return null;
   return <div aria-label="当前筛选" className="flex min-w-0 flex-wrap items-center gap-x-3 border-b border-line py-2 text-xs text-ink-3">
-      <span>已选条件</span>{filters.map(({key,value,label,changes})=><Link key={key} to={readerLink(query,changes)} aria-label={`移除${label}：${value}`} className="inline-flex min-h-9 items-center gap-1 text-accent hover:underline">{value}<span aria-hidden="true">×</span></Link>)}
-      <Link to={readerLink(query.limit?{limit:query.limit}:{},{})} className="inline-flex min-h-9 items-center underline underline-offset-4">清除全部筛选</Link>
+      <span>已选条件</span>{filters.map(({key,value,label,changes})=><Link key={key} to={readerLink(target,changes)} aria-label={`移除${label}：${value}`} className="inline-flex min-h-9 items-center gap-1 text-accent hover:underline">{value}<span aria-hidden="true">×</span></Link>)}
+      <Link to={readerLink(target.limit?{limit:target.limit}:{},{})} className="inline-flex min-h-9 items-center underline underline-offset-4">清除全部筛选</Link>
   </div>;
 }

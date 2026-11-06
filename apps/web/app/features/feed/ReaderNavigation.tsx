@@ -3,6 +3,7 @@ import {Link,useLocation} from "react-router";
 import {ARTICLE_NAVIGATION} from "@agidawn/site";
 import {IconChevronDown} from "../../components/icons";
 import type {ReaderPageData} from "./reader.server";
+import {useReaderQuery} from './useReaderQuery';
 
 export function readerLink(query:Record<string,string>,changes:Record<string,string|null>){
   const next=new URLSearchParams(query);next.delete('page');
@@ -53,14 +54,16 @@ export function ReaderPopover({label,triggerLabel,triggerRef,children,className=
 
 const navLink="flex min-h-10 items-center rounded-mark px-3 py-2 text-[13px] text-ink-3 hover:bg-bg-sunk hover:text-ink aria-[current=page]:bg-accent/10 aria-[current=page]:font-semibold aria-[current=page]:text-accent";
 export function CategoryNavigation({categories,query,currentCategory=query.category??''}:Pick<ReaderPageData,'categories'|'query'>&{currentCategory?:string|null}){
+  const target=useReaderQuery(query);
   const rank=(name:string)=>{const index=ARTICLE_NAVIGATION.categoryOrder.indexOf(name);return index<0?ARTICLE_NAVIGATION.categoryOrder.length:index;};
   const ordered=[...categories].sort((a,b)=>a.id==='uncategorized'?1:b.id==='uncategorized'?-1:rank(a.name)-rank(b.name));
   return <nav aria-label="文章类别" className="flex flex-col gap-0.5">
-    {[{id:'',name:'全部类别'},...ordered].map(c=><Link key={c.id} to={readerLink(query,{category:c.id})} aria-current={currentCategory===c.id?'page':undefined} className={navLink}>{c.name}</Link>)}
+    {[{id:'',name:'全部类别'},...ordered].map(c=><Link key={c.id} to={readerLink(target,{category:c.id})} aria-current={currentCategory===c.id?'page':undefined} className={navLink}>{c.name}</Link>)}
   </nav>;
 }
 
 export function ReaderNavigation({categories,topics,query}:Pick<ReaderPageData,'categories'|'topics'|'query'>){
+  const target=useReaderQuery(query);
   const selected=topics.find(t=>t.slug===query.topic);
   const shortcuts=ARTICLE_NAVIGATION.topicShortcuts.flatMap(slug=>topics.filter(t=>t.slug===slug));
   const primary=[...shortcuts,...topics.filter(t=>!shortcuts.includes(t))].slice(0,5);
@@ -78,16 +81,16 @@ export function ReaderNavigation({categories,topics,query}:Pick<ReaderPageData,'
   },[labels]);
   const visible=primary.slice(0,visibleCount),extraSelected=selected&&!visible.includes(selected);
   const topicLinks=<nav aria-label="全部技术主题" className="grid grid-cols-2 gap-1">
-    <Link className={navLink} to={readerLink(query,{topic:null})} aria-current={!query.topic?'page':undefined}>全部主题</Link>
-    {[...primary,...topics.filter(t=>!primary.includes(t))].map(t=><Link key={t.slug} className={`${navLink} justify-between gap-3${visible.includes(t)?' lg:hidden':''}`} to={readerLink(query,{topic:t.slug})} aria-label={t.name} aria-description={`共${t.total}篇文章`} aria-current={query.topic===t.slug?'page':undefined}><span>{t.name}</span><span aria-hidden="true" className="text-xs tabular-nums text-ink-4">{t.total}</span></Link>)}
+    <Link className={navLink} to={readerLink(target,{topic:null})} aria-current={!query.topic?'page':undefined}>全部主题</Link>
+    {[...primary,...topics.filter(t=>!primary.includes(t))].map(t=><Link key={t.slug} className={`${navLink} justify-between gap-3${visible.includes(t)?' lg:hidden':''}`} to={readerLink(target,{topic:t.slug})} aria-label={t.name} aria-description={`共${t.total}篇文章`} aria-current={query.topic===t.slug?'page':undefined}><span>{t.name}</span><span aria-hidden="true" className="text-xs tabular-nums text-ink-4">{t.total}</span></Link>)}
   </nav>;
   const tab="flex min-h-11 shrink-0 items-center whitespace-nowrap border-b-2 border-transparent py-2 text-[13px] text-ink-3 hover:text-accent aria-[current=page]:border-accent aria-[current=page]:font-semibold aria-[current=page]:text-accent";
   return <div ref={container} className="reader-navigation relative mt-5 grid grid-cols-2 gap-4 border-b border-line lg:flex lg:gap-5">
     <div ref={measure} aria-hidden="true" className="pointer-events-none invisible absolute flex w-full gap-5 overflow-hidden font-semibold"><span className={tab}>全部主题</span>{primary.map(t=><span key={t.slug} className={tab}>{t.name}</span>)}</div>
     <ReaderPopover label={`类别：${categories.find(c=>c.id===query.category)?.name??'全部类别'}`} className="min-w-0 lg:hidden" panelClassName="reader-mobile-options"><CategoryNavigation {...{categories,query}}/></ReaderPopover>
     <nav aria-label="文章主题" className="-mb-px hidden min-w-0 gap-5 lg:flex">
-      <Link className={tab} to={readerLink(query,{topic:null})} aria-current={!query.topic?'page':undefined}>全部主题</Link>
-      {visible.map(t=><Link key={t.slug} className={tab} to={readerLink(query,{topic:t.slug})} aria-current={query.topic===t.slug?'page':undefined}>{t.name}</Link>)}
+      <Link className={tab} to={readerLink(target,{topic:null})} aria-current={!query.topic?'page':undefined}>全部主题</Link>
+      {visible.map(t=><Link key={t.slug} className={tab} to={readerLink(target,{topic:t.slug})} aria-current={query.topic===t.slug?'page':undefined}>{t.name}</Link>)}
     </nav>
     <ReaderPopover label={<><span className="lg:hidden">主题：{selected?.name??'全部主题'}</span><span className="hidden max-w-40 truncate lg:block">{extraSelected?selected.name:'更多主题'}</span></>}
       className="min-w-0 lg:relative lg:shrink-0" panelClassName="reader-mobile-options reader-topic-options" active={!!extraSelected}>

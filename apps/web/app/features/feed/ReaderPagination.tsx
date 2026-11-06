@@ -5,6 +5,7 @@ import {PreservedFilters} from './ReaderFilters';
 import {readerLink} from './ReaderNavigation';
 import {IconChevronDown,IconChevronLeft,IconChevronRight} from '../../components/icons';
 import {IntentLink} from '../../components/ui/IntentLink';
+import {useReaderQuery} from './useReaderQuery';
 
 type PaginationProps=Pick<ReaderPageData,'page'|'query'>;
 
@@ -15,7 +16,8 @@ export function ReaderListSummary({page}:Pick<ReaderPageData,'page'>){
 
 export function ReaderPagination({page,query}:PaginationProps){
   const submit=useSubmit(),start=(page.page-1)*page.limit+1,end=start+page.items.length-1;
-  const href=(number:number)=>readerLink(query,{page:number===1?null:String(number)});
+  const target=useReaderQuery(query);
+  const href=(number:number)=>readerLink(target,{page:number===1?null:String(number)});
   const numbers=page.pageCount<=9?Array.from({length:page.pageCount},(_,index)=>index+1):[
     1,...Array.from({length:page.page<=4||page.page>=page.pageCount-3?6:5},(_,index)=>
       page.page<=4?index+2:page.page>=page.pageCount-3?page.pageCount-6+index:page.page-2+index),page.pageCount,

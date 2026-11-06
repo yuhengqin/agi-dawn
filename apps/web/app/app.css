@@ -583,7 +583,13 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 .reader-feed-meta { margin-top: 12px; font-size: 12px; }
 .reader-body-status { border-left: 1px solid var(--line-strong); padding-left: 12px; }
 @media (min-width: 961px) {
-  .reader-feed { padding: 28px 32px 36px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); }
+  .reader-feed { padding: 16px 32px 36px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); }
+  .reader-feed-row { padding-block: 16px; }
+  .reader-feed-summary { margin-top: 6px; }
+  .reader-feed-meta { margin-top: 8px; }
+  .reader-navigation { margin-top: 8px; }
+  .reader-toolbar { position: sticky; top: 0; z-index: 20; margin: -8px -32px 0; padding: 8px 32px 12px; border-bottom: 1px solid var(--line); background: var(--surface); }
+  html:has(.reader-toolbar) { scroll-padding-top: calc(var(--reader-toolbar-height, 68px) + 8px); }
 }
 @media (max-width: 640px) {
   .reader-feed-row { padding-block: 20px; }

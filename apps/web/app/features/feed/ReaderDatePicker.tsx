@@ -3,6 +3,7 @@ import {Form,useNavigate} from 'react-router';
 import {addDays,beijingDate,isValidDate,monthDay} from '@agidawn/contracts/time';
 import {ReaderPopover,readerLink} from './ReaderNavigation';
 import {IconChevronDown,IconChevronLeft,IconChevronRight} from '../../components/icons';
+import {useReaderQuery} from './useReaderQuery';
 
 export function dateRangeLabel(from?:string,to?:string){
   return from&&to?`${from} — ${to}`:from?`${from} 起`:to?`截至 ${to}`:'不限日期';
@@ -39,10 +40,11 @@ function shiftMonth(day:string,offset:number){
 
 function DateDraft({query,close}:{query:Record<string,string>;close:()=>void}){
   const navigate=useNavigate(),today=beijingDate(Date.now());
-  const [draft,setDraft]=useState({from:query.from??'',to:query.to??''});
+  const target=useReaderQuery(query);
+  const [draft,setDraft]=useState({from:target.from??'',to:target.to??''});
   const [active,setActive]=useState<DateField>('from'),[edited,setEdited]=useState<DateField>('from');
   const [touched,setTouched]=useState({from:false,to:false}),[preview,setPreview]=useState<string|null>(null);
-  const initial=validDay(query.from??'')?query.from!:validDay(query.to??'')?query.to!:today;
+  const initial=validDay(target.from??'')?target.from!:validDay(target.to??'')?target.to!:today;
   const [focusDay,setFocusDay]=useState(initial),[month,setMonth]=useState(initial.slice(0,7));
   const calendar=useRef<HTMLTableElement>(null),moveFocus=useRef(false),monthButton=useRef<HTMLButtonElement>(null),yearInput=useRef<HTMLInputElement>(null);
   const [jumpOpen,setJumpOpen]=useState(false),[jumpYear,setJumpYear]=useState(''),[jumpMonth,setJumpMonth]=useState(''),[jumpError,setJumpError]=useState('');
@@ -65,7 +67,7 @@ function DateDraft({query,close}:{query:Record<string,string>;close:()=>void}){
     if(active==='from')setActive('to');
   };
   const setRange=(start:string,end:string)=>{
-    void navigate(readerLink(query,{from:start||null,to:end||null}));close();
+    void navigate(readerLink(target,{from:start||null,to:end||null}));close();
   };
   const jump=()=>{
     if(!/^\d{1,4}$/.test(jumpYear)||Number(jumpYear)<1){setJumpError('请输入1至9999之间的年份。');return;}
@@ -84,8 +86,8 @@ function DateDraft({query,close}:{query:Record<string,string>;close:()=>void}){
   const previewFrom=preview&&active==='from'?preview:from,previewTo=preview&&active==='to'?preview:to;
   const hasPreview=!!preview&&!dateError(previewFrom)&&!dateError(previewTo)&&!(previewFrom&&previewTo&&previewFrom>previewTo);
   const shownFrom=hasPreview?previewFrom:from,shownTo=hasPreview?previewTo:to;
-  return <Form method="get" action="/" noValidate className="flex max-h-[inherit] flex-col" onSubmit={event=>{event.preventDefault();setTouched({from:true,to:true});if(invalid)return;void navigate(readerLink(query,{from:from||null,to:to||null}));close();}}>
-    {Object.entries(query).filter(([key])=>!['page','from','to'].includes(key)).map(([key,value])=><input key={key} type="hidden" name={key} value={value}/>)}
+  return <Form method="get" action="/" noValidate className="flex max-h-[inherit] flex-col" onSubmit={event=>{event.preventDefault();setTouched({from:true,to:true});if(invalid)return;void navigate(readerLink(target,{from:from||null,to:to||null}));close();}}>
+    {Object.entries(target).filter(([key])=>!['page','from','to'].includes(key)).map(([key,value])=><input key={key} type="hidden" name={key} value={value}/>)}
     <div className="min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-4">
     <div aria-label="日期预设" className="mb-3 grid grid-cols-4 gap-1 border-b border-line pb-2 sm:flex sm:flex-wrap">
       <button type="button" className={presetAction} aria-pressed={preset==='all'} onClick={()=>setRange('','')}>不限日期</button>

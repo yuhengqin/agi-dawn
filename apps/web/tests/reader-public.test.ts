@@ -83,7 +83,21 @@ test('desktop floating reading tools leave the outline and pagination clickable'
     }
     await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true}).check();await page.keyboard.press('Escape');
     await page.getByRole('navigation',{name:'本文目录',exact:true}).getByRole('link',{name:'Section 20',exact:true}).click({trial:true,timeout:1500});
-    await page.setViewportSize({width:1280,height:900});await visit(page,web.origin+'/');await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));
+    await page.setViewportSize({width:1280,height:900});await visit(page,web.origin+'/');await page.evaluate(()=>scrollTo(0,1400));
+    const search=page.getByRole('searchbox'),searchBox=await search.boundingBox();
+    assert(searchBox&&searchBox.y>=0&&searchBox.y<100,'search remains available while browsing the middle of the list');
+    const date=page.locator('summary').filter({hasText:'不限日期'});await date.click();
+    await page.getByRole('button',{name:'应用日期',exact:true}).click({trial:true});
+    await page.keyboard.press('Escape');await expect(date).toBeFocused();
+    const entry=page.getByRole('link',{name:'Article 10',exact:true});
+    await page.locator('main article').nth(9).getByRole('link',{name:'Fixture',exact:true}).evaluate(link=>link.focus({preventScroll:true}));
+    await entry.evaluate(link=>scrollBy(0,link.getBoundingClientRect().top-12));await page.keyboard.press('Tab');
+    await expect(entry).toBeFocused();
+    await expect.poll(async()=>{
+      const target=await entry.boundingBox(),toolbar=await page.getByRole('group',{name:'文章检索工具',exact:true}).boundingBox();
+      return target&&toolbar?target.y-toolbar.y-toolbar.height:-1;
+    }).toBeGreaterThanOrEqual(0);
+    await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));
     await page.getByRole('combobox',{name:'每页篇数',exact:true}).click({trial:true,timeout:1500});
   }finally{await browser.close();await web?.stop();}
 });
@@ -397,6 +411,202 @@ for(const engine of [chromium,webkit])test(`reader search debounces, respects co
     },{input:await input.elementHandle(),link:await page.locator('aside').first().getByRole('link',{name:'全部类别',exact:true}).elementHandle()});
     await expect(page).toHaveURL(web.origin+'/');
     await expect(input).toHaveValue('');assert(!searches.includes('unfinished'));
+  }finally{await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`reader filters compose pending searches, categories, topics, dates and page sizes (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined,release=()=>{},begun=()=>{},finished=()=>{};
+  let pending=Promise.resolve(),started=Promise.resolve(),ended=Promise.resolve(),hold:(url:URL)=>boolean=()=>false;
+  const gate=(matches:(url:URL)=>boolean)=>{hold=matches;pending=new Promise<void>(resolve=>release=resolve);started=new Promise<void>(resolve=>begun=resolve);ended=new Promise<void>(resolve=>finished=resolve);};
+  const base={category:'coding',topic:'mcp',from:'2026-10-01',to:'2026-10-28',limit:'50'};
+  try{
+    web=await startWebServer(fakeApi(async url=>{
+      if(url.pathname==='/api/site/articles'){
+        if(hold(url)){hold=()=>false;begun();await pending;finished();}
+        return readerPage(Array.from({length:100},(_,i)=>feedItem({id:'pending-'+i,title:'Pending result '+i,source:{id:'first',name:'Source One'}})),url);
+      }
+      if(url.pathname==='/api/site/categories')return {items:[{id:'coding',name:'AI 编程'}]};
+      if(url.pathname==='/api/site/sources')return {items:['first','second'].map((id,i)=>({id,name:i?'Source Two':'Source One',url:null,description:null,articles:100,fulltext:false,latestAt:null}))};
+      if(url.pathname==='/api/site/topics')return {topics:['mcp','agent'].map(slug=>({slug,name:slug==='mcp'?'MCP':'Agent',group:'field',definition:'',brand:null,total:100,recent:1,indexable:true,latest:null}))};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    await visit(page,web.origin+'/?'+new URLSearchParams({...base,sourceId:'first',q:'old',page:'2'}));
+    const input=page.getByRole('searchbox'),source=page.getByRole('combobox',{name:'来源',exact:true});
+    const query=()=>Object.fromEntries(new URL(page.url()).searchParams);
+    const settled=async(expected:Record<string,string>)=>{
+      await expect.poll(query).toEqual(expected);
+      await expect(page.getByRole('search').getByRole('status')).toBeEmpty();
+      release();await ended;await expect.poll(query).toEqual(expected);
+    };
+
+    gate(url=>url.searchParams.get('q')==='Codex');
+    await input.fill('Codex');await started;
+    await source.selectOption('second');
+    await settled({...base,sourceId:'second',q:'Codex'});await expect(input).toHaveValue('Codex');
+
+    gate(url=>url.searchParams.get('sourceId')==='first');
+    await source.selectOption('first');await started;
+    await page.locator('aside').getByRole('link',{name:'全部类别',exact:true}).click();
+    const uncategorized={topic:'mcp',from:'2026-10-01',to:'2026-10-28',limit:'50',sourceId:'first',q:'Codex'};
+    await settled(uncategorized);
+
+    gate(url=>url.searchParams.get('topic')==='agent');
+    await page.getByRole('navigation',{name:'文章主题',exact:true}).getByRole('link',{name:'Agent',exact:true}).click();await started;
+    await page.getByRole('link',{name:'移除来源：Source One',exact:true}).click();
+    const topical={topic:'agent',from:'2026-10-01',to:'2026-10-28',limit:'50',q:'Codex'};
+    await settled(topical);
+
+    await page.locator('summary').filter({hasText:'2026-10-01'}).click();
+    await page.getByLabel('起始日期',{exact:true}).fill('2026-10-03');
+    gate(url=>url.searchParams.get('from')==='2026-10-03');
+    await page.getByRole('button',{name:'应用日期',exact:true}).click();await started;
+    await input.fill('updated');await input.press('Enter');
+    const dated={topic:'agent',from:'2026-10-03',to:'2026-10-28',limit:'50',q:'updated'};
+    await settled(dated);
+
+    gate(url=>url.searchParams.get('q')==='latest');
+    await input.fill('latest');await input.press('Enter');await started;
+    await page.getByRole('combobox',{name:'每页篇数',exact:true}).selectOption('100');
+    await settled({...dated,limit:'100',q:'latest'});
+
+    gate(url=>url.searchParams.get('q')==='article-source');
+    await input.fill('article-source');await input.press('Enter');await started;
+    await page.locator('main article').first().getByRole('link',{name:'Source One',exact:true}).click();
+    await settled({...dated,limit:'100',q:'article-source',sourceId:'first'});
+
+    const date=page.getByRole('group',{name:'文章检索工具',exact:true}).locator('summary');
+    await date.click();await page.getByLabel('起始日期',{exact:true}).fill('2026-10-05');
+    gate(url=>url.searchParams.get('from')==='2026-10-05');
+    await page.getByRole('button',{name:'应用日期',exact:true}).click();await started;
+    await date.click();await expect(page.getByLabel('起始日期',{exact:true})).toHaveValue('2026-10-05');
+    await page.getByLabel('结束日期',{exact:true}).fill('2026-10-29');
+    await page.getByRole('button',{name:'应用日期',exact:true}).click();
+    await settled({...dated,from:'2026-10-05',to:'2026-10-29',limit:'100',q:'article-source',sourceId:'first'});
+  }finally{release();await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`reader search preserves text entered while a source request is finishing (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined,release=()=>{},begun=()=>{},held=false;
+  const pending=new Promise<void>(resolve=>release=resolve),started=new Promise<void>(resolve=>begun=resolve);
+  try{
+    web=await startWebServer(fakeApi(async url=>{
+      if(url.pathname==='/api/site/articles'){
+        if(url.searchParams.has('sourceId')&&!held){held=true;begun();await pending;}
+        return readerPage([feedItem({id:'typing',title:'Typing result'})],url);
+      }
+      if(url.pathname==='/api/site/sources')return {items:[{id:'source',name:'Source',url:null,description:null,articles:1,fulltext:false,latestAt:null}]};
+      if(url.pathname==='/api/site/categories')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1280,height:800}});await visit(page,web.origin+'/?q=old&limit=50');
+    await page.getByRole('combobox',{name:'来源',exact:true}).selectOption('source');await started;
+    const input=page.getByRole('searchbox');
+    // Hold the debounce while the earlier response commits; composition must not be overwritten either.
+    await input.dispatchEvent('compositionstart');await input.fill('新输入');release();
+    await expect(page).toHaveURL(/sourceId=source/);await expect(page.getByRole('search').getByRole('status')).toBeEmpty();
+    await expect(input).toHaveValue('新输入');
+    await input.dispatchEvent('compositionend');
+    await expect.poll(()=>Object.fromEntries(new URL(page.url()).searchParams)).toEqual({q:'新输入',sourceId:'source',limit:'50'});
+    await page.goBack();await expect(input).toHaveValue('old');await expect(page).not.toHaveURL(/sourceId=/);
+  }finally{release();await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])for(const composing of [false,true])test(`reader search preserves ${composing?'composition':'typing'} started during history navigation (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined,release=()=>{},begun=()=>{},hold=false;
+  const pending=new Promise<void>(resolve=>release=resolve),started=new Promise<void>(resolve=>begun=resolve),searches:string[]=[];
+  try{
+    web=await startWebServer(fakeApi(async url=>{
+      if(url.pathname==='/api/site/articles'){
+        searches.push(url.searchParams.get('q')??'');
+        if(hold&&!url.searchParams.has('sourceId')){hold=false;begun();await pending;}
+        return readerPage([feedItem({id:'history-input',title:'History result'})],url);
+      }
+      if(url.pathname==='/api/site/sources')return {items:[{id:'source',name:'Source',url:null,description:null,articles:1,fulltext:false,latestAt:null}]};
+      if(url.pathname==='/api/site/categories')return {items:[{id:'coding',name:'AI 编程'}]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1280,height:800},reducedMotion:'reduce'});
+    await page.clock.install({time:new Date('2026-11-06T08:00:00Z')});
+    await visit(page,web.origin+'/?q=old&category=coding&limit=50');
+    const input=page.getByRole('searchbox'),source=page.getByRole('combobox',{name:'来源',exact:true}),status=page.getByRole('search').getByRole('status');
+    await source.selectOption('source');await expect(page).toHaveURL(/sourceId=source/);await expect(status).toBeEmpty();
+    // Keep the response commit inside the debounce window without relying on host speed.
+    await page.clock.pauseAt(new Date('2026-11-06T10:00:00Z'));
+    hold=true;await page.evaluate(()=>history.back());await started;await expect(status).toHaveText('正在更新…');
+    if(composing)await input.dispatchEvent('compositionstart');
+    const value=composing?'新输入':'newword';await input.fill(value);release();
+    await expect(source).toHaveValue('');await expect(status).toBeEmpty();await expect(input).toHaveValue(value);
+    if(composing){
+      await page.clock.runFor(400);assert(!searches.includes(value));
+      await input.dispatchEvent('compositionend');
+    }
+    await page.clock.runFor(400);
+    await expect.poll(()=>Object.fromEntries(new URL(page.url()).searchParams)).toEqual({q:value,category:'coding',limit:'50'});
+    await expect(status).toBeEmpty();
+
+    // A draft entered before the next history navigation must still be discarded.
+    await input.fill('discard-before-history');await page.evaluate(()=>history.forward());
+    await expect(source).toHaveValue('source');await expect(status).toBeEmpty();await expect(input).toHaveValue('old');
+    await page.clock.runFor(400);assert(!searches.includes('discard-before-history'));
+    await expect.poll(()=>Object.fromEntries(new URL(page.url()).searchParams)).toEqual({q:'old',category:'coding',limit:'50',sourceId:'source'});
+  }finally{release();await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`reader search discards earlier drafts when history entries share a URL (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined,release=()=>{},begun=()=>{},hold=false;
+  const pending=new Promise<void>(resolve=>release=resolve),started=new Promise<void>(resolve=>begun=resolve),searches:string[]=[];
+  try{
+    web=await startWebServer(fakeApi(async url=>{
+      if(url.pathname==='/api/site/articles'){
+        searches.push(url.searchParams.get('q')??'');const returning=hold;
+        if(hold){hold=false;begun();await pending;}
+        return readerPage([feedItem({id:'same-history',title:returning?'Returned history':'Search result'})],url);
+      }
+      if(['/api/site/sources','/api/site/categories'].includes(url.pathname))return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1280,height:800},reducedMotion:'reduce'});
+    await page.clock.install({time:new Date('2026-11-06T08:00:00Z')});await visit(page,web.origin+'/?q=old&limit=50');
+    const input=page.getByRole('searchbox');await input.fill('temp');await input.press('Enter');await expect(page).toHaveURL(/q=temp/);
+    await page.clock.pauseAt(new Date('2026-11-06T10:00:00Z'));
+    // Replace the pushed search so two distinct history entries now have the same URL.
+    await input.fill('old');await page.clock.runFor(400);await expect(page).toHaveURL(/q=old/);
+    await expect(page.getByRole('search').getByRole('status')).toBeEmpty();
+    await input.fill('discard-before-history');hold=true;await page.evaluate(()=>history.back());await started;release();
+    await expect(page.getByRole('link',{name:'Returned history',exact:true})).toBeVisible();await expect(input).toHaveValue('old');
+    await page.clock.runFor(400);assert(!searches.includes('discard-before-history'));
+    await expect.poll(()=>Object.fromEntries(new URL(page.url()).searchParams)).toEqual({q:'old',limit:'50'});
+  }finally{release();await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`empty reader results can remove only the source or keyword (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined;
+  const filters={q:'missing',sourceId:'source',category:'coding',topic:'mcp',limit:'50'};
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/articles')return readerPage(url.searchParams.has('q')&&url.searchParams.has('sourceId')?[]:[feedItem({id:'recovered',title:'Recovered article'})],url);
+      if(url.pathname==='/api/site/categories')return {items:[{id:'coding',name:'AI 编程'}]};
+      if(url.pathname==='/api/site/sources')return {items:[{id:'source',name:'Source',url:null,description:null,articles:1,fulltext:false,latestAt:null}]};
+      if(url.pathname==='/api/site/topics')return {topics:[{slug:'mcp',name:'MCP',group:'field',definition:'',brand:null,total:1,recent:1,indexable:true,latest:null}]};
+    }));
+    const page=await browser.newPage({viewport:{width:1280,height:800}});
+    const dateRanges:Record<string,string>[]=[{},{from:'2026-10-01',to:'2026-10-28'}];
+    for(const dates of dateRanges){
+      const selected={...filters,...dates};
+      for(const [key,label] of [['sourceId','移除来源限制'],['q','清除关键词']]){
+        await visit(page,web.origin+'/?'+new URLSearchParams(selected));
+        await expect(page.getByRole('group',{name:'文章分页控制',exact:true})).toHaveCount(0);
+        await page.getByRole('link',{name:label,exact:true}).click();
+        await expect(page.getByRole('link',{name:'Recovered article',exact:true})).toBeVisible();
+        const expected={...selected};delete expected[key as keyof typeof expected];
+        assert.deepEqual(Object.fromEntries(new URL(page.url()).searchParams),expected);
+        await expect(page.getByRole('combobox',{name:'每页篇数',exact:true})).toHaveValue('50');
+      }
+    }
+    const plain=await browser.newPage({javaScriptEnabled:false,viewport:{width:1280,height:800}});
+    await plain.goto(web.origin+'/?'+new URLSearchParams(filters));await plain.getByRole('link',{name:'清除关键词',exact:true}).click();
+    await expect(plain.getByRole('link',{name:'Recovered article',exact:true})).toBeVisible();
+    assert.deepEqual(Object.fromEntries(new URL(plain.url()).searchParams),{sourceId:'source',category:'coding',topic:'mcp',limit:'50'});
   }finally{await browser.close();await web?.stop();}
 });
 
@@ -1022,7 +1232,7 @@ for(const engine of [chromium,webkit])test(`exploration and article links lead t
     await page.locator('main').getByRole('link',{name:'探索',exact:true}).click();
     await expect(bottom.getByRole('link',{name:'探索',exact:true})).toHaveAttribute('aria-current','page');
     await page.setViewportSize({width:1440,height:900});
-    await page.getByRole('link',{name:'空主题',exact:true}).click();await expect(page.getByText('没有符合条件的文章。可以调整筛选，或稍后查看更新。',{exact:true})).toBeVisible();
+    await page.getByRole('link',{name:'空主题',exact:true}).click();await expect(page.getByRole('heading',{name:'没有符合条件的文章',exact:true})).toBeVisible();
     const plain=await browser.newPage({javaScriptEnabled:false,viewport:{width:390,height:844}});
     await plain.goto(web.origin+'/explore?view=sources');await plain.getByRole('navigation',{name:'探索方式'}).getByRole('link',{name:'主题',exact:true}).click();await expect(plain).toHaveURL(web.origin+'/explore');
     await plain.goto(web.origin+'/explore');await plain.getByRole('link',{name:'MCP 与工具调用',exact:true}).click();await expect(plain).toHaveURL(web.origin+'/?topic=mcp');
