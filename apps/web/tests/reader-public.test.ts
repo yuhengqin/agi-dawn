@@ -52,10 +52,101 @@ test('desktop reading improvements expose search evidence, immediate presets and
     await expect(page.getByText('阅读 0',{exact:true})).toHaveCount(0);
     await page.locator('summary').filter({hasText:'不限日期'}).click();await page.getByRole('button',{name:'近7天',exact:true}).click();
     await expect(page).toHaveURL(/from=\d{4}-\d{2}-\d{2}/);await expect(page.getByRole('button',{name:'应用日期',exact:true})).toBeHidden();
-    await page.locator('main ol > li').first().click({position:{x:10,y:5}});await expect(page).toHaveURL(web.origin+'/items/experience');
+    await page.locator('main ol > li').first().click({position:{x:10,y:5}});await expect(page).toHaveURL(web.origin+'/items/experience?q=cost&match=body%3Atranslation');
     await expect(page.getByText('中文译文',{exact:true})).toBeVisible();
     await expect(page.getByRole('contentinfo',{name:'文章后续阅读'})).toContainText('Another useful article');
     await expect(page.getByRole('contentinfo',{name:'文章后续阅读'}).getByRole('link',{name:'文末打开原文',exact:true})).toBeVisible();
+  }finally{await browser.close();await web?.stop();}
+});
+
+test('search details retain the query, locate visible matches across markup and explain original-only evidence',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  const lead='<p>'+('Unrelated introduction. '.repeat(150))+'</p>';
+  const articles=[
+    itemDetail({id:'search-visible',title:'Visible evidence',summary:null,intro:null,bodyHtml:lead+'<p id="matched">人工<strong>智能</strong> supports an ag<em>ent</em>.</p><p>agents are different.</p><pre><code class="language-javascript">const agent = 1;</code></pre><p>人工</p><p>智能</p>'+'<p>More reading. '.repeat(90)+'</p>',matches:[{field:'body',language:'original',snippet:'人工智能 supports an agent.'}]}),
+    itemDetail({id:'search-original',title:'Agent internals',metadataTranslation:{title:'智能体内部实现',summary:'中文摘要。'},translation:{bodyHtml:'<p>当前显示中文内容。</p>',outline:[],complete:true},matches:[{field:'body',language:'original',snippet:'An agent works here.'}]}),
+    itemDetail({id:'search-withdrawn',title:'Withdrawn body',bodyHtml:null,bodyState:{status:'not-permitted',bodyRevision:null,refreshPending:false,issues:[]},matches:[{field:'body',language:'original',snippet:'An agent used to appear here.'}]}),
+  ];
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/articles')return readerPage(articles,url);
+      const article=articles.find(item=>url.pathname==='/api/site/items/'+item.id);if(article)return article;
+      if(url.pathname==='/api/site/engagement'||url.pathname==='/api/site/categories'||url.pathname==='/api/site/sources')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    await visit(page,web.origin+'/?q='+encodeURIComponent('人工智能 agent'));
+    await page.getByRole('link',{name:'Visible evidence',exact:true}).click();
+    await expect.poll(()=>new URL(page.url()).searchParams.get('q')).toBe('人工智能 agent');
+    const context=page.getByRole('region',{name:'搜索定位',exact:true});
+    await expect(context).toContainText('当前页面 3 处匹配');
+    assert(await page.evaluate(()=>scrollY)<100,'search entry keeps the article heading in view');
+    await context.getByRole('button',{name:'定位到首处匹配',exact:true}).click();
+    await expect(page.locator('#matched')).toBeInViewport();assert(await page.evaluate(()=>scrollY)>200);
+    await page.getByRole('button',{name:'复制代码',exact:true}).scrollIntoViewIfNeeded();
+    await expect(page.locator('pre code')).toHaveClass(/hljs/);
+    await expect.poll(()=>page.evaluate(()=>Array.from(CSS.highlights.get('article-search')??[]).map(range=>range.toString()))).toEqual(['人工智能','agent','agent']);
+    await page.getByRole('button',{name:'折叠代码',exact:true}).click();await expect(context).toContainText('当前页面 2 处匹配');
+    await page.getByRole('button',{name:'展开代码',exact:true}).click();await expect(context).toContainText('当前页面 3 处匹配');
+    const position=await page.evaluate(()=>scrollY);await page.goBack();await expect(page.getByRole('searchbox')).toHaveValue('人工智能 agent');
+    await expect.poll(()=>page.evaluate(()=>CSS.highlights.has('article-search'))).toBe(false);
+    await page.goForward();await expect(context).toContainText('当前页面 3 处匹配');await expect.poll(()=>page.evaluate(()=>scrollY)).toBeCloseTo(position,0);
+    await visit(page,web.origin+'/?q=agent');await page.getByRole('link',{name:'智能体内部实现',exact:true}).click();
+    await expect(context).toContainText('正文原文');await expect(context).toContainText('当前显示中文译文');
+    await expect(context.getByRole('link',{name:'打开搜索命中的原文',exact:true})).toHaveAttribute('href',articles[1]!.links.original);
+    await expect(context.getByRole('button')).toHaveCount(0);await expect(page.getByRole('region',{name:'文章正文',exact:true})).not.toContainText('An agent');
+    await visit(page,web.origin+'/items/search-withdrawn?q=agent&match=body%3Aoriginal');
+    await expect(context).toContainText('当前页面未找到关键词');await expect(page.getByRole('region',{name:'文章正文',exact:true})).toHaveCount(0);
+    await visit(page,web.origin+'/items/search-visible?q=Fixture&match=source%3Aoriginal');await context.getByRole('button',{name:'定位到首处匹配',exact:true}).click();
+    const source=page.locator('header').getByRole('link',{name:'Fixture',exact:true});await expect(source).toBeFocused();assert.equal(await source.evaluate(link=>link.tabIndex),0);
+    await visit(page,web.origin+'/items/search-visible');await expect(context).toHaveCount(0);await expect.poll(()=>page.evaluate(()=>CSS.highlights.has('article-search'))).toBe(false);
+  }finally{await browser.close();await web?.stop();}
+});
+
+test('image zoom steps start at the displayed size and preserve the viewed center',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  const picture='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="3840" height="1600"><rect width="3840" height="1600" fill="white"/><text x="1920" y="800">Center</text></svg>').toString('base64');
+  try{
+    web=await startWebServer(fakeApi(url=>{if(url.pathname==='/api/site/items/zoom')return itemDetail({id:'zoom',title:'Zoom',bodyHtml:`<img src="${picture}" alt="Wide diagram"><img src="${picture}" alt="Repeated diagram">`});if(url.pathname==='/api/site/engagement')return {items:[]};}));
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});await visit(page,web.origin+'/items/zoom');await page.getByRole('button',{name:'查看大图：Wide diagram',exact:true}).click();
+    const dialog=page.getByRole('dialog'),image=dialog.getByRole('img'),stage=page.getByRole('region',{name:'可滚动图片',exact:true});
+    const geometry=()=>image.evaluate(img=>{const r=img.getBoundingClientRect(),s=img.parentElement!.getBoundingClientRect();return {width:r.width,x:(s.left+s.width/2-r.left)/r.width,y:(s.top+s.height/2-r.top)/r.height};});
+    const initial=await geometry();await dialog.getByRole('button',{name:'放大图片',exact:true}).click();
+    await expect.poll(async()=>(await geometry()).width/initial.width).toBeCloseTo(1.25,2);
+    await expect.poll(async()=>(await geometry()).x).toBeCloseTo(initial.x,2);await expect.poll(async()=>(await geometry()).y).toBeCloseTo(initial.y,2);
+    await expect(dialog.getByRole('status',{name:'图片缩放比例',exact:true})).toHaveText(/44%/);
+    await dialog.getByRole('button',{name:'放大图片',exact:true}).click();await stage.evaluate(el=>{el.scrollLeft=150;el.scrollTop=30;});
+    const panned=await geometry();await dialog.getByRole('button',{name:'放大图片',exact:true}).click();
+    await expect.poll(async()=>(await geometry()).x).toBeCloseTo(panned.x,2);await expect.poll(async()=>(await geometry()).y).toBeCloseTo(panned.y,2);
+    await dialog.getByRole('button',{name:'缩小图片',exact:true}).click();await expect.poll(async()=>(await geometry()).width).toBeCloseTo(panned.width,0);
+    await dialog.getByRole('button',{name:'原尺寸',exact:true}).click();await expect.poll(async()=>(await geometry()).width).toBeCloseTo(3840,0);await expect(dialog.getByRole('status',{name:'图片缩放比例',exact:true})).toHaveText('100%');
+    await dialog.getByRole('button',{name:'适应窗口',exact:true}).click();await expect.poll(async()=>(await geometry()).width).toBeCloseTo(initial.width,0);await expect(dialog.getByRole('button',{name:'缩小图片',exact:true})).toBeDisabled();
+    await dialog.getByRole('button',{name:'放大图片',exact:true}).click();await dialog.getByRole('button',{name:'下一张',exact:true}).click();
+    await expect(dialog).toHaveAttribute('aria-label','图片 2 / 2');await expect(dialog.getByRole('button',{name:'放大图片',exact:true})).toBeEnabled();await expect.poll(async()=>(await geometry()).width).toBeCloseTo(initial.width,0);
+    await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'查看大图：Wide diagram',exact:true})).toBeFocused();
+  }finally{await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`mixed-language search keeps hidden original evidence when the translation also matches (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined;
+  const article=itemDetail({id:'mixed-search',title:'Mixed evidence',translation:{bodyHtml:'<p>AI 可以帮助完成任务。</p>',outline:[],complete:true},matches:[{field:'body',language:'translation',snippet:'AI 可以帮助完成任务。'},{field:'body',language:'original',snippet:'The foobar technique.'}]});
+  try{
+    web=await startWebServer(fakeApi(url=>{if(url.pathname==='/api/site/articles')return readerPage([article],url);if(url.pathname==='/api/site/items/'+article.id)return article;if(['/api/site/engagement','/api/site/categories','/api/site/sources'].includes(url.pathname))return {items:[]};if(url.pathname==='/api/site/topics')return {topics:[]};}));
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});await visit(page,web.origin+'/?q=AI+foobar');await page.getByRole('link',{name:article.title,exact:true}).click();
+    const context=page.getByRole('region',{name:'搜索定位',exact:true});await expect(context).toContainText('当前页面 1 处匹配');await expect(context).toContainText('正文原文');await expect(context.getByRole('link',{name:'打开搜索命中的原文',exact:true})).toBeVisible();
+    await expect(page.getByRole('region',{name:'文章正文',exact:true})).not.toContainText('foobar');
+  }finally{await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`search location reveals a match at the far end of a scrolling code line (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined;
+  const article=itemDetail({id:'wide-search',title:'Wide code',bodyHtml:'<pre><code class="language-text">'+('prefix '.repeat(150))+'needle</code></pre>'});
+  try{
+    web=await startWebServer(fakeApi(url=>{if(url.pathname==='/api/site/items/'+article.id)return article;if(url.pathname==='/api/site/engagement')return {items:[]};}));
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});await visit(page,web.origin+'/items/wide-search?q=needle&match=body%3Aoriginal');
+    const pre=page.locator('pre');assert.equal(await pre.evaluate(el=>el.scrollLeft),0);await page.getByRole('button',{name:'定位到首处匹配',exact:true}).click();
+    await expect.poll(()=>pre.evaluate(el=>el.scrollLeft)).toBeGreaterThan(0);
+    const visible=await page.evaluate(()=>{const match=Array.from(CSS.highlights.get('article-search')??[])[0];if(!(match instanceof Range))return false;const r=match.getBoundingClientRect(),p=document.querySelector('pre')!.getBoundingClientRect();return r.left>=p.left&&r.right<=p.right;});assert(visible,'the complete matched word is inside the horizontal viewport');
   }finally{await browser.close();await web?.stop();}
 });
 
@@ -967,7 +1058,7 @@ for(const engine of [chromium,webkit])test(`translated title and summary remain 
 
 for(const engine of [chromium,webkit])test(`reading display preferences apply, persist, synchronize and reset without changing article data (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined;let writes=0;
-  const article=itemDetail({id:'display-ui',title:'Reading display',bodyHtml:'<h2 id="sec-1">A saved section</h2>'+Array.from({length:8},()=>'<p>'+('Readable article content. '.repeat(30))+'</p>').join(''),outline:[{id:'sec-1',text:'A saved section',level:2}]});
+  const article=itemDetail({id:'display-ui',title:'Reading display',bodyHtml:'<h2 id="sec-1">A saved section</h2><pre><code>const readable = true;</code></pre>'+Array.from({length:8},()=>'<p>'+('Readable article content. '.repeat(30))+'</p>').join(''),outline:[{id:'sec-1',text:'A saved section',level:2}]});
   try{
     web=await startWebServer(fakeApi((url,res,req)=>{
       if(url.pathname==='/api/site/items/display-ui')return article;
@@ -980,11 +1071,15 @@ for(const engine of [chromium,webkit])test(`reading display preferences apply, p
     const context=await browser.newContext({viewport:{width:1920,height:900}}),page=await context.newPage();await visit(page,web.origin+'/items/display-ui');const body=page.locator('article .prose');
     await page.getByLabel('阅读显示设置',{exact:true}).click();await expect(page.getByRole('button',{name:'恢复默认显示',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'恢复图表提示',exact:true})).toHaveCount(0);await page.keyboard.press('Escape');
     const font=()=>body.evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),height=()=>body.evaluate(el=>parseFloat(getComputedStyle(el).lineHeight)),width=()=>body.evaluate(el=>el.getBoundingClientRect().width);
+    const codeFont=()=>body.locator('pre code').evaluate(el=>parseFloat(getComputedStyle(el).fontSize));await expect.poll(codeFont).toBe(13);
     await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'较大',exact:true}).check();await page.getByRole('group',{name:'正文行距',exact:true}).getByRole('radio',{name:'宽松',exact:true}).check();await page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'窄',exact:true}).check();await expect.poll(font).toBe(20);await expect.poll(height).toBe(40);assert(await width()<=641);const narrow=await width();
+    await expect.poll(codeFont).toBe(14.5);
     const second=await context.newPage();await visit(second,web.origin+'/items/display-ui');assert.equal(await second.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),20);await second.getByLabel('阅读显示设置',{exact:true}).click();await second.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'更大',exact:true}).check();await second.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true}).check();await expect.poll(font).toBe(22);await expect.poll(width).toBeGreaterThan(narrow+100);
+    await expect.poll(codeFont).toBe(16);assert.equal(await body.locator('.code-block-lines').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),16);
     await visit(page,page.url());await expect.poll(font).toBe(22);await expect.poll(height).toBe(44);await page.getByLabel('阅读显示设置',{exact:true}).click();await expect(page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true})).toBeChecked();
     for(const size of [320,390,1440]){await page.setViewportSize({width:size,height:800});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));}
     await page.getByRole('button',{name:'恢复默认显示',exact:true}).click();await expect(page.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'默认',exact:true})).toBeChecked();await expect.poll(()=>second.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBe(18);assert.equal(writes,0);
+    await expect.poll(codeFont).toBe(13);
     await page.evaluate(()=>localStorage.setItem('agi-dawn-reading-display-v1','{"size":"enormous","spacing":"loose","width":"wide"}'));await visit(page,page.url());await expect.poll(font).toBe(18);await expect.poll(height).toBe(36);
     await page.evaluate(()=>localStorage.setItem('agi-dawn-reading-display-v1','{'));await visit(page,page.url());await expect.poll(height).toBeCloseTo(32.4,1);assert.equal(writes,0);
     const denied=await browser.newContext({viewport:{width:390,height:800}});await denied.addInitScript(()=>{Object.defineProperty(window,'localStorage',{get(){throw new DOMException('blocked','SecurityError');}});});const blocked=await denied.newPage();await visit(blocked,web.origin+'/items/display-ui');await blocked.getByLabel('阅读显示设置',{exact:true}).click();await blocked.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'较大',exact:true}).check();await expect.poll(()=>blocked.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBe(20);await expect(blocked.getByRole('status').filter({hasText:'当前标签页'})).toBeVisible();await visit(blocked,blocked.url());assert.equal(await blocked.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),17);await denied.close();

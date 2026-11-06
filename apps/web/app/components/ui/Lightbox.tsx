@@ -1,4 +1,4 @@
-import { useEffect,useRef,useState } from "react";
+import { useLayoutEffect,useRef,useState } from "react";
 import { createPortal } from "react-dom";
 import { Presence } from "./Presence";
 import { useModal } from "./modal";
@@ -17,9 +17,36 @@ export interface LightboxImage {
  */
 export function Lightbox({ images, index, onIndex, onClose }: { images: LightboxImage[]; index: number | null; onIndex: (i: number) => void; onClose: () => void }) {
   const open = index !== null && !!images[index];
-  const [enlarged,setEnlarged]=useState(false),[scale,setScale]=useState(1),[dimensions,setDimensions]=useState({width:0,height:0});
-  const stage=useRef<HTMLDivElement>(null),pan=useRef<{x:number;y:number;left:number;top:number}|null>(null);
-  useEffect(()=>{setEnlarged(false);setScale(1);setDimensions({width:0,height:0});if(stage.current){stage.current.scrollTop=0;stage.current.scrollLeft=0;}},[index,open]);
+  const [zoom,setZoom]=useState<number|null>(null),[dimensions,setDimensions]=useState({width:0,height:0}),[viewport,setViewport]=useState({width:0,height:0});
+  const stage=useRef<HTMLDivElement>(null),img=useRef<HTMLImageElement>(null),pan=useRef<{x:number;y:number;left:number;top:number}|null>(null);
+  const center=useRef<{x:number;y:number}|null>(null);
+  const fit=dimensions.width&&viewport.width?Math.min(1,viewport.width/dimensions.width,viewport.height/dimensions.height):0;
+  const scale=zoom===null?fit:Math.max(fit,zoom),enlarged=scale>fit+0.001;
+  useLayoutEffect(()=>{
+    setZoom(null);center.current=null;pan.current=null;
+    const picture=img.current;
+    // A repeated source or a quick reopen can reuse an already-loaded image without another load event.
+    setDimensions(open&&picture?.complete?{width:picture.naturalWidth,height:picture.naturalHeight}:{width:0,height:0});
+    if(stage.current){stage.current.scrollTop=0;stage.current.scrollLeft=0;}
+  },[index,open]);
+  useLayoutEffect(()=>{
+    const box=stage.current;if(!open||!box)return;
+    const measure=()=>setViewport({width:box.clientWidth,height:box.clientHeight});
+    measure();const observer=new ResizeObserver(measure);observer.observe(box);return()=>observer.disconnect();
+  },[open]);
+  useLayoutEffect(()=>{
+    const point=center.current,box=stage.current,picture=img.current;if(!point||!box||!picture)return;
+    const outer=box.getBoundingClientRect(),inner=picture.getBoundingClientRect();
+    box.scrollLeft+=inner.left-outer.left+point.x*inner.width-box.clientWidth/2;
+    box.scrollTop+=inner.top-outer.top+point.y*inner.height-box.clientHeight/2;
+    center.current=null;
+  },[scale,zoom]);
+  const resize=(next:number|null)=>{
+    const box=stage.current,picture=img.current;if(!box||!picture||!fit)return;
+    const outer=box.getBoundingClientRect(),inner=picture.getBoundingClientRect();
+    center.current={x:(outer.left+box.clientWidth/2-inner.left)/inner.width,y:(outer.top+box.clientHeight/2-inner.top)/inner.height};
+    setZoom(next===null?null:Math.max(fit,Math.min(4,next)));
+  };
   const dialog = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const state = useRef({ index, count: images.length, onIndex, onClose });
@@ -40,7 +67,6 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
   });
 
   // Touch: follow one finger, then step, close or snap back. A drag is not also a tap that closes.
-  const img = useRef<HTMLImageElement>(null);
   const drag = useRef<{ x: number; y: number; dx: number; dy: number; axis: "x" | "y" | null; moved: boolean } | null>(null);
   const suppressTap = useRef(false);
   const zoomed = () => (window.visualViewport?.scale ?? 1) > 1.01;
@@ -126,13 +152,15 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
           onPointerCancel={()=>{pan.current=null;}}>
           {current&&<img ref={img} key={current.src} src={current.src} decoding="async" alt={current.alt??''} draggable={false}
             onLoad={event=>setDimensions({width:event.currentTarget.naturalWidth,height:event.currentTarget.naturalHeight})}
-            style={enlarged?{width:dimensions.width*scale}:undefined}
+            style={scale?{width:dimensions.width*scale,height:dimensions.height*scale,maxWidth:'none',maxHeight:'none'}:undefined}
             className="lightbox-img rounded-control object-contain shadow-2xl"/>}
         </div>
         <div className="absolute left-5 top-5 flex gap-1 rounded-control bg-black/60 text-sm text-white" onClick={event=>event.stopPropagation()}>
-          <button type="button" className="min-h-11 px-3 hover:bg-white/10" aria-pressed={!enlarged} onClick={()=>{setEnlarged(false);setScale(1);}}>适应窗口</button>
-          <button type="button" className="min-h-11 px-3 hover:bg-white/10" aria-pressed={enlarged&&scale===1} disabled={!dimensions.width} onClick={()=>{setEnlarged(true);setScale(1);}}>原尺寸</button>
-          <button type="button" className="min-h-11 px-3 hover:bg-white/10" aria-label="放大图片" disabled={!dimensions.width||scale>=4} onClick={()=>{setEnlarged(true);setScale(value=>Math.min(4,value*2));}}>＋</button>
+          <button type="button" className="min-h-11 px-3 hover:bg-white/10" aria-pressed={zoom===null} onClick={()=>resize(null)}>适应窗口</button>
+          <button type="button" className="min-h-11 px-3 hover:bg-white/10" aria-pressed={zoom!==null&&scale===1} disabled={!fit} onClick={()=>resize(1)}>原尺寸</button>
+          <button type="button" className="min-h-11 px-3 hover:bg-white/10 disabled:opacity-40" aria-label="缩小图片" disabled={!enlarged} onClick={()=>resize(scale/1.25<=fit+0.001?null:scale/1.25)}>－</button>
+          <span role="status" aria-label="图片缩放比例" className="grid min-w-12 place-items-center tabular-nums">{fit?`${Math.round(scale*100)}%`:'—'}</span>
+          <button type="button" className="min-h-11 px-3 hover:bg-white/10 disabled:opacity-40" aria-label="放大图片" disabled={!fit||scale>=4} onClick={()=>resize(scale*1.25)}>＋</button>
         </div>
         <button ref={closeButton} type="button" aria-label="关闭" onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute right-[max(16px,env(safe-area-inset-right))] top-[max(16px,env(safe-area-inset-top))] grid size-11 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
           <IconClose size={18} />

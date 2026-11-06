@@ -574,6 +574,11 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 .reader-feed-entry:hover .reader-feed-title { color: var(--accent); }
 .reader-feed-entry:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
 .reader-search-match { margin-top: 10px; font-size: 13px; line-height: 1.65; color: var(--ink-3); }
+.article-search-context { margin-top: 20px; padding-block: 12px; border-block: 1px solid var(--line); font-size: 13px; line-height: 1.8; color: var(--ink-3); overflow-wrap: anywhere; }
+.article-search-context strong { color: var(--ink); font-weight: 500; }
+.article-search-context :is(button,a) { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.article-search-context p { margin-top: 4px; }
+::highlight(article-search) { background-color: #f6df8d; color: #292211; }
 @media (pointer: fine) and (max-width: 960px) {
   .site-shell > main { padding-right: 64px; }
 }
@@ -617,8 +622,8 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 }
 .prose > * + * { margin-top: 1.2em; }
 /* Reader settings apply only to article bodies and their explicitly opted-in layouts. */
-[data-reading-size="large"] .article-prose { font-size: 1.25rem; }
-[data-reading-size="larger"] .article-prose { font-size: 1.375rem; }
+[data-reading-size="large"] .article-prose { font-size: 1.25rem; --reading-code-size: 14.5px; }
+[data-reading-size="larger"] .article-prose { font-size: 1.375rem; --reading-code-size: 16px; }
 [data-reading-spacing="compact"] .article-prose { line-height: 1.6; }
 [data-reading-spacing="loose"] .article-prose { line-height: 2; }
 [data-reading-width="narrow"] { --reading-width: 640px; }
@@ -783,9 +788,9 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 .prose figure[data-reader-figure-status="missing"], .prose p[data-reader-embed="true"] { padding: 12px 16px; background: var(--bg-sunk); border-radius: var(--radius-control); font-size: 0.9em; }
 [data-theme="dark"] .article-prose img:not([data-reader-inline="true"]) { filter: brightness(0.88); }
 [data-theme="dark"] .article-prose img:hover { filter: none; }
-.lightbox-stage { display: grid; place-items: center; width: 100%; height: calc(100dvh - 80px); min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
-.lightbox-stage .lightbox-img { max-width: 100%; max-height: calc(100dvh - 80px); }
-.lightbox-stage.is-enlarged { display: block; cursor: grab; }
+.lightbox-stage { display: flex; width: 100%; height: calc(100dvh - 80px); min-width: 0; min-height: 0; overflow: auto; overflow-anchor: none; overscroll-behavior: contain; }
+.lightbox-stage .lightbox-img { flex: none; margin: auto; max-width: 100%; max-height: 100%; }
+.lightbox-stage.is-enlarged { cursor: grab; }
 .lightbox-stage.is-enlarged:active { cursor: grabbing; }
 .lightbox-stage.is-enlarged .lightbox-img { max-width: none; max-height: none; margin-inline: auto; }
 .prose figcaption { font-size: 13px; color: var(--ink-4); text-align: center; margin-top: 0.6em; }
@@ -800,7 +805,7 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 .prose pre {
   position: relative;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--reading-code-size, 13px);
   line-height: 1.65;
   background: var(--code-bg);
   border: 1px solid var(--line);
@@ -827,7 +832,7 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 .prose .code-block-status:empty { display: none; }
 .prose .code-block-copy[data-status="copied"] { color: var(--ok-ink); }
 .prose .code-block-copy[data-status="error"] { color: var(--hot); }
-.prose .code-block-body { display: grid; grid-template-columns: max-content minmax(0, 1fr); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; }
+.prose .code-block-body { display: grid; grid-template-columns: max-content minmax(0, 1fr); font-family: var(--font-mono); font-size: var(--reading-code-size, 13px); line-height: 1.65; }
 .prose .code-block-body[hidden] { display: none; }
 .prose .code-block-lines { padding: 3px 8px 10px; color: var(--ink-3); background: var(--code-toolbar-bg); white-space: pre; text-align: right; user-select: none; }
 .prose .code-block pre { min-width: 0; margin: 0; border: 0; border-radius: 0; padding: 3px 8px 10px 6px; background: transparent; font: inherit; tab-size: 4; }

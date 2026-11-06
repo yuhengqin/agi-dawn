@@ -51,8 +51,10 @@ export function ReaderPage({page,sources,topics,categories,query,latestArticleDa
       {page.items.map(item=>{const title=item.metadataTranslation?.title??item.title,rawSummary=item.metadataTranslation?.summary??item.summary;
         const summary=rawSummary&&item.summaryTruncated&&!/[.!?。！？…]["'”’）)]*$/.test(rawSummary.trim())?rawSummary+'…':rawSummary;
         const extra=item.matches?.find(hit=>hit.field==='body'||hit.field==='topic'||hit.language==='original'&&!!item.metadataTranslation&&['title','summary'].includes(hit.field));
+        const search=query.q?new URLSearchParams({q:query.q}):null;
+        if(search)for(const hit of item.matches??[])search.append('match',`${hit.field}:${hit.language}`);
         return <li key={item.id} className="reader-feed-row"><article>
-        <Link viewTransition to={`/items/${item.id}`} aria-label={title} draggable={false} className="reader-feed-entry">
+        <Link viewTransition to={`/items/${item.id}${search?'?'+search:''}`} aria-label={title} draggable={false} className="reader-feed-entry">
           <h2 className="reader-feed-title"><SearchHighlight text={title} query={query.q}/></h2>
           {summary&&<p className="reader-feed-summary"><SearchHighlight text={summary} query={query.q}/></p>}
           {extra&&<p className="reader-search-match">{({title:'标题',summary:'摘要',source:'来源',topic:'主题',body:'正文'})[extra.field]}{extra.language==='translation'?'译文':'原文'}命中：<SearchHighlight text={extra.snippet} query={query.q}/></p>}
