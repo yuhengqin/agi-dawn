@@ -210,7 +210,8 @@ test("private notes keep a conflicting draft and disappear when the session ends
 test('private reading keeps body and notes together, protects drafts and restores library filters',async()=>{
   let note={articleId:'daily-ui',text:'Saved note',version:1,updatedAt:null};
   const state={articleId:'daily-ui',starred:true,status:'reading',version:1,updatedAt:null};
-  const snapshot={id:'daily-snapshot',articleId:'daily-ui',title:'Daily reading',sourceName:'Source',author:'Author',publishedAt:null,discoveredAt:'2026-10-28T00:00:00Z',bodyRevision:2,createdAt:'2026-10-28T00:00:00Z',status:'partial',quality:'partial',issues:[{kind:'missing-figure',message:'图表需对照原文'}],resources:[],bodyHtml:'<p>Private body in the reading page.</p>',originalUrl:'https://example.com/daily'};
+  const picture='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="900"><rect width="1800" height="900" fill="white"/></svg>').toString('base64');
+  const snapshot={id:'daily-snapshot',articleId:'daily-ui',title:'Daily reading',sourceName:'Source',author:'Author',publishedAt:null,discoveredAt:'2026-10-28T00:00:00Z',bodyRevision:2,createdAt:'2026-10-28T00:00:00Z',status:'partial',quality:'partial',issues:[{kind:'missing-figure',message:'图表需对照原文'}],resources:[],bodyHtml:`<p>Private body in the reading page.</p><img src="${picture}" alt="Private diagram">`,originalUrl:'https://example.com/daily'};
   const browser=await chromium.launch();let web:WebServer|undefined;
   try{
     web=await startWebServer(fakeApi(async(url,res,req)=>{
@@ -248,8 +249,12 @@ test('private reading keeps body and notes together, protects drafts and restore
     for(const route of ['/admin/reader/articles/daily-ui','/admin/reader/snapshots/daily-snapshot']){
       await context.addCookies([{name:'testowner',value:'1',url:web.origin}]);await visit(page,web.origin+route);
       await expect(page.getByText('Private body in the reading page.',{exact:true})).toBeVisible();await page.getByLabel('私人笔记').fill('Private session draft');
+      const source=page.getByRole('button',{name:'查看大图：Private diagram',exact:true}),viewer=page.getByRole('dialog');
+      await source.click();await viewer.getByRole('button',{name:'原尺寸',exact:true}).click();await page.keyboard.press('Escape');await expect(viewer).toHaveCount(0);await expect(source).toBeFocused();
+      await source.click();await viewer.getByRole('button',{name:'原尺寸',exact:true}).click();
       await context.clearCookies();await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
       await expect(page).toHaveURL(/\/admin\/login/);await expect(page.getByText('Private body in the reading page.',{exact:true})).toHaveCount(0);await expect(page.getByLabel('私人笔记')).toHaveCount(0);
+      await expect(viewer).toHaveCount(0);await expect.poll(()=>page.evaluate(src=>[...document.images].filter(img=>img.src===src).length,picture)).toBe(0);
     }
   }finally{await browser.close();await web?.stop();}
 });

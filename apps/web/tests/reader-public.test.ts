@@ -2,6 +2,32 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { chromium, webkit, expect } from "./browser.ts";
 import { fakeApi, feedItem, itemDetail, readerPage, startWebServer, visit, type WebServer } from "./web-server.ts";
+import type { Page } from "@playwright/test";
+
+// Observe what is actually drawn, including an animation's temporary image, without depending on its implementation.
+async function sampleViewerMotion(page:Page,selector:string){
+  return page.evaluate(async selector=>{
+    const samples:{ms:number;box:{x:number;y:number;width:number;height:number}|null;focused:boolean;visibleSources:string[]}[]=[];
+    if(selector==='Escape'){
+      const target=document.activeElement!;
+      for(const type of ['keydown','keyup'])target.dispatchEvent(new KeyboardEvent(type,{key:'Escape',code:'Escape',bubbles:true}));
+    }else (document.querySelector(selector) as HTMLElement).click();
+    const start=performance.now();
+    await new Promise<void>(resolve=>{
+      const frame=()=>{
+        const dialog=document.querySelector('[role="dialog"]');
+        const images=[...dialog?.querySelectorAll('img')??[]].filter(img=>img.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}));
+        const rect=images.map(img=>img.getBoundingClientRect()).sort((a,b)=>b.width-a.width)[0];
+        const ms=performance.now()-start;
+        const visibleSources=[...document.querySelectorAll<HTMLImageElement>('img[role="button"]')].filter(img=>img.checkVisibility({checkVisibilityCSS:true})).map(img=>img.alt);
+        samples.push({ms,box:rect?{x:rect.x,y:rect.y,width:rect.width,height:rect.height}:null,focused:!!document.activeElement?.closest('[role="dialog"]'),visibleSources});
+        if(ms<430)requestAnimationFrame(frame);else resolve();
+      };
+      requestAnimationFrame(frame);
+    });
+    return samples;
+  },selector);
+}
 
 test('article like controls share pending requests and recover together after a failure',async()=>{
   const browser=await chromium.launch();let web:WebServer|undefined,release=()=>{},begun=()=>{},fail=false,liked=false;
@@ -147,6 +173,113 @@ test('image zoom steps start at the displayed size and preserve the viewed cente
     await dialog.getByRole('button',{name:'放大图片',exact:true}).click();await dialog.getByRole('button',{name:'下一张',exact:true}).click();
     await expect(dialog).toHaveAttribute('aria-label','图片 2 / 2');await expect(dialog.getByRole('button',{name:'放大图片',exact:true})).toBeEnabled();await expect.poll(async()=>(await geometry()).width).toBeCloseTo(initial.width,0);
     await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'查看大图：Wide diagram',exact:true})).toBeFocused();
+  }finally{await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`image viewer expands from the article and keeps its image and focus until it returns (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined;
+  const picture='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1200"><rect width="2400" height="1200" fill="white"/></svg>').toString('base64');
+  try{
+    web=await startWebServer(fakeApi(url=>{if(url.pathname==='/api/site/items/image-motion')return itemDetail({id:'image-motion',title:'Image motion',bodyHtml:`<p><img src="${picture}" alt="Motion diagram"></p>`});if(url.pathname==='/api/site/engagement')return {items:[]};}));
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'no-preference'});await visit(page,web.origin+'/items/image-motion');
+    const source=page.getByRole('button',{name:'查看大图：Motion diagram',exact:true});await source.scrollIntoViewIfNeeded();await source.focus();const origin=(await source.boundingBox())!;
+    const opening=await sampleViewerMotion(page,'img[alt="Motion diagram"]');
+    const dialog=page.getByRole('dialog'),image=dialog.getByRole('img');await expect(image).toBeVisible();const expanded=(await image.boundingBox())!;
+    assert(expanded.width>origin.width+100);
+    assert(opening.some(frame=>frame.box&&frame.box.width>origin.width+5&&frame.box.width<expanded.width-5),'opening visibly passes through sizes between the article image and the fitted image');
+    const closing=await sampleViewerMotion(page,'Escape');
+    assert(closing.some(frame=>frame.box&&frame.box.width>origin.width+5&&frame.box.width<expanded.width-5),'closing visibly shrinks the retained image back towards the article');
+    assert(closing.filter(frame=>frame.ms>50&&frame.ms<130).every(frame=>frame.box&&frame.focused),'the image and modal focus remain during the return animation');
+    await expect(dialog).toHaveCount(0);await expect(source).toBeVisible();await expect(source).toBeFocused();
+    const returned=(await source.boundingBox())!;assert(Math.abs(returned.x-origin.x)<1&&Math.abs(returned.y-origin.y)<1,'returning does not shift the article');
+  }finally{await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`image viewer returns a panned image to the current thumbnail when sources repeat (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined;
+  const picture='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="3840" height="1600"><rect width="3840" height="1600" fill="white"/></svg>').toString('base64');
+  try{
+    web=await startWebServer(fakeApi(url=>{if(url.pathname==='/api/site/items/image-return')return itemDetail({id:'image-return',title:'Image return',bodyHtml:`<div style="display:flex;gap:60px"><img style="width:240px" src="${picture}" alt="First thumbnail"><img style="width:240px" src="${picture}" alt="Second thumbnail"></div>`});if(url.pathname==='/api/site/engagement')return {items:[]};}));
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'no-preference'});await visit(page,web.origin+'/items/image-return');
+    const first=page.getByRole('button',{name:'查看大图：First thumbnail',exact:true}),second=page.getByRole('button',{name:'查看大图：Second thumbnail',exact:true});
+    await first.click();const dialog=page.getByRole('dialog');await dialog.getByRole('button',{name:'下一张',exact:true}).click();await expect(dialog).toHaveAttribute('aria-label','图片 2 / 2');
+    await dialog.getByRole('button',{name:'原尺寸',exact:true}).click();const stage=page.getByRole('region',{name:'可滚动图片',exact:true});await stage.evaluate(el=>{el.scrollLeft=330;el.scrollTop=100;});
+    const displayed=(await dialog.getByRole('img').boundingBox())!;const target=(await second.boundingBox())!;
+    const closing=await sampleViewerMotion(page,'[role="dialog"] button[aria-label="关闭"]');
+    const firstFrame=closing.find(frame=>frame.box)?.box;assert(firstFrame&&Math.abs(firstFrame.width-displayed.width)<100,'closing starts at the panned scale instead of resetting to fit');
+    assert(closing.filter(frame=>frame.ms>50&&frame.ms<130).every(frame=>frame.focused),'closing retains modal focus when the zoom control becomes disabled');
+    assert(closing.filter(frame=>frame.ms>50&&frame.ms<130).every(frame=>frame.visibleSources.includes('First thumbnail')&&!frame.visibleSources.includes('Second thumbnail')),'a switched return restores the earlier thumbnail while only its current target remains hidden');
+    const nearTarget=closing.find(frame=>frame.ms>150&&frame.box&&Math.abs(frame.box.width-target.width)<15)?.box;
+    assert(nearTarget&&Math.abs(nearTarget.x-target.x)<15&&Math.abs(nearTarget.y-target.y)<15,'the return ends at the current DOM thumbnail, including when URLs repeat');
+    await expect(dialog).toHaveCount(0);await expect(first).toBeVisible();await expect(second).toBeVisible();await expect(first).toBeFocused();
+  }finally{await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`image viewer survives interrupted entrances, resize, repeated close and reduced motion (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined;
+  const picture='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1200"><rect width="1800" height="1200" fill="white"/></svg>').toString('base64');
+  try{
+    web=await startWebServer(fakeApi(url=>{if(url.pathname==='/api/site/items/image-lifecycle')return itemDetail({id:'image-lifecycle',title:'Image lifecycle',bodyHtml:`<img src="${picture}" alt="Lifecycle diagram">`});if(url.pathname==='/api/site/engagement')return {items:[]};}));
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'no-preference'});await visit(page,web.origin+'/items/image-lifecycle');
+    const source=page.getByRole('button',{name:'查看大图：Lifecycle diagram',exact:true}),dialog=page.getByRole('dialog');
+    for(let n=0;n<3;n++){
+      await source.click();await page.keyboard.press('Escape');await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);await expect(source).toBeVisible();await expect(source).toBeFocused();
+      await expect.poll(()=>page.evaluate(src=>[...document.images].filter(img=>img.src===src).length,picture)).toBe(1);
+    }
+    await source.click();await dialog.getByRole('button',{name:'原尺寸',exact:true}).click();
+    await page.setViewportSize({width:1100,height:800});await expect(dialog).toBeVisible();
+    await dialog.getByRole('button',{name:'适应窗口',exact:true}).click();
+    await page.waitForTimeout(380);await expect(dialog.getByRole('img')).toBeVisible();
+    await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(source).toBeVisible();
+    await page.emulateMedia({reducedMotion:'reduce'});await source.press('Enter');
+    await expect(dialog.getByRole('button',{name:'原尺寸',exact:true})).toBeEnabled();
+    assert.equal(await dialog.evaluate(el=>el.getAnimations({subtree:true}).filter(a=>a.playState==='running').length),0,'reduced motion does not run an image or backdrop animation');
+    await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(source).toBeFocused();
+  }finally{await browser.close();await web?.stop();}
+});
+
+test('image viewer fades when the current thumbnail is outside the viewport and releases a replaced article',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  const picture='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="800"><rect width="1600" height="800" fill="white"/></svg>').toString('base64');
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/items/image-offscreen')return itemDetail({id:'image-offscreen',title:'Offscreen image',bodyHtml:`<img src="${picture}" alt="Visible diagram"><div style="height:2200px"></div><img src="${picture}" alt="Distant diagram">`});
+      if(url.pathname==='/api/site/items/replacement')return itemDetail({id:'replacement',title:'Replacement article',bodyHtml:'<p>New article content.</p>'});
+      if(url.pathname==='/api/site/engagement')return {items:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'no-preference'});await visit(page,web.origin+'/items/image-offscreen');
+    const source=page.getByRole('button',{name:'查看大图：Visible diagram',exact:true}),dialog=page.getByRole('dialog');
+    await source.click();await dialog.getByRole('button',{name:'下一张',exact:true}).click();const before=(await dialog.getByRole('img').boundingBox())!,scroll=await page.evaluate(()=>scrollY);
+    const closing=await sampleViewerMotion(page,'[role="dialog"] button[aria-label="关闭"]');
+    assert(closing.filter(frame=>frame.box).every(frame=>Math.abs(frame.box!.width-before.width)<1),'an offscreen return fades in place instead of flying through the article');
+    await expect(dialog).toHaveCount(0);assert.equal(await page.evaluate(()=>scrollY),scroll);await expect(source).toBeVisible();
+    await source.click();await dialog.getByRole('button',{name:'原尺寸',exact:true}).click();
+    await page.evaluate(()=>{void (globalThis as unknown as {__reactRouterDataRouter:{navigate:(path:string)=>Promise<void>}}).__reactRouterDataRouter.navigate('/items/replacement');});
+    await expect(page.getByRole('heading',{name:'Replacement article',exact:true})).toBeVisible();await expect(dialog).toHaveCount(0);
+    await expect.poll(()=>page.evaluate(src=>[...document.images].filter(img=>img.src===src).length,picture)).toBe(0);
+  }finally{await browser.close();await web?.stop();}
+});
+
+test('image viewer releases its source listeners after every close',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  const picture='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="900"><rect width="1800" height="900" fill="white"/></svg>').toString('base64');
+  try{
+    web=await startWebServer(fakeApi(url=>{if(url.pathname==='/api/site/items/image-listeners')return itemDetail({id:'image-listeners',title:'Listener cleanup',bodyHtml:`<img src="${picture}" alt="Listener diagram">`});if(url.pathname==='/api/site/engagement')return {items:[]};}));
+    const page=await browser.newPage({viewport:{width:1440,height:1000}});await visit(page,web.origin+'/items/image-listeners');
+    const cdp=await page.context().newCDPSession(page);
+    const countListeners=async()=>{
+      const {result}=await cdp.send('Runtime.evaluate',{expression:'document.querySelector(\'img[alt="Listener diagram"]\')'});
+      const {listeners}=await cdp.send('DOMDebugger.getEventListeners',{objectId:result.objectId!});
+      await cdp.send('Runtime.releaseObject',{objectId:result.objectId!});
+      return listeners.filter(listener=>listener.type==='medium-zoom:close'||listener.type==='medium-zoom:closed').length;
+    };
+    const source=page.getByRole('button',{name:'查看大图：Listener diagram',exact:true});assert.equal(await countListeners(),0);
+    for(let n=0;n<3;n++){
+      await source.click();const dialog=page.getByRole('dialog');await dialog.getByRole('button',{name:'原尺寸',exact:true}).click();
+      await dialog.getByRole('button',{name:'关闭',exact:true}).click();await expect(dialog).toHaveCount(0);
+      assert.equal(await countListeners(),0,'completed sessions release their source event listeners');
+    }
   }finally{await browser.close();await web?.stop();}
 });
 

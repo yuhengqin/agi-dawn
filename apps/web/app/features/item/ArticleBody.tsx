@@ -182,7 +182,8 @@ export function ArticleBody({ html }: { html: string }) {
       const index = list.indexOf(img);
       if (index < 0) return;
       e.preventDefault();
-      setImages(list.map((i) => ({ src: i.src, alt: i.alt })));
+      e.stopPropagation();
+      setImages(list.map((i) => ({ src: i.src, alt: i.alt, source: i })));
       setOpen(index);
     };
     const onKeyDown = (e: KeyboardEvent) => {
