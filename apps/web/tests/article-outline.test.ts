@@ -152,9 +152,10 @@ for (const engine of [chromium, webkit]) test(`the desktop outline collapses wit
     await page.reload();
     await expect(collapse).toBeVisible();
     await expect(nav).toBeVisible();
-    for (const width of [1280, 1440, 1920]) {
+    for (const width of [1920, 1440, 1280]) {
       await page.setViewportSize({ width, height: 768 });
-      for (const preference of ["窄", "默认", "宽"]) {
+      let defaultGain = 0;
+      for (const preference of ["默认", "窄", "宽"]) {
         await page.getByLabel("阅读显示设置", { exact: true }).click();
         await page.getByRole("group", { name: "正文宽度", exact: true }).getByRole("radio", { name: preference, exact: true }).check();
         await page.keyboard.press("Escape");
@@ -163,6 +164,11 @@ for (const engine of [chromium, webkit]) test(`the desktop outline collapses wit
         await collapse.click();
         await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().x)).toBeCloseTo(expanded.x, 1);
         await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThan(expanded.width);
+        const gain = await body.evaluate(el => el.getBoundingClientRect().width) - expanded.width;
+        if (preference === "默认") defaultGain = gain;
+        else if (preference === "窄") expect(gain).toBeCloseTo(defaultGain, 1);
+        else if (width === 1920) expect(gain - defaultGain).toBeCloseTo(100, 1);
+        else assert.ok(gain > defaultGain && gain <= defaultGain + 100, "wide text uses the extra space available in a smaller window");
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
         await expand.click();
         await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().x)).toBeCloseTo(expanded.x, 1);

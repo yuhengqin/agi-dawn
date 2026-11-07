@@ -674,6 +674,13 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
   .article-reading-layout.has-outline { max-width: calc(var(--reading-width, 760px) + 322px); grid-template-columns: minmax(0, 1fr) 224px; gap: 32px; }
   .public-article-reading[data-outline-collapsed="true"] .article-reading-layout.has-outline { grid-template-columns: minmax(0, 1fr) 52px; gap: 16px; }
   .public-article-reading[data-outline-collapsed="true"] .article-reading-layout.has-outline .article-reading-column { max-width: none; }
+  [data-reading-width="wide"] .public-article-reading[data-outline-collapsed="true"] .article-reading-layout.has-outline {
+    --article-outline-inset: max(0px, calc((100% - var(--reading-width) - 322px) / 2));
+    margin-inline: var(--article-outline-inset) 0;
+    /* Keep the left edge and leave at least 24px of the 84px right gutter. */
+    width: calc(100% - var(--article-outline-inset) + 60px);
+    max-width: calc(var(--reading-width) + 322px + 100px);
+  }
   .article-reading-layout > aside { display: block; padding-top: 8px; }
 }
 @media (min-width: 961px) and (max-width: 1279px) {
