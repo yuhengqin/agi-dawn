@@ -81,3 +81,96 @@ test("outline keyboard scrolling stays inside its boundary in WebKit", async () 
     await web.stop();
   }
 });
+
+for (const engine of [chromium, webkit]) test(`the desktop outline collapses without losing the reading point or nested state (${engine.name()})`, async () => {
+  const outline = [
+    { id: "start", level: 2, text: "Start" },
+    { id: "detail", level: 3, text: "Detail" },
+    { id: "middle", level: 2, text: "Middle" },
+    { id: "end", level: 2, text: "End" },
+  ];
+  const item = itemDetail({ id: "outline-toggle", title: "可折叠目录", outline,
+    bodyHtml: outline.map(o => `<h${o.level} id="${o.id}">${o.text}</h${o.level}>` + `<p>${"Readable section content. ".repeat(100)}</p>`.repeat(4)).join(""),
+  });
+  const web = await startWebServer(outlineApi(item));
+  const browser = await engine.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1366, height: 768 }, reducedMotion: "reduce" });
+    await visit(page, web.origin + "/items/" + item.id);
+    const nav = page.getByRole("navigation", { name: "本文目录", exact: true });
+    const collapse = page.getByRole("button", { name: "收起本文目录", exact: true });
+    const expand = page.getByRole("button", { name: "展开本文目录", exact: true });
+    const body = page.getByRole("region", { name: "文章正文", exact: true });
+    await expect(collapse).toHaveAttribute("aria-expanded", "true");
+    assert.equal(await collapse.getAttribute("aria-controls"), await nav.getAttribute("id"));
+    await nav.getByRole("button", { name: "收起：Start", exact: true }).click();
+    await page.evaluate(() => {
+      const from = document.getElementById("middle")!, to = document.getElementById("end")!;
+      scrollTo(0, scrollY + from.getBoundingClientRect().top + (to.getBoundingClientRect().top - from.getBoundingClientRect().top) * .35 - parseFloat(getComputedStyle(from).scrollMarginTop));
+    });
+    const ratio = () => page.evaluate(() => {
+      const from = document.getElementById("middle")!, to = document.getElementById("end")!;
+      return (parseFloat(getComputedStyle(from).scrollMarginTop) - from.getBoundingClientRect().top) / (to.getBoundingClientRect().top - from.getBoundingClientRect().top);
+    });
+    const before = await body.boundingBox();
+    assert.ok(before);
+    await collapse.focus();
+    await page.keyboard.press("Enter");
+    await expect(nav).toBeHidden();
+    await expect(expand).toBeFocused();
+    await expect(expand).toHaveAttribute("aria-expanded", "false");
+    await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().x)).toBeCloseTo(before.x, 1);
+    await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThan(before.width);
+    await expect.poll(ratio).toBeCloseTo(.35, 2);
+    await page.keyboard.press("Tab");
+    assert.equal(await page.locator('nav[aria-label="本文目录"]').evaluate(el => el.contains(document.activeElement)), false, "collapsed links leave the tab order");
+    await expand.focus();
+    await page.keyboard.press("Space");
+    await expect(nav).toBeVisible();
+    await expect(collapse).toBeFocused();
+    await expect(nav.getByRole("link", { name: "Detail", exact: true })).toBeHidden();
+    await expect(nav.getByRole("link", { name: "Middle", exact: true })).toHaveAttribute("aria-current", "location");
+    await expect.poll(ratio).toBeCloseTo(.35, 2);
+    await collapse.click();
+    await page.getByRole("button", { name: "开启专注模式", exact: true }).click();
+    await expect(expand).toBeHidden();
+    const focusedBox = await body.boundingBox();
+    await page.getByRole("button", { name: "退出专注模式", exact: true }).click();
+    await expect(expand).toBeVisible();
+    assert.deepEqual(await body.boundingBox(), focusedBox, "focus mode retains the collapsed layout and reading point");
+    await page.setViewportSize({ width: 1100, height: 768 });
+    await expect(expand).toBeHidden();
+    await page.getByLabel("展开文章目录", { exact: true }).click();
+    await expect(page.getByRole("navigation", { name: "手机文章目录", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await expect(expand).toBeVisible();
+    await expand.click();
+    await nav.getByRole("link", { name: "End", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "End", exact: true })).toBeFocused();
+    await collapse.click();
+    await page.reload();
+    await expect(collapse).toBeVisible();
+    await expect(nav).toBeVisible();
+    for (const width of [1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 768 });
+      for (const preference of ["窄", "默认", "宽"]) {
+        await page.getByLabel("阅读显示设置", { exact: true }).click();
+        await page.getByRole("group", { name: "正文宽度", exact: true }).getByRole("radio", { name: preference, exact: true }).check();
+        await page.keyboard.press("Escape");
+        const expanded = await body.boundingBox();
+        assert.ok(expanded);
+        await collapse.click();
+        await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().x)).toBeCloseTo(expanded.x, 1);
+        await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThan(expanded.width);
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+        await expand.click();
+        await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().x)).toBeCloseTo(expanded.x, 1);
+        await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().width)).toBeCloseTo(expanded.width, 1);
+      }
+    }
+  } finally {
+    await browser.close();
+    await web.stop();
+  }
+});

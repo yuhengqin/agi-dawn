@@ -1,12 +1,12 @@
-import {useEffect,useLayoutEffect,useRef,useState,type MouseEvent} from 'react';
+import {useEffect,useId,useLayoutEffect,useRef,useState,type MouseEvent} from 'react';
 import type {OutlineEntry} from '@agidawn/contracts/site';
-import {IconChevronDown} from '../../components/icons';
-import {RailSection,useContainedScroll} from '../../components/ui/Page';
+import {IconChevronDown,IconChevronLeft,IconChevronRight,IconList} from '../../components/icons';
+import {useContainedScroll} from '../../components/ui/Page';
 import {useCurrentSection} from '../../lib/motion';
 import {READING_DISPLAY_CHANGE_EVENT} from '../../lib/local-state';
 import {captureReadingPoint,restoreReadingPoint,type ReadingPoint} from '../../lib/reading-position';
 
-export function useArticleReading(outline:OutlineEntry[],html:string|null,focus:boolean){
+export function useArticleReading(outline:OutlineEntry[],html:string|null,focus:boolean,outlineCollapsed:boolean){
   const scope=useRef<HTMLDivElement>(null),body=useRef<HTMLDivElement>(null),toolbar=useRef<HTMLDivElement>(null);
   const [progress,setProgress]=useState(0),[current,go]=useCurrentSection(outline.map(entry=>entry.id),!!html,0.25);
   const held=useRef<{point:ReadingPoint;bySection:boolean}|null>(null);
@@ -18,7 +18,7 @@ export function useArticleReading(outline:OutlineEntry[],html:string|null,focus:
   };
   const adjust=()=>{if(body.current&&held.current)restoreReadingPoint(body.current,ids.current,held.current.point,held.current.bySection);};
   const measure=()=>scope.current?.style.setProperty('--article-toolbar-h',(toolbar.current?.getBoundingClientRect().height??0)+'px');
-  useLayoutEffect(()=>{measure();adjust();},[html,focus]);
+  useLayoutEffect(()=>{measure();adjust();},[html,focus,outlineCollapsed]);
   useLayoutEffect(()=>{
     if(!body.current||!scope.current)return;
     const root=body.current,bar=toolbar.current,container=scope.current;
@@ -64,19 +64,29 @@ function OutlineLinks({outline,current,navigate}:OutlineProps){
   })}</ol>;
 }
 
-export function ArticleOutline(props:OutlineProps&{progress:number}){
+export function ArticleOutline({collapsed,onToggle,...props}:OutlineProps&{progress:number;collapsed:boolean;onToggle:()=>void}){
+  const id=useId();
   const [nav,overscroll]=useContainedScroll<HTMLElement>();
   useEffect(()=>{
+    if(collapsed)return;
     const box=nav.current,active=box?.querySelector<HTMLElement>('[aria-current="location"]');if(!box||!active)return;
     const outer=box.getBoundingClientRect(),inner=active.getBoundingClientRect();
     if(inner.top<outer.top)box.scrollTop-=outer.top-inner.top;else if(inner.bottom>outer.bottom)box.scrollTop+=inner.bottom-outer.bottom;
-  },[props.current]);
-  return <RailSection title={<span className="flex justify-between gap-3"><span>本文目录</span><span className="font-normal tabular-nums" aria-hidden="true">{props.progress}%</span></span>} shrink>
-    <nav ref={nav} aria-label="本文目录" tabIndex={overscroll?0:undefined} className={`article-outline scrollbar-thin overflow-y-auto ${overscroll}`}
+  },[props.current,collapsed]);
+  const label=collapsed?'展开本文目录':'收起本文目录';
+  return <section className="article-outline-section" data-reading-controls>
+    <div className="article-outline-header">
+      <button type="button" className="article-outline-toggle" aria-label={label} title={label} aria-expanded={!collapsed} aria-controls={id} onClick={onToggle}>
+        {collapsed?<><IconChevronLeft size={14}/><IconList size={16}/></>:<IconChevronRight size={16}/>}
+      </button>
+      <h2 hidden={collapsed}>本文目录</h2>
+      <span hidden={collapsed} className="article-outline-progress" aria-hidden="true">{props.progress}%</span>
+    </div>
+    <nav id={id} ref={nav} hidden={collapsed} aria-label="本文目录" tabIndex={overscroll?0:undefined} className={`article-outline scrollbar-thin overflow-y-auto ${overscroll}`}
       onKeyDown={event=>{const box=event.currentTarget;if(box.scrollHeight<=box.clientHeight||event.altKey||event.ctrlKey||event.metaKey)return;
         const up=['ArrowUp','PageUp','Home'].includes(event.key)||(event.key===' '&&event.shiftKey),down=['ArrowDown','PageDown','End'].includes(event.key)||(event.key===' '&&!event.shiftKey);
         if((up&&box.scrollTop<=0)||(down&&box.scrollTop+box.clientHeight>=box.scrollHeight-1))event.preventDefault();}}><OutlineLinks {...props}/></nav>
-  </RailSection>;
+  </section>;
 }
 
 export function MobileArticleOutline(props:OutlineProps&{progress:number}){

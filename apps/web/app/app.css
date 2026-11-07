@@ -672,6 +672,8 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 }
 @media (min-width: 1280px) {
   .article-reading-layout.has-outline { max-width: calc(var(--reading-width, 760px) + 322px); grid-template-columns: minmax(0, 1fr) 224px; gap: 32px; }
+  .public-article-reading[data-outline-collapsed="true"] .article-reading-layout.has-outline { grid-template-columns: minmax(0, 1fr) 52px; gap: 16px; }
+  .public-article-reading[data-outline-collapsed="true"] .article-reading-layout.has-outline .article-reading-column { max-width: none; }
   .article-reading-layout > aside { display: block; padding-top: 8px; }
 }
 @media (min-width: 961px) and (max-width: 1279px) {
@@ -706,6 +708,14 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 .article-reading-body .prose > :first-child { margin-top: 0; }
 .article-progress { position: fixed; z-index: 45; top: 0; left: 194px; right: 0; height: 2px; pointer-events: none; }
 .article-progress > div { height: 100%; background: var(--accent); transform-origin: left; transform: scaleX(var(--article-progress)); }
+.article-outline-section { display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--line); padding-top: 14px; }
+.article-outline-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--ink-3); font-size: 12px; }
+.article-outline-header h2 { font-weight: 600; }
+.article-outline-progress { margin-left: auto; font-variant-numeric: tabular-nums; }
+.article-outline-toggle { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 2px; min-width: 28px; min-height: 28px; border: 1px solid var(--line); border-radius: 9999px; background: var(--surface); }
+.article-outline-toggle[aria-expanded="false"] { width: 52px; min-height: 32px; }
+.article-outline-toggle:hover { color: var(--accent); background: var(--raised); }
+.article-outline-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .article-outline { min-height: 160px; }
 .article-outline-list { border-left: 1px solid var(--line); }
 .article-outline-list li:not([hidden]) { display: flex; align-items: flex-start; position: relative; }

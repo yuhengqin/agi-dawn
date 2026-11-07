@@ -27,14 +27,14 @@ export function meta({loaderData}:Route.MetaArgs){return pageMeta({title:loaderD
 
 const notices={pending:"全文暂未就绪。可以先阅读摘要，或访问原文。",unavailable:"暂时无法取得全文，请访问原文。",partial:"正文有缺失，请对照原文。","not-permitted":"本来源暂以摘要与原文链接展示。",ready:""};
 export default function Item(){const item=useLoaderData<typeof loader>();return <ItemReading key={item.id} item={item}/>;}
-function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useState(false);
+function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useState(false),[outlineCollapsed,setOutlineCollapsed]=useState(false);
   const translated=item.body?.language==='translation'?item.body:null,metadata=item.metadataTranslation,outline=item.body?.outline??[],html=item.body?.html??null;
-  const reading=useArticleReading(outline,html,focus),outlineProps={outline,current:reading.current,navigate:reading.navigate,progress:reading.progress};
+  const reading=useArticleReading(outline,html,focus,outlineCollapsed),outlineProps={outline,current:reading.current,navigate:reading.navigate,progress:reading.progress};
   const figureIssues=item.bodyState.issues.filter(issue=>issue.kind==='missing-figure'),otherIssues=item.bodyState.issues.filter(issue=>issue.kind!=='missing-figure');
-  return <EngagementProvider items={[item]} trackView={item.id}><div ref={reading.scope} className="public-article-reading" data-reading-focus={focus}>
+  return <EngagementProvider items={[item]} trackView={item.id}><div ref={reading.scope} className="public-article-reading" data-reading-focus={focus} data-outline-collapsed={outlineCollapsed}>
   <PhoneBar title="文章"/>
   {html&&<ArticleProgress progress={reading.progress}/>}
-  <ArticleLayout readingDisplay right={html&&outline.length?<ArticleOutline {...outlineProps}/>:undefined}>
+  <ArticleLayout readingDisplay right={html&&outline.length?<ArticleOutline {...outlineProps} collapsed={outlineCollapsed} onToggle={()=>{reading.preserve();setOutlineCollapsed(value=>!value);}}/>:undefined}>
     <article className="public-article break-words pb-12 pt-5 lg:pt-0">
       <header className="article-heading"><h1 tabIndex={-1} className="article-title" data-search-content>{metadata?.title??item.title}</h1>
         <div className="article-meta"><div className="article-byline">
