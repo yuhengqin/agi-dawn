@@ -788,6 +788,48 @@ for(const engine of [chromium,webkit])test(`date month jumps retain drafts and t
   }finally{await browser.close();await web?.stop();}
 });
 
+for(const engine of [chromium,webkit])test(`not-found recovery searches public articles without stale filters (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined;
+  const article=feedItem({id:'recovered-result',title:'找到的技术文章'});
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/articles')return readerPage([article],url);
+      if(url.pathname==='/api/site/categories'||url.pathname==='/api/site/sources')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {groups:[],topics:[]};
+      if(url.pathname==='/api/site/engagement')return {items:[{id:article.id,views:0,likes:0,liked:false}]};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    const missing=web.origin+'/items/missing?q=old&category=stale&page=8';
+    const response=await page.goto(missing);assert.equal(response!.status(),404);
+    assert.match(response!.headers()['cache-control']!,/no-store/);
+    await page.waitForFunction(()=>(globalThis as {__reactRouterDataRouter?:{state:{initialized:boolean}}}).__reactRouterDataRouter?.state.initialized);
+    const input=page.getByRole('searchbox',{name:'搜索文章',exact:true});
+    await input.fill('  Agent 中文 & tools  ');await expect(page).toHaveURL(missing);
+    await input.press('Enter');
+    await expect(page).toHaveURL(web.origin+'/?'+new URLSearchParams({q:'Agent 中文 & tools'}));
+    await expect(page.getByRole('searchbox')).toHaveValue('Agent 中文 & tools');
+    await expect(page.getByRole('link',{name:article.title,exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'点赞',exact:true})).toBeEnabled();
+
+    await visit(page,web.origin+'/does-not-exist');
+    await page.getByRole('searchbox',{name:'搜索文章',exact:true}).fill('模型评测');
+    await page.getByRole('search').getByRole('button',{name:'搜索',exact:true}).click();
+    await expect(page).toHaveURL(web.origin+'/?'+new URLSearchParams({q:'模型评测'}));
+    await expect(page.getByRole('link',{name:article.title,exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'点赞',exact:true})).toBeEnabled();
+
+    await visit(page,missing);
+    const main=page.getByRole('main');
+    await expect(main.getByRole('link',{name:'给我们发邮件',exact:true})).toHaveAttribute('href','mailto:qin2522362171@gmail.com');
+    await main.getByRole('link',{name:'探索主题',exact:true}).focus();await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(web.origin+'/explore');
+    await expect(page.getByRole('heading',{level:1,name:'探索',exact:true})).toBeVisible();
+    await visit(page,missing);await page.getByRole('main').getByRole('link',{name:'浏览全部文章',exact:true}).click();
+    await expect(page).toHaveURL(web.origin+'/');
+    await expect(page.getByRole('link',{name:article.title,exact:true})).toBeVisible();
+  }finally{await browser.close();await web?.stop();}
+});
+
 for(const engine of [chromium,webkit])test(`global categories persist and browser history restores complete list and article positions (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined;
   const article=itemDetail({id:'history-article',title:'History article',category:'coding',bodyHtml:'<pre><code>const value = 1;</code></pre>'.repeat(3)+'<p>'+('Long article paragraph.</p><p>'.repeat(100))+'</p>'});

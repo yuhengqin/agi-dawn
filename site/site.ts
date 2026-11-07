@@ -5,7 +5,7 @@ export const SITE={
   feedbackExample:"例如：我在搜索某个关键词时遇到……我原本想……",feedbackLead:"内容或功能有问题，可以在这里反馈。",feedbackEmailHint:"留下邮箱，便于回复",
   description:"从关注的技术博客收录文章，按来源、主题和时间查找，保存阅读进度与文章版本。",tagline:"技术文章阅读与归档",
   keywords:["技术文章","工程博客","文章归档"] as string[],since:null as string|null,locale:"zh-CN",defaultUrl:"http://localhost:3000",
-  rootIcons:[] as string[],contactEmail:null as string|null,footerNote:null as string|null,icp:null as string|null,psb:null as string|null,github:null as string|null,
+  rootIcons:[] as string[],contactEmail:"qin2522362171@gmail.com" as string|null,footerNote:null as string|null,icp:null as string|null,psb:null as string|null,github:null as string|null,
   organization:{name:"AGI黎明",founder:null as Founder|null},crawlerName:"AGIDawnReader/1.0",
 } as const;
 

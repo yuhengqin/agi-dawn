@@ -1,0 +1,120 @@
+.not-found-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100dvh - 120px);
+  padding: 40px 16px;
+  text-align: center;
+}
+.not-found-content { width: 100%; max-width: 680px; }
+
+/* Slanted circles and folded edges, inspired by 404-pages/random404. */
+.not-found-graphic {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto 28px;
+  color: var(--accent-contrast);
+}
+.not-found-clip { position: relative; transform: skew(-45deg); }
+.not-found-shadow { position: relative; width: 116px; height: 140px; overflow: hidden; }
+.not-found-digit {
+  position: relative;
+  top: 12px;
+  display: block;
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  background: var(--accent);
+  font-size: 94px;
+  font-weight: 750;
+  line-height: 116px;
+  transform: skew(45deg);
+}
+.not-found-clip:nth-child(2) .not-found-shadow {
+  box-shadow: inset 16px 0 18px -14px color-mix(in srgb, var(--ink) 35%, transparent), 16px 0 18px -14px color-mix(in srgb, var(--ink) 35%, transparent);
+}
+.not-found-clip:first-child::after,
+.not-found-clip:last-child::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  right: -6px;
+  width: 8px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 25%, transparent), transparent);
+  pointer-events: none;
+}
+.not-found-clip:last-child::after { right: auto; left: -6px; }
+.not-found-content h1 { margin: 0; color: var(--ink); font-size: 30px; font-weight: 700; line-height: 1.4; }
+.not-found-description { margin-top: 16px; color: var(--ink-3); font-size: 16px; line-height: 1.8; }
+.not-found-description p + p { margin-top: 4px; }
+
+.not-found-search {
+  display: flex;
+  width: 100%;
+  max-width: 460px;
+  margin: 28px auto 0;
+  border: 1px solid var(--ink-4);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+.not-found-search:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.not-found-search input { flex: 1; min-width: 0; min-height: 48px; padding: 10px 16px; border: 0; background: transparent; color: var(--ink); font-size: 16px; outline: none; }
+.not-found-search input::placeholder { color: var(--ink-3); }
+.not-found-search button {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 60px;
+  min-height: 48px;
+  border-radius: 0 calc(var(--radius-control) - 1px) calc(var(--radius-control) - 1px) 0;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  transition: background-color 150ms;
+}
+.not-found-search button:hover { background: var(--accent-ink); }
+.not-found-search button:focus-visible { outline-offset: -4px; outline-color: currentColor; }
+
+/* Opposite-direction color wipes, inspired by 404-pages/particles404. */
+.not-found-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin-top: 24px; }
+.not-found-button {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
+  min-height: 46px;
+  padding: 10px 24px;
+  overflow: hidden;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 14.5px;
+  font-weight: 500;
+  transition: color 300ms ease;
+}
+.not-found-button::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: var(--surface);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 300ms ease;
+  pointer-events: none;
+}
+.not-found-button:is(:hover, :focus-visible) { color: var(--accent-ink); }
+.not-found-button:is(:hover, :focus-visible)::before { transform: scaleX(1); }
+.not-found-button-secondary { background: var(--surface); color: var(--accent-ink); }
+.not-found-button-secondary::before { background: var(--accent); transform-origin: left; }
+.not-found-button-secondary:is(:hover, :focus-visible) { color: var(--accent-contrast); }
+.not-found-button:active { opacity: 0.85; }
+.not-found-contact { margin-top: 28px; color: var(--ink-3); font-size: 13px; line-height: 1.8; }
+.not-found-contact a { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+.not-found-contact a:hover { color: var(--accent); }
