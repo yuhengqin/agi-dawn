@@ -142,20 +142,26 @@ export function ErrorBoundary() {
   const notFound = status === 404;
   const body = (
     <div className="flex min-h-[70vh] items-center justify-center px-2 py-16">
-      <div className="max-w-sm text-center">
+      <div className={notFound ? "w-full max-w-lg text-center" : "max-w-sm text-center"}>
         <RingMark className="mx-auto mb-5 size-10 text-accent" />
         <div className="mono text-[12px] text-ink-4">{status}</div>
-        <h1 className="mt-1.5 text-[20px] font-bold text-ink">{notFound ? "找不到这个页面" : "暂时无法加载"}</h1>
-        <p className="mt-2 text-[13.5px] leading-relaxed text-ink-3">
-          {notFound ? "链接可能有误，或者这条内容已经下架。" : "页面暂时无法显示，请重新加载后再试。"}
+        <h1 className={notFound ? "mt-3 text-[30px] font-bold leading-tight text-ink" : "mt-1.5 text-[20px] font-bold text-ink"}>
+          {notFound ? "找不到这个页面" : "暂时无法加载"}
+        </h1>
+        <p className={notFound ? "mt-4 text-[16px] leading-7 text-ink-3" : "mt-2 text-[13.5px] leading-relaxed text-ink-3"}>
+          {notFound ? "链接可能已失效，或对应内容已下架。" : "页面暂时无法显示，请重新加载后再试。"}
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2.5">
+        {notFound && <p className="mt-1 text-[16px] leading-7 text-ink-3">你可以浏览全部文章，或按主题继续查找。</p>}
+        <div className={notFound ? "mt-8 flex flex-wrap items-center justify-center gap-4" : "mt-6 flex flex-wrap justify-center gap-2.5"}>
           {!notFound && <Link reloadDocument to={pathname + search + hash} className={buttonClass("primary")}>
             重新加载
           </Link>}
-          <Link reloadDocument to="/" className={buttonClass(notFound ? "primary" : "secondary")}>
-            文章
+          <Link reloadDocument to="/" className={buttonClass(notFound ? "primary" : "secondary", notFound ? "lg" : "md")}>
+            {notFound ? "浏览全部文章" : "文章"}
           </Link>
+          {notFound && <Link reloadDocument to="/explore" className="inline-flex min-h-11 items-center px-2 text-[14.5px] font-medium text-ink-2 underline decoration-line-strong underline-offset-4 hover:text-accent">
+            探索主题
+          </Link>}
         </div>
       </div>
     </div>
