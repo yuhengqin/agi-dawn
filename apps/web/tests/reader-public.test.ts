@@ -830,6 +830,97 @@ for(const engine of [chromium,webkit])test(`not-found recovery searches public a
   }finally{await browser.close();await web?.stop();}
 });
 
+for(const engine of [chromium,webkit])test(`not-found idle redirect respects activity, visibility and cancellation (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined,releaseRoute=()=>{},begunRoute=()=>{},holdRoute=false,homeReads=0;
+  const pendingRoute=new Promise<void>(resolve=>releaseRoute=resolve),startedRoute=new Promise<void>(resolve=>begunRoute=resolve);
+  const article=feedItem({id:'idle-home',title:'自动返回后的文章'});
+  try{
+    web=await startWebServer(fakeApi(async(url,res)=>{
+      if(url.pathname==='/api/site/articles'){homeReads++;return readerPage([article],url);}
+      if(holdRoute&&(url.pathname==='/api/site/sources'||url.pathname==='/api/site/topics')){begunRoute();await pendingRoute;}
+      if(url.pathname==='/api/site/categories'||url.pathname==='/api/site/sources')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+      if(url.pathname==='/api/site/engagement')return {items:[{id:article.id,views:0,likes:0,liked:false}]};
+      if(url.pathname==='/api/site/items/unavailable'){res.statusCode=500;return {};}
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    await page.clock.install({time:new Date('2026-11-07T02:00:00Z')});
+    await page.clock.pauseAt(new Date('2026-11-07T02:00:01Z'));
+    await visit(page,web.origin+'/explore');await visit(page,web.origin+'/does-not-exist');
+    const input=page.getByRole('searchbox',{name:'搜索文章',exact:true}),timer=page.getByRole('timer');
+    await expect(timer).toContainText('8');
+    await input.focus();await page.clock.runFor(7000);await expect(page).toHaveURL(web.origin+'/does-not-exist');
+    await page.keyboard.press('ArrowLeft');await expect(timer).toContainText('8');await page.clock.runFor(7000);
+    await input.fill('尚未提交');await expect(timer).toContainText('8');await page.clock.runFor(7000);
+    await page.mouse.move(10,10);await expect(timer).toContainText('8');await page.clock.runFor(7999);
+    await expect(page).toHaveURL(web.origin+'/does-not-exist');await expect(input).toHaveValue('尚未提交');
+    await page.clock.runFor(1);await expect(page).toHaveURL(web.origin+'/');
+    await expect(page.getByRole('link',{name:article.title,exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'点赞',exact:true})).toBeEnabled();
+    await page.goBack();await expect(page).toHaveURL(web.origin+'/explore');
+
+    await visit(page,web.origin+'/items/missing');await expect(timer).toContainText('8');
+    await page.clock.runFor(7000);
+    await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});document.dispatchEvent(new Event('visibilitychange'));});
+    await page.clock.runFor(30000);await expect(page).toHaveURL(web.origin+'/items/missing');
+    await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});document.dispatchEvent(new Event('visibilitychange'));});
+    await expect(timer).toContainText('8');await page.clock.runFor(7999);await expect(page).toHaveURL(web.origin+'/items/missing');
+    await page.getByRole('button',{name:'取消自动跳转',exact:true}).click();
+    await expect(page.getByRole('status')).toHaveText('已取消自动跳转。');
+    await page.clock.runFor(30000);await expect(page).toHaveURL(web.origin+'/items/missing');
+    await input.fill('取消后仍可搜索');await input.press('Enter');
+    await expect(page).toHaveURL(web.origin+'/?'+new URLSearchParams({q:'取消后仍可搜索'}));
+    await expect(page.getByRole('button',{name:'点赞',exact:true})).toBeEnabled();
+    await visit(page,web.origin+'/does-not-exist');await expect(timer).toContainText('8');
+    holdRoute=true;const readsBeforeRoute=homeReads,moving=page.locator('aside').getByRole('link',{name:'探索',exact:true}).click();await startedRoute;
+    await page.clock.runFor(20000);assert.equal(homeReads,readsBeforeRoute,'waiting for sidebar navigation must not trigger an idle navigation');
+    releaseRoute();await moving;
+    await expect(page.getByRole('heading',{level:1,name:'探索',exact:true})).toBeVisible();
+    await page.clock.runFor(20000);await expect(page).toHaveURL(web.origin+'/explore');
+    const unavailable=await page.goto(web.origin+'/items/unavailable');assert.equal(unavailable!.status(),503);
+    await expect(page.getByRole('heading',{level:1,name:'暂时无法加载',exact:true})).toBeVisible();
+    await expect(timer).toHaveCount(0);await page.clock.runFor(20000);
+    await expect(page).toHaveURL(web.origin+'/items/unavailable');
+  }finally{releaseRoute();await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`not-found idle redirect stops for pending document navigation (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined,release=()=>{},begun=()=>{},releaseExplore=()=>{},begunExplore=()=>{},holdExplore=false,plainHomeReads=0;
+  const pending=new Promise<void>(resolve=>release=resolve),started=new Promise<void>(resolve=>begun=resolve);
+  const pendingExplore=new Promise<void>(resolve=>releaseExplore=resolve),startedExplore=new Promise<void>(resolve=>begunExplore=resolve);
+  const article=feedItem({id:'idle-search',title:'等待后找到的文章'});
+  try{
+    web=await startWebServer(fakeApi(async(url,res)=>{
+      if(url.pathname==='/api/site/articles'){
+        if(url.searchParams.get('q')==='wait'){begun();await pending;}
+        else plainHomeReads++;
+        return readerPage([article],url);
+      }
+      if(holdExplore&&(url.pathname==='/api/site/sources'||url.pathname==='/api/site/topics')){begunExplore();await pendingExplore;}
+      if(url.pathname==='/api/site/categories'||url.pathname==='/api/site/sources')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+      if(url.pathname==='/api/site/engagement')return {items:[{id:article.id,views:0,likes:0,liked:false}]};
+      if(url.pathname==='/api/site/items/unavailable'){res.statusCode=500;return {};}
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    await visit(page,web.origin+'/does-not-exist');await expect(page.getByRole('timer')).toContainText('8');
+    const input=page.getByRole('searchbox',{name:'搜索文章',exact:true});await input.fill('wait');
+    let submitError:unknown;const submitting=input.press('Enter').catch(error=>{submitError=error;});await started;
+    // Clock commands can stall during native document navigation; observe the real timeout instead.
+    await new Promise(resolve=>setTimeout(resolve,9000));assert.equal(plainHomeReads,0,'waiting for a search must not trigger an idle navigation');
+    release();await submitting;assert.equal(submitError,undefined);
+    await expect(page).toHaveURL(web.origin+'/?q=wait');await expect(page.getByRole('link',{name:article.title,exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'点赞',exact:true})).toBeEnabled();
+
+    await visit(page,web.origin+'/does-not-exist');await expect(page.getByRole('timer')).toContainText('8');
+    holdExplore=true;let clickError:unknown;
+    const clicking=page.getByRole('main').getByRole('link',{name:'探索主题',exact:true}).click().catch(error=>{clickError=error;});await startedExplore;
+    await new Promise(resolve=>setTimeout(resolve,9000));assert.equal(plainHomeReads,0,'waiting for a recovery link must not trigger an idle navigation');
+    releaseExplore();await clicking;assert.equal(clickError,undefined);
+    await expect(page).toHaveURL(web.origin+'/explore');await expect(page.getByRole('heading',{level:1,name:'探索',exact:true})).toBeVisible();
+  }finally{release();releaseExplore();await browser.close();await web?.stop();}
+});
+
 for(const engine of [chromium,webkit])test(`global categories persist and browser history restores complete list and article positions (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined;
   const article=itemDetail({id:'history-article',title:'History article',category:'coding',bodyHtml:'<pre><code>const value = 1;</code></pre>'.repeat(3)+'<p>'+('Long article paragraph.</p><p>'.repeat(100))+'</p>'});

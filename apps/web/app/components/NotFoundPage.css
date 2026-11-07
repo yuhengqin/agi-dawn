@@ -115,6 +115,9 @@
 .not-found-button-secondary::before { background: var(--accent); transform-origin: left; }
 .not-found-button-secondary:is(:hover, :focus-visible) { color: var(--accent-contrast); }
 .not-found-button:active { opacity: 0.85; }
+.not-found-redirect { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 12px; min-height: 28px; margin-top: 16px; color: var(--ink-3); font-size: 13px; line-height: 1.8; font-variant-numeric: tabular-nums; }
+.not-found-redirect button { padding-block: 2px; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+.not-found-redirect button:hover { color: var(--accent); }
 .not-found-contact { margin-top: 28px; color: var(--ink-3); font-size: 13px; line-height: 1.8; }
 .not-found-contact a { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
 .not-found-contact a:hover { color: var(--accent); }
