@@ -1,6 +1,6 @@
 import {createContext,useContext,useEffect,useRef,useState,type ReactNode} from 'react';
 import type {ArticleEngagement,ReaderItemSummary} from '@agidawn/contracts/site';
-import {IconHeart} from '../../components/icons';
+import {IconEye,IconHeart} from '../../components/icons';
 
 type State={items:Record<string,ArticleEngagement>;ready:boolean;pending:ReadonlySet<string>;toggle:(id:string)=>Promise<void>};
 const EngagementContext=createContext<State|null>(null);
@@ -55,7 +55,7 @@ export function ArticleEngagementBar({item,compact=false,labelPrefix='',showView
     catch{setError('点赞未能保存，请重试。');}
   }
   return <div className={`flex flex-wrap items-center gap-x-4 text-ink-3 tabular-nums ${compact?'text-xs':'text-[13px]'}`}>
-    {showViews&&counts.views>0&&<span title="本站详情打开次数，同一浏览器30分钟内去重">阅读 {counts.views.toLocaleString('zh-CN')}</span>}
+    {showViews&&counts.views>0&&<span className="reader-meta-item" title="本站详情打开次数，同一浏览器30分钟内去重"><IconEye size={15}/><span><span className="sr-only">阅读 </span>{counts.views.toLocaleString('zh-CN')}</span></span>}
     <button type="button" aria-label={labelPrefix+(current?.liked?'取消点赞':'点赞')} aria-pressed={current?.liked??false} disabled={!state?.ready||!current||pending} onClick={()=>void toggle()}
       className={`inline-flex items-center gap-1.5 hover:text-accent aria-pressed:text-accent disabled:cursor-wait ${compact?'min-h-7 [@media(pointer:coarse)]:min-h-11':'min-h-11'}`} title="同一浏览器可点赞一次，再点取消">
       <IconHeart size={15} fill={current?.liked?'currentColor':'none'}/>{counts.likes>0&&<span>{counts.likes.toLocaleString('zh-CN')}</span>}

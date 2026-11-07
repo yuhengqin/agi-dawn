@@ -10,6 +10,7 @@ import {pageMeta,listPath} from "../../lib/seo";
 import {BEIJING_TIMEZONE} from "@agidawn/contracts/time";
 import {SearchHighlight} from './SearchHighlight';
 import {useReaderQuery} from './useReaderQuery';
+import {IconCalendar,IconClock,IconDoc} from '../../components/icons';
 
 export function readerMeta(value:ReaderPageData|undefined){
   const query={...value?.query};
@@ -60,9 +61,9 @@ export function ReaderPage({page,sources,topics,categories,query,latestArticleDa
           {extra&&<p className="reader-search-match">{({title:'标题',summary:'摘要',source:'来源',topic:'主题',body:'正文'})[extra.field]}{extra.language==='translation'?'译文':'原文'}命中：<SearchHighlight text={extra.snippet} query={query.q}/></p>}
         </Link>
         <div className="reader-feed-meta flex flex-col gap-x-6 gap-y-1 text-ink-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><Link className="hover:underline" to={readerLink(target,{sourceId:item.source.id})}>{item.source.name}</Link>
-            <time dateTime={item.publishedAt??item.discoveredAt}>{item.publishedAt?'':'收录于 '}{readerDate(item.publishedAt??item.discoveredAt)}</time>
-            {item.readingMinutes&&<span>约 {item.readingMinutes} 分钟</span>}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1"><Link className="reader-meta-item hover:underline" to={readerLink(target,{sourceId:item.source.id})}><IconDoc size={15}/><span>{item.source.name}</span></Link>
+            <time className="reader-meta-item whitespace-nowrap" dateTime={item.publishedAt??item.discoveredAt} title={item.publishedAt?'发布时间':'收录时间'}><IconCalendar size={15}/><span>{item.publishedAt?'':'收录于 '}{readerDate(item.publishedAt??item.discoveredAt)}</span></time>
+            {item.readingMinutes&&<span className="reader-meta-item whitespace-nowrap"><IconClock size={15}/><span>约 {item.readingMinutes} 分钟</span></span>}
             {item.bodyState.status==='pending'&&<span className="reader-body-status">全文暂未就绪</span>}
             {item.bodyState.status==='partial'&&item.bodyState.issues.some(issue=>issue.kind!=='missing-figure')&&<span className="reader-body-status" title="正文有缺失，请对照原文">正文不完整</span>}
           </div>

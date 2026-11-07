@@ -4,7 +4,7 @@ import type {Route} from "./+types/item";
 import type {ReaderItemDetail} from "@agidawn/contracts/site";
 import {loadOr404} from "../lib/api.server";
 import {PhoneBar} from "../components/shell/PhoneBar";
-import {IconDoc,IconExternal,IconClock,IconUser} from "../components/icons";
+import {IconCalendar,IconDoc,IconExternal,IconClock,IconUser} from "../components/icons";
 import {ArticleLayout} from "../components/ui/Page";
 import {ArticleBody} from "../features/item/ArticleBody";
 import {ArticleSearch} from "../features/item/ArticleSearch";
@@ -40,9 +40,9 @@ function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useS
         <div className="article-meta"><div className="article-byline">
           <Link className="article-source" data-search-content to={`/?${new URLSearchParams({sourceId:item.source.id})}`}><IconDoc size={15}/>{item.source.name}</Link>
           {item.author&&<span className="article-author"><IconUser size={15}/><span><span className="sr-only">作者：</span>{item.author}</span></span>}
-          <time dateTime={item.publishedAt??item.discoveredAt}><IconClock size={15}/><span><span className={item.publishedAt?"sr-only":undefined}>{item.publishedAt?"发布时间：":"收录时间："}</span>{readerDate(item.publishedAt??item.discoveredAt)}</span></time>
+          <time dateTime={item.publishedAt??item.discoveredAt}><IconCalendar size={15}/><span><span className={item.publishedAt?"sr-only":undefined}>{item.publishedAt?"发布时间：":"收录时间："}</span>{readerDate(item.publishedAt??item.discoveredAt)}</span></time>
           <ArticleEngagementBar item={item} compact/>
-          {item.readingMinutes&&<span>约 {item.readingMinutes} 分钟</span>}
+          {item.readingMinutes&&<span className="reader-meta-item whitespace-nowrap"><IconClock size={15}/><span>约 {item.readingMinutes} 分钟</span></span>}
           {translated&&<span className="article-language">中文译文</span>}
         </div>
           <a href={item.links.original} target="_blank" rel="noreferrer" className="article-tool-link article-original-link text-accent">打开原文<IconExternal size={16}/></a>
