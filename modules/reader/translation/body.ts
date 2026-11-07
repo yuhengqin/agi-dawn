@@ -1,11 +1,19 @@
 import * as cheerio from 'cheerio';
 import type {AnyNode,Element} from 'domhandler';
 import {sanitizeBody} from '@agidawn/backend/content/sanitize';
+import {isChineseText} from '@agidawn/backend/lib/text';
 
 type Request=(parts:string[],retry?:boolean)=>Promise<{t:string[]|null;receiptId:number}>;
 const blocks=new Set(['p','h1','h2','h3','h4','h5','h6','li','blockquote','figcaption','td','th','dt','dd','caption']);
 const container=/^(p|h[1-6]|li|blockquote|figcaption|td|th|dt|dd|caption|ul|ol|table|pre|figure|div)$/;
 const protectedElements='picture, video, img, code, math, svg';
+
+/** Infer the article's prose language, excluding protected code and generated reader notices. */
+export function isChineseBody(html:string,language?:string|null):boolean{
+  const $=cheerio.load(html,null,false);
+  $('pre,code,math,svg,[data-reader-embed],figure[data-reader-figure-status="missing"] > p:first-child').remove();
+  return isChineseText($.root().text(),language);
+}
 
 function shield(html:string){
   const $=cheerio.load(html,null,false),tokens:string[]=[],links:Array<Record<string,string>>=[];

@@ -54,6 +54,7 @@ export function normalizeTechnicalMarkup(html:string,baseUrl:string,trackIssues=
     const unsupported=svg.find("*").toArray().some(el=>["foreignobject","image","animate","animatetransform","set"].includes(el.name.toLowerCase()))||svg.html()!.length>1024*1024;
     if(unsupported) {
       const replacement=$("<p>").text(label||"图表需在原文查看");
+      if(!label)replacement.attr('data-reader-embed','true');
       mark(replacement,{kind:"missing-figure",message:"图表包含无法静态保存的内容，请对照原文。"});
       original.replaceWith(replacement);return;
     }

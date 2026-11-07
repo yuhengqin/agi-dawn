@@ -66,6 +66,31 @@ test('delayed bodies are eligible; code, images and link destinations survive tr
   assert.match(stored!.body_html,/data-code-kind="prompt"/);assert.match(stored!.body_html,/data-language="text"/);
 });
 
+test('English bodies with generated Chinese notices or Chinese product names still translate without a declared language',async()=>{
+  for(const html of [
+    '<p>People often ask me about open-source models.</p><p data-reader-embed="true"><a href="https://example.org/video">互动内容请访问原文查看。</a></p>',
+    '<p>Read.</p><figure data-reader-figure-status="missing"><p><a href="https://example.org/figure">此图未保存，查看原文</a></p></figure>',
+    '<p>Read.</p><svg viewBox="0 0 10 10"><foreignObject><p>Interactive drawing</p></foreignObject></svg>',
+    '<p>What 通义千问 teaches us about building better coding agents.</p>',
+  ]){
+    const {articleId}=await upsertMaterial({...input(html),language:undefined});
+    await run();
+    const item=await detail(articleId);
+    assert.equal(item.body?.language,'translation');
+    assert.equal(item.body.complete,true);
+  }
+});
+
+test('Chinese prose remains untranslated when its protected code contains much more English text',async()=>{
+  const html='<p>这是中文技术文章，代码保持原样，无需翻译正文。</p><pre><code>'+('const example = "English code stays unchanged";\n'.repeat(20))+'</code></pre>';
+  const {articleId}=await upsertMaterial({...input(html),language:undefined});
+  const calls=provider.hits();await run();
+  assert.equal(provider.hits(),calls);
+  assert.equal((await detail(articleId)).body?.language,'original');
+  const [state]=await sql`SELECT status FROM reader_translations WHERE article_id=${articleId}`;
+  assert.equal(state!.status,'skipped');
+});
+
 test('missing protected content is retried once, then retained as original and labelled partial',async()=>{
   const {articleId}=await upsertMaterial(input('<p>A good paragraph.</p><p>This never keeps <a href="https://example.org/safe">the link</a>.</p>'));
   await run();const item=await detail(articleId);

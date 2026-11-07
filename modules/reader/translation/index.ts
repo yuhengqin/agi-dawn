@@ -1,11 +1,10 @@
 import {sql,type Db} from '@agidawn/backend/db';
 import {emit,type MaterialCapture,type PublishedBodyInput} from '@agidawn/backend/modules';
-import {isChineseText} from '@agidawn/backend/lib/text';
 import {shutdownSignal} from '@agidawn/backend/lib/shutdown';
 import {canReadArticleBody} from '@agidawn/backend/publication/access';
 import {completeReceipt,rejectReceivedResponse,ModelOutputError,failureKind} from '@agidawn/backend/providers/receipts';
 import {requestTranslation} from './model.ts';
-import {translateHtml} from './body.ts';
+import {isChineseBody,translateHtml} from './body.ts';
 
 /** Only this creation event grants eligibility; republishing old articles cannot opt them in. */
 export async function registerTranslation({id}:{id:string},tx:Db){
@@ -25,14 +24,14 @@ export async function publicationTranslation(input:PublishedBodyInput){
 export async function translatePending(started=Date.now(),durationMs=240_000){
   if(process.env.MODEL_CALLS_ENABLED!=='true')return {done:0};
   let done=0;
-  const rows=await sql`SELECT t.article_id,t.body_revision,t.source_html,a.body_text,a.language FROM reader_translations t
+  const rows=await sql`SELECT t.article_id,t.body_revision,t.source_html,a.language FROM reader_translations t
     JOIN articles a ON a.id=t.article_id WHERE t.status='pending' AND t.source_html IS NOT NULL
     AND a.body_revision=t.body_revision AND a.body_html=t.source_html ORDER BY t.updated_at,t.article_id`;
   for(const row of rows){
     if(done>=30||Date.now()-started>durationMs||shutdownSignal.signal.aborted)break;
     const articleId=String(row.article_id),revision=Number(row.body_revision),source=String(row.source_html);
     if(!await canReadArticleBody(articleId))continue;
-    if(isChineseText(row.body_text??'',row.language)){
+    if(isChineseBody(source,row.language)){
       await sql`UPDATE reader_translations SET status='skipped',error='already Chinese',updated_at=now()
         WHERE article_id=${articleId} AND body_revision=${revision} AND source_html=${source}`;
       continue;

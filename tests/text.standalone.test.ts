@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { stripTags } from "@agidawn/backend/lib/text";
+import { isChineseText, stripTags } from "@agidawn/backend/lib/text";
 import {textToHtml} from "@agidawn/backend/content/sanitize";
+
+test('language inference requires predominantly Chinese text and honours declared languages',()=>{
+  for(const [text,language,expected] of [
+    ['People often ask me about open-source models. 互动内容请访问原文查看。',null,false],
+    ['What 通义千问 teaches us about building better coding agents',null,false],
+    ['这是介绍 AI 和 API 的中文技术文章，正文仍以中文为主。',null,true],
+    ['这是中文。','en',false],
+    ['An explicitly declared Chinese article.','zh-CN',true],
+    ['這是中文文章。','und',true],
+    ['日本語の技術記事です。',null,false],
+    ['한국어 기술 문서 漢字',null,false],
+    ['1234 --',null,false],
+  ] as const)assert.equal(isChineseText(text,language),expected,`${language??'unknown'}: ${text}`);
+});
 
 test("bare addresses in post text become safe links",()=>{
   const html=textToHtml("see https://arxiv.org/abs/2502.11089. <b>x</b>\n\n1. one\n2. two");
