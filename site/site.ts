@@ -31,6 +31,7 @@ export const ARTICLE_NAVIGATION={
   categoryOrder:['Agent','AI Coding','产品与应用','Evaluating','系统与性能','观点与方法','待分类'] as string[],
   topicShortcuts:['harness-long-running','mcp-tool-use','skills-extensions'] as string[],
 };
+export const ARTICLE_FOOTER={hideActionsForSources:['geoffrey-huntley'] as string[]};
 export const CARDS:Record<string,{kicker:string;title:string;subtitle:string;accent?:"hot"|"amber"}>={
   site:{kicker:SITE.name,title:SITE.tagline,subtitle:SITE.description},
   explore:{kicker:"文章",title:"探索",subtitle:"按技术主题或内容来源发现文章，查看最新收录与更新。"},

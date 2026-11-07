@@ -59,6 +59,29 @@ test('desktop reading improvements expose search evidence, immediate presets and
   }finally{await browser.close();await web?.stop();}
 });
 
+test('Geoffrey Huntley articles omit repeated footer actions while keeping the header and further reading',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  const article=itemDetail({id:'huntley-footer',title:'Huntley article',source:{id:'geoffrey-huntley',name:'Geoffrey Huntley'},author:'Geoffrey Huntley',
+    topics:[{slug:'mcp',name:'MCP'}],related:[feedItem({id:'related',title:'Another useful article'})]});
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/items/huntley-footer')return article;
+      if(url.pathname==='/api/site/engagement')return {items:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    await visit(page,web.origin+'/items/huntley-footer');
+    const footer=page.getByRole('contentinfo',{name:'文章后续阅读'});
+    await expect(footer.getByRole('link',{name:'文末打开原文',exact:true})).toHaveCount(0);
+    await expect(footer.getByRole('button')).toHaveCount(0);
+    await expect(footer.getByText('Geoffrey Huntley',{exact:true})).toHaveCount(0);
+    await expect(footer.getByRole('navigation',{name:'文末主题'}).getByRole('link',{name:'MCP',exact:true})).toBeVisible();
+    await expect(footer.getByRole('link',{name:'Another useful article',exact:true})).toBeVisible();
+    await expect(page.getByRole('link',{name:'Geoffrey Huntley',exact:true})).toHaveAttribute('href','/?sourceId=geoffrey-huntley');
+    await expect(page.getByRole('link',{name:'打开原文',exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'点赞',exact:true})).toHaveCount(1);
+  }finally{await browser.close();await web?.stop();}
+});
+
 test('search details retain the query, locate visible matches across markup and explain original-only evidence',async()=>{
   const browser=await chromium.launch();let web:WebServer|undefined;
   const lead='<p>'+('Unrelated introduction. '.repeat(150))+'</p>';

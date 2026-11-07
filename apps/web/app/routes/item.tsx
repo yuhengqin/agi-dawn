@@ -2,6 +2,7 @@ import {data,Link,useLoaderData} from "react-router";
 import {useState} from 'react';
 import type {Route} from "./+types/item";
 import type {ReaderItemDetail} from "@agidawn/contracts/site";
+import {ARTICLE_FOOTER} from "@agidawn/site";
 import {loadOr404} from "../lib/api.server";
 import {PhoneBar} from "../components/shell/PhoneBar";
 import {IconCalendar,IconDoc,IconExternal,IconClock,IconUser} from "../components/icons";
@@ -59,7 +60,7 @@ function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useS
       {translated&&!translated.complete&&<p className="article-status" role="status">译文尚不完整，未译段落保留原文；可打开原文对照。</p>}
       {html&&<div ref={reading.body} className="article-reading-body" role="region" aria-label="文章正文" data-search-content><ArticleBody html={html}/></div>}
       <footer role="contentinfo" aria-label="文章后续阅读" className="article-footer">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2"><span className="text-sm text-ink-3">{item.source.name}</span><a href={item.links.original} target="_blank" rel="noreferrer" aria-label="文末打开原文" className="article-tool-link text-accent">打开原文<IconExternal size={16}/></a><ArticleEngagementBar item={item} labelPrefix="文末" showViews={false}/></div>
+        {!ARTICLE_FOOTER.hideActionsForSources.includes(item.source.id)&&<div className="flex flex-wrap items-center gap-x-6 gap-y-2"><span className="text-sm text-ink-3">{item.source.name}</span><a href={item.links.original} target="_blank" rel="noreferrer" aria-label="文末打开原文" className="article-tool-link text-accent">打开原文<IconExternal size={16}/></a><ArticleEngagementBar item={item} labelPrefix="文末" showViews={false}/></div>}
         {item.topics.length>0&&<nav aria-label="文末主题" className="article-topics">{item.topics.map(topic=><Link key={topic.slug} to={`/?${new URLSearchParams({topic:topic.slug})}`}>{topic.name}</Link>)}</nav>}
         {!!item.related?.length&&<div className="mt-6"><h2 className="text-sm font-medium">继续阅读</h2><ul className="mt-3 space-y-3">{item.related.map(related=><li key={related.id}><Link viewTransition to={'/items/'+related.id} className="text-accent hover:underline">{related.metadataTranslation?.title??related.title}</Link><span className="ml-3 text-xs text-ink-3">{related.source.name}</span></li>)}</ul></div>}
       </footer>
