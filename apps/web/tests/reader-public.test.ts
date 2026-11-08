@@ -176,18 +176,22 @@ test('image zoom steps start at the displayed size and preserve the viewed cente
   }finally{await browser.close();await web?.stop();}
 });
 
-for(const engine of [chromium,webkit])test(`image viewer expands from the article and keeps its image and focus until it returns (${engine.name()})`,async()=>{
+for(const engine of [chromium,webkit])for(const reducedMotion of ['no-preference','reduce'] as const)test(`image viewer expands from the article and keeps its image and focus until it returns (${engine.name()}, ${reducedMotion})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined;
   const picture='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1200"><rect width="2400" height="1200" fill="white"/></svg>').toString('base64');
   try{
     web=await startWebServer(fakeApi(url=>{if(url.pathname==='/api/site/items/image-motion')return itemDetail({id:'image-motion',title:'Image motion',bodyHtml:`<p><img src="${picture}" alt="Motion diagram"></p>`});if(url.pathname==='/api/site/engagement')return {items:[]};}));
-    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'no-preference'});await visit(page,web.origin+'/items/image-motion');
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion});await visit(page,web.origin+'/items/image-motion');
     const source=page.getByRole('button',{name:'查看大图：Motion diagram',exact:true});await source.scrollIntoViewIfNeeded();await source.focus();const origin=(await source.boundingBox())!;
     const opening=await sampleViewerMotion(page,'img[alt="Motion diagram"]');
     const dialog=page.getByRole('dialog'),image=dialog.getByRole('img');await expect(image).toBeVisible();const expanded=(await image.boundingBox())!;
     assert(expanded.width>origin.width+100);
+    assert(opening.every(frame=>frame.box||frame.visibleSources.includes('Motion diagram')),'opening keeps an image visible while handing off to the interactive viewer');
     assert(opening.some(frame=>frame.box&&frame.box.width>origin.width+5&&frame.box.width<expanded.width-5),'opening visibly passes through sizes between the article image and the fitted image');
     const closing=await sampleViewerMotion(page,'Escape');
+    const returning=closing.flatMap(frame=>frame.box?[frame.box.width]:[]);
+    assert(returning.every((width,at)=>!at||width<=returning[at-1]!+1),'the expanded image does not flash back after returning to the article');
+    assert(closing.every(frame=>frame.box||frame.visibleSources.includes('Motion diagram')),'closing keeps an image visible through the return handoff');
     assert(closing.some(frame=>frame.box&&frame.box.width>origin.width+5&&frame.box.width<expanded.width-5),'closing visibly shrinks the retained image back towards the article');
     assert(closing.filter(frame=>frame.ms>50&&frame.ms<130).every(frame=>frame.box&&frame.focused),'the image and modal focus remain during the return animation');
     await expect(dialog).toHaveCount(0);await expect(source).toBeVisible();await expect(source).toBeFocused();
@@ -234,7 +238,6 @@ for(const engine of [chromium,webkit])test(`image viewer survives interrupted en
     await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(source).toBeVisible();
     await page.emulateMedia({reducedMotion:'reduce'});await source.press('Enter');
     await expect(dialog.getByRole('button',{name:'原尺寸',exact:true})).toBeEnabled();
-    assert.equal(await dialog.evaluate(el=>el.getAnimations({subtree:true}).filter(a=>a.playState==='running').length),0,'reduced motion does not run an image or backdrop animation');
     await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(source).toBeFocused();
   }finally{await browser.close();await web?.stop();}
 });

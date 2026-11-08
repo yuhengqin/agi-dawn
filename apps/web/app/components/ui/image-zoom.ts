@@ -12,12 +12,10 @@ interface Session {
 export function createImageZoom(source:HTMLImageElement,picture:HTMLImageElement,stage:HTMLElement,layer:HTMLElement,onOpened:()=>void){
   let session:Session|null=null,disposed=false,returning=false,opened=false;
   const hidden=new Map<HTMLImageElement,string>();
-  const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
   const reveal=()=>{
     if(disposed||returning)return;
     opened=true;
     onOpened();
-    if(session)session.clone.style.visibility='hidden';
   };
   const attach=(origin:HTMLImageElement,enter:boolean)=>{
     const bounds=stage.getBoundingClientRect();
@@ -76,7 +74,7 @@ export function createImageZoom(source:HTMLImageElement,picture:HTMLImageElement
       void session.zoom.close();
     }
   };
-  if(reduced())reveal();else attach(source,true);
+  attach(source,true);
 
   return {
     dispose,
@@ -87,7 +85,6 @@ export function createImageZoom(source:HTMLImageElement,picture:HTMLImageElement
       const inFlight=!opened&&session&&!session.closing;
       const from=(inFlight?session!.clone:currentPicture).getBoundingClientRect();
       const target=current.getBoundingClientRect();
-      if(reduced()){dispose();return;}
       if(!current.isConnected||!target.width||!target.height||target.bottom<=0||target.top>=innerHeight||target.right<=0||target.left>=innerWidth){
         const visual=inFlight?session!.clone:currentPicture;
         await visual.animate([{opacity:1},{opacity:0}],{duration:300,easing:'ease-out',fill:'forwards'}).finished.catch(()=>{});
@@ -119,7 +116,6 @@ export function createImageZoom(source:HTMLImageElement,picture:HTMLImageElement
       await active.zoom.close();
       await active.closed;
       dispose();
-      currentPicture.style.removeProperty('visibility');
     },
   };
 }

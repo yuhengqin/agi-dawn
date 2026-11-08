@@ -806,17 +806,17 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 .prose figure[data-reader-figure-status="missing"], .prose p[data-reader-embed="true"] { padding: 12px 16px; background: var(--bg-sunk); border-radius: var(--radius-control); font-size: 0.9em; }
 [data-theme="dark"] .article-prose img:not([data-reader-inline="true"]) { filter: brightness(0.88); }
 [data-theme="dark"] .article-prose img:hover { filter: none; }
-.lightbox-backdrop { transition: opacity 300ms; }
+/* The user-triggered image viewer keeps its short transition under reduced motion. */
+.lightbox-backdrop { transition: opacity 300ms !important; }
 @starting-style { .lightbox-backdrop { opacity: 0; } }
 .lightbox[data-phase="closing"] .lightbox-backdrop { opacity: 0; }
 .lightbox[data-phase="opening"] .lightbox-img { visibility: hidden; }
+/* Switch both images in the same render; the return copy explicitly becomes visible on close. */
+.lightbox[data-phase="open"] .lightbox-transition-layer { visibility: hidden; }
 .lightbox-stage { position: relative; display: flex; width: 100%; height: calc(100dvh - 80px); min-width: 0; min-height: 0; overflow: auto; overflow-anchor: none; overscroll-behavior: contain; }
 .lightbox-tools { z-index: 2; }
 .lightbox-transition-layer { z-index: 1; }
 .lightbox-transition-image.medium-zoom-image--opened { max-width: none; max-height: none; margin: 0; transition: transform 300ms cubic-bezier(0.2, 0, 0.2, 1), clip-path 300ms cubic-bezier(0.2, 0, 0.2, 1) !important; }
-@media (prefers-reduced-motion: reduce) {
-  .lightbox-backdrop, .lightbox-transition-image.medium-zoom-image--opened { transition: none !important; }
-}
 .lightbox-stage .lightbox-img { flex: none; margin: auto; max-width: 100%; max-height: 100%; }
 .lightbox-stage.is-enlarged { cursor: grab; }
 .lightbox-stage.is-enlarged:active { cursor: grabbing; }
