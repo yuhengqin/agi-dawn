@@ -46,7 +46,12 @@ export function BackToTop({onActivate}:{onActivate?:()=>void}={}) {
       title="回到顶部"
       aria-hidden={!shown}
       disabled={!shown}
-      onClick={() => {onActivate?.();window.scrollTo({ top: 0, behavior: scrollBehavior() });}}
+      onClick={event => {
+        onActivate?.();
+        // Chromium interrupts smooth scrolling if the focused button becomes hidden mid-scroll.
+        event.currentTarget.blur();
+        window.scrollTo({ top: 0, behavior: scrollBehavior() });
+      }}
       className="floating-tool-button floating-back-to-top"
     >
       <IconArrowUpToLine size={20} />

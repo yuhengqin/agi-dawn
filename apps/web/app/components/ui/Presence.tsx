@@ -1,7 +1,7 @@
 // Enter and leave animations with CSS keyframes instead of an animation library (about 35 KB of
 // compressed JavaScript on every page). An element mounts with its entrance class; when it goes away
-// it stays mounted with its exit class for `duration`, then unmounts. Reduced motion is handled by the
-// global rule in app.css. Content present at the first render never animates in.
+// it stays mounted with its exit class for `duration`, then unmounts. Content present at the first
+// render never animates in.
 import { cloneElement, useEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 
 type Animatable = ReactElement<{ className?: string; style?: CSSProperties }>;

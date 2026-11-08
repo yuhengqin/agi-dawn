@@ -1,18 +1,14 @@
-// Moving the page for the reader: their reduced-motion preference, jumps to anchors, and which section of
-// the page they are reading.
+// Appearance transitions, smooth jumps to anchors, and which section the reader is viewing.
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
-/** Whether the reader asked for reduced motion: still drawings, no animations, instant jumps. */
-export const reducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-/** How the page scrolls for the reader: smoothly, or at once under reduced motion. */
-export const scrollBehavior = (): ScrollBehavior => (reducedMotion() ? "auto" : "smooth");
+/** Reader-triggered scrolling stays smooth under either system motion preference. */
+export const scrollBehavior = (): ScrollBehavior => "smooth";
 
 /** Cross-fades an appearance change after React has committed its DOM, keeping page navigation separate. */
 export function transitionAppearance(update: () => void) {
   const apply = () => flushSync(update);
-  if (document.startViewTransition && !reducedMotion()) {
+  if (document.startViewTransition) {
     delete document.documentElement.dataset.vt;
     document.startViewTransition(apply);
   } else apply();

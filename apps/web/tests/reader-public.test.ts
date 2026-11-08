@@ -1420,6 +1420,46 @@ for(const engine of [chromium,webkit])test(`floating theme toggle follows the di
   }finally{await browser.close();await web?.stop();}
 });
 
+for(const engine of [chromium,webkit])test(`reader motion remains enabled under a reduced-motion preference (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined;
+  const article=itemDetail({id:'retained-motion',title:'Retained motion',bodyHtml:'<p>'+('Readable article content. '.repeat(1200))+'</p>'});
+  try{
+    web=await startWebServer(fakeApi(url=>{if(url.pathname==='/api/site/items/'+article.id)return article;if(url.pathname==='/api/site/engagement')return {items:[]};}));
+    const page=await browser.newPage({viewport:{width:1440,height:900},colorScheme:'light',reducedMotion:'reduce'});await visit(page,web.origin+'/items/'+article.id);
+    const nativeTransitions=await page.evaluate(()=>typeof document.startViewTransition==='function');
+    for(const name of ['主题切换','开启专注模式']){
+      const animated=await page.getByRole('button',{name,exact:true}).evaluate(async button=>{
+        (button as HTMLButtonElement).click();let animated=false;
+        for(let frame=0;frame<24;frame++){
+          await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
+          animated ||= document.getAnimations().some(animation=>animation.playState==='running');
+        }
+        return animated;
+      });
+      if(nativeTransitions)assert(animated,name+' retains its appearance transition');
+    }
+    await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+    await expect(page.getByRole('button',{name:'退出专注模式',exact:true})).toHaveAttribute('aria-pressed','true');
+    const back=page.getByRole('button',{name:'回到顶部',exact:true,includeHidden:true});
+    const opacity=await back.evaluate(async button=>{
+      window.scrollTo({top:4000,behavior:'instant'});const samples:number[]=[];
+      for(let frame=0;frame<18;frame++){await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));samples.push(Number(getComputedStyle(button).opacity));}
+      return samples;
+    });
+    assert(opacity.some(value=>value>0&&value<1),'the back-to-top control keeps its CSS fade');
+    const scrolling=page.evaluate(async()=>{
+      const from=window.scrollY,samples:number[]=[];
+      for(let frame=0;frame<60;frame++){await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));samples.push(window.scrollY);}
+      return {from,samples};
+    });
+    await back.click();const movement=await scrolling;
+    assert(movement.samples.some(value=>value>0&&value<movement.from),'returning to the top passes through intermediate scroll positions');
+    await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBe(0);
+    await page.evaluate(()=>window.scrollTo({top:4000,behavior:'instant'}));await expect(back).toBeEnabled();await expect(back).toBeVisible();
+    await back.focus();await expect(back).toBeFocused();await back.press('Enter');await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBe(0);
+  }finally{await browser.close();await web?.stop();}
+});
+
 for(const engine of [chromium,webkit])test(`figure notices show hover details and distinguish visit dismissal from permanent disable (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined,writes=0;
   const issues=[{kind:'missing-figure' as const,message:'图表依赖原站样式，保存的图形可能不完整。'},{kind:'missing-figure' as const,message:'图表的外部引用未保存。'}];

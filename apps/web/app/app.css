@@ -543,21 +543,6 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 @keyframes agidawn-page-out-right { to { transform: translateX(100%); } }
 @keyframes agidawn-page-in-left { from { transform: translateX(-28%); } }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    /* A nonzero duration also starts transitions on otherwise static layout properties. */
-    transition-duration: 0s !important;
-    scroll-behavior: auto !important;
-  }
-  ::view-transition-group(*),
-  ::view-transition-old(*),
-  ::view-transition-new(*) {
-    animation: none !important;
-  }
-}
-
 /* ---------------------------------------------------------------------------
    Article discovery
    --------------------------------------------------------------------------- */
@@ -806,8 +791,7 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 .prose figure[data-reader-figure-status="missing"], .prose p[data-reader-embed="true"] { padding: 12px 16px; background: var(--bg-sunk); border-radius: var(--radius-control); font-size: 0.9em; }
 [data-theme="dark"] .article-prose img:not([data-reader-inline="true"]) { filter: brightness(0.88); }
 [data-theme="dark"] .article-prose img:hover { filter: none; }
-/* The user-triggered image viewer keeps its short transition under reduced motion. */
-.lightbox-backdrop { transition: opacity 300ms !important; }
+.lightbox-backdrop { transition: opacity 300ms; }
 @starting-style { .lightbox-backdrop { opacity: 0; } }
 .lightbox[data-phase="closing"] .lightbox-backdrop { opacity: 0; }
 .lightbox[data-phase="opening"] .lightbox-img { visibility: hidden; }
