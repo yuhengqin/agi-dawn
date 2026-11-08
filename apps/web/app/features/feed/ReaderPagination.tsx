@@ -1,4 +1,5 @@
-import {Form,useSubmit} from 'react-router';
+import {useEffect,useState} from 'react';
+import {Form,useLocation,useNavigation,useSubmit} from 'react-router';
 import {READER_PAGE_SIZES} from '@agidawn/contracts/site';
 import type {ReaderPageData} from './reader.server';
 import {PreservedFilters} from './ReaderFilters';
@@ -10,8 +11,16 @@ import {useReaderQuery} from './useReaderQuery';
 type PaginationProps=Pick<ReaderPageData,'page'|'query'>;
 
 export function ReaderListSummary({page}:Pick<ReaderPageData,'page'>){
+  const location=useLocation(),navigation=useNavigation();
+  const busy=navigation.state!=='idle'&&navigation.location?.pathname==='/'&&navigation.location.search!==location.search;
+  const [showSearching,setShowSearching]=useState(false);
+  useEffect(()=>{
+    if(!busy){setShowSearching(false);return;}
+    const timer=setTimeout(()=>setShowSearching(true),300);
+    return()=>clearTimeout(timer);
+  },[busy]);
   const start=(page.page-1)*page.limit+1,end=start+page.items.length-1;
-  return <p role="status" aria-label="文章分页信息" className="py-3 text-xs text-ink-3">共 {page.total} 篇{page.total>0&&<span className="ml-3">第 {start}–{end} 篇</span>}</p>;
+  return <p role="status" aria-label="文章分页信息" aria-atomic="true" className="py-3 text-xs text-ink-3">{busy&&showSearching?'正在搜索…':<>共 {page.total} 篇{page.total>0&&<span className="ml-3">第 {start}–{end} 篇</span>}</>}</p>;
 }
 
 export function ReaderPagination({page,query}:PaginationProps){

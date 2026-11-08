@@ -664,6 +664,59 @@ for(const engine of [chromium,webkit])test(`reader search debounces, respects co
   }finally{await browser.close();await web?.stop();}
 });
 
+for(const engine of [chromium,webkit])test(`reader results delay search feedback and preserve input and old articles (${engine.name()})`,async()=>{
+  const browser=await engine.launch();let web:WebServer|undefined,release=()=>{},begun=()=>{},heldQuery:string|undefined;
+  let pending=Promise.resolve(),started=Promise.resolve();
+  const gate=(query:string)=>{heldQuery=query;pending=new Promise<void>(resolve=>release=resolve);started=new Promise<void>(resolve=>begun=resolve);};
+  try{
+    web=await startWebServer(fakeApi(async url=>{
+      if(url.pathname==='/api/site/articles'){
+        const query=url.searchParams.get('q')??'';
+        if(query===heldQuery){heldQuery=undefined;begun();await pending;}
+        return readerPage(query==='新输入'?[]:query?[feedItem({id:query,title:query+' result'})]:[
+          feedItem({id:'original',title:'Original article'}),feedItem({id:'another',title:'Another article'}),
+        ],url);
+      }
+      if(['/api/site/sources','/api/site/categories'].includes(url.pathname))return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900}});
+    await page.clock.install({time:new Date('2026-11-08T08:00:00Z')});await visit(page,web.origin+'/');
+    await page.clock.pauseAt(new Date('2026-11-08T10:00:00Z'));
+    const input=page.getByRole('searchbox'),status=page.getByRole('status',{name:'文章分页信息',exact:true});
+    await expect(status).toContainText('共 2 篇');
+    await status.evaluate(element=>{
+      const messages:string[]=[];Object.assign(window,{searchStatusMessages:messages});
+      new MutationObserver(()=>messages.push(element.textContent??'')).observe(element,{childList:true,characterData:true,subtree:true});
+    });
+
+    gate('quick');await input.fill('quick');await input.press('Enter');await started;
+    await page.clock.runFor(100);await expect(status).toContainText('共 2 篇');release();
+    await expect(page).toHaveURL(/q=quick/);await expect(status).toContainText('共 1 篇');
+    await page.clock.runFor(500);
+    assert(!(await page.evaluate(()=>(window as typeof window&{searchStatusMessages:string[]}).searchStatusMessages)).some(message=>message.includes('正在搜索')));
+
+    gate('slow');await input.fill('slow');await input.press('Enter');await started;
+    await page.clock.runFor(100);await expect(status).toContainText('共 1 篇');
+    await page.clock.runFor(250);await expect(status).toHaveText('正在搜索…');
+    await expect(page.getByRole('link',{name:'quick result',exact:true})).toBeVisible();
+    await expect(page.getByRole('search').getByRole('status')).toHaveCount(0);
+    await expect(input).toBeEnabled();await expect(input).toBeFocused();
+    await expect(page.getByRole('button',{name:'清除搜索',exact:true})).toBeEnabled();
+    await input.dispatchEvent('compositionstart');await input.fill('新输入');release();
+    await expect(page).toHaveURL(/q=slow/);await expect(status).toContainText('共 1 篇');await expect(input).toHaveValue('新输入');
+    await input.dispatchEvent('compositionend');await page.clock.runFor(300);
+    await expect(status).toHaveText('共 0 篇');await expect(page.getByRole('heading',{name:'没有符合条件的文章',exact:true})).toBeVisible();
+
+    gate('stale');await input.fill('stale');await input.press('Enter');await started;
+    await page.clock.runFor(350);await expect(status).toHaveText('正在搜索…');
+    await page.getByRole('button',{name:'清除搜索',exact:true}).click();
+    await expect(page).toHaveURL(web.origin+'/');await expect(status).toContainText('共 2 篇');await expect(input).toHaveValue('');
+    release();await page.clock.runFor(500);await expect(status).toContainText('共 2 篇');
+    await expect(page.getByRole('link',{name:'Original article',exact:true})).toBeVisible();
+  }finally{release();await browser.close();await web?.stop();}
+});
+
 for(const engine of [chromium,webkit])test(`reader filters compose pending searches, categories, topics, dates and page sizes (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined,release=()=>{},begun=()=>{},finished=()=>{};
   let pending=Promise.resolve(),started=Promise.resolve(),ended=Promise.resolve(),hold:(url:URL)=>boolean=()=>false;
@@ -685,7 +738,7 @@ for(const engine of [chromium,webkit])test(`reader filters compose pending searc
     const query=()=>Object.fromEntries(new URL(page.url()).searchParams);
     const settled=async(expected:Record<string,string>)=>{
       await expect.poll(query).toEqual(expected);
-      await expect(page.getByRole('search').getByRole('status')).toBeEmpty();
+      await expect(page.getByRole('status',{name:'文章分页信息',exact:true})).toContainText('共 100 篇');
       release();await ended;await expect.poll(query).toEqual(expected);
     };
 
@@ -753,7 +806,7 @@ for(const engine of [chromium,webkit])test(`reader search preserves text entered
     const input=page.getByRole('searchbox');
     // Hold the debounce while the earlier response commits; composition must not be overwritten either.
     await input.dispatchEvent('compositionstart');await input.fill('新输入');release();
-    await expect(page).toHaveURL(/sourceId=source/);await expect(page.getByRole('search').getByRole('status')).toBeEmpty();
+    await expect(page).toHaveURL(/sourceId=source/);await expect(page.getByRole('status',{name:'文章分页信息',exact:true})).toContainText('共 1 篇');
     await expect(input).toHaveValue('新输入');
     await input.dispatchEvent('compositionend');
     await expect.poll(()=>Object.fromEntries(new URL(page.url()).searchParams)).toEqual({q:'新输入',sourceId:'source',limit:'50'});
@@ -778,25 +831,25 @@ for(const engine of [chromium,webkit])for(const composing of [false,true])test(`
     const page=await browser.newPage({viewport:{width:1280,height:800},reducedMotion:'reduce'});
     await page.clock.install({time:new Date('2026-11-06T08:00:00Z')});
     await visit(page,web.origin+'/?q=old&category=coding&limit=50');
-    const input=page.getByRole('searchbox'),source=page.getByRole('combobox',{name:'来源',exact:true}),status=page.getByRole('search').getByRole('status');
-    await source.selectOption('source');await expect(page).toHaveURL(/sourceId=source/);await expect(status).toBeEmpty();
+    const input=page.getByRole('searchbox'),source=page.getByRole('combobox',{name:'来源',exact:true}),status=page.getByRole('status',{name:'文章分页信息',exact:true});
+    await source.selectOption('source');await expect(page).toHaveURL(/sourceId=source/);await expect(status).toContainText('共 1 篇');
     // Keep the response commit inside the debounce window without relying on host speed.
     await page.clock.pauseAt(new Date('2026-11-06T10:00:00Z'));
-    hold=true;await page.evaluate(()=>history.back());await started;await expect(status).toHaveText('正在更新…');
+    hold=true;await page.evaluate(()=>history.back());await started;await page.clock.runFor(350);await expect(status).toHaveText('正在搜索…');
     if(composing)await input.dispatchEvent('compositionstart');
     const value=composing?'新输入':'newword';await input.fill(value);release();
-    await expect(source).toHaveValue('');await expect(status).toBeEmpty();await expect(input).toHaveValue(value);
+    await expect(source).toHaveValue('');await expect(status).toContainText('共 1 篇');await expect(input).toHaveValue(value);
     if(composing){
       await page.clock.runFor(400);assert(!searches.includes(value));
       await input.dispatchEvent('compositionend');
     }
     await page.clock.runFor(400);
     await expect.poll(()=>Object.fromEntries(new URL(page.url()).searchParams)).toEqual({q:value,category:'coding',limit:'50'});
-    await expect(status).toBeEmpty();
+    await expect(status).toContainText('共 1 篇');
 
     // A draft entered before the next history navigation must still be discarded.
     await input.fill('discard-before-history');await page.evaluate(()=>history.forward());
-    await expect(source).toHaveValue('source');await expect(status).toBeEmpty();await expect(input).toHaveValue('old');
+    await expect(source).toHaveValue('source');await expect(status).toContainText('共 1 篇');await expect(input).toHaveValue('old');
     await page.clock.runFor(400);assert(!searches.includes('discard-before-history'));
     await expect.poll(()=>Object.fromEntries(new URL(page.url()).searchParams)).toEqual({q:'old',category:'coding',limit:'50',sourceId:'source'});
   }finally{release();await browser.close();await web?.stop();}
@@ -821,7 +874,7 @@ for(const engine of [chromium,webkit])test(`reader search discards earlier draft
     await page.clock.pauseAt(new Date('2026-11-06T10:00:00Z'));
     // Replace the pushed search so two distinct history entries now have the same URL.
     await input.fill('old');await page.clock.runFor(400);await expect(page).toHaveURL(/q=old/);
-    await expect(page.getByRole('search').getByRole('status')).toBeEmpty();
+    await expect(page.getByRole('status',{name:'文章分页信息',exact:true})).toContainText('共 1 篇');
     await input.fill('discard-before-history');hold=true;await page.evaluate(()=>history.back());await started;release();
     await expect(page.getByRole('link',{name:'Returned history',exact:true})).toBeVisible();await expect(input).toHaveValue('old');
     await page.clock.runFor(400);assert(!searches.includes('discard-before-history'));

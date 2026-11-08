@@ -39,15 +39,13 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
     setDraft(value);editedFor.current=navigation.location?.key??location.key;cancel();if(composing.current)return;
     if(!value)search('',true);else timer.current=setTimeout(()=>search(value,true),300);
   };
-  const busy=navigation.state!=='idle'&&navigation.location?.pathname==='/'&&navigation.location.search!==location.search;
-  return <Form role="search" method="get" action="/" className="relative flex min-w-0 items-center gap-1 rounded-control border border-line bg-surface pl-3 pr-0.5 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent"
+  return <Form role="search" method="get" action="/" className="flex min-w-0 items-center gap-1 rounded-control border border-line bg-surface pl-3 pr-0.5 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent"
     onSubmit={event=>{event.preventDefault();if(!composing.current)search(draft,false);}}>
     <PreservedFilters query={query} except={['q']}/>
     <input ref={input} aria-label="搜索文章" className="reader-search-input min-h-10 w-full min-w-0 bg-transparent text-base text-ink outline-none sm:text-sm" type="search" name="q" maxLength={200} value={draft} placeholder="搜索文章"
       onChange={event=>changed(event.currentTarget.value)} onCompositionStart={()=>{composing.current=true;cancel();}} onCompositionEnd={event=>{composing.current=false;changed(event.currentTarget.value);}}/>
     {draft&&<button type="button" aria-label="清除搜索" className="min-h-10 min-w-8 text-lg text-ink-3" onClick={()=>{composing.current=false;setDraft('');search('',true);input.current?.focus();}}>×</button>}
     <button type="submit" aria-label="搜索" title="搜索" className="grid size-11 shrink-0 place-items-center rounded-mark text-accent hover:bg-accent/10 focus-visible:outline-2 focus-visible:outline-accent"><IconSearch size={20}/></button>
-    <span role="status" className="absolute right-0 top-full pt-1 text-[11px] text-ink-3">{busy?'正在更新…':''}</span>
   </Form>;
 }
 
