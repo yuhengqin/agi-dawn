@@ -12,15 +12,25 @@ export function readerLink(query:Record<string,string>,changes:Record<string,str
 }
 
 /** Native disclosure remains usable without JS; the panel overlays the list. */
-export function ReaderPopover({label,triggerLabel,triggerRef,children,className='',panelClassName='',active=false,onOpen}:{label:ReactNode;triggerLabel?:string;triggerRef?:Ref<HTMLElement>;children:ReactNode|((close:()=>void)=>ReactNode);className?:string;panelClassName?:string;active?:boolean;onOpen?:()=>void}){
+export function ReaderPopover({label,triggerLabel,triggerRef,children,className='',panelClassName='',active=false,onOpen,fitHeight=false}:{label:ReactNode;triggerLabel?:string;triggerRef?:Ref<HTMLElement>;children:ReactNode|((close:()=>void)=>ReactNode);className?:string;panelClassName?:string;active?:boolean;onOpen?:()=>void;fitHeight?:boolean}){
   const ref=useRef<HTMLDetailsElement>(null),location=useLocation();
   const close=()=>{if(ref.current){ref.current.open=false;ref.current.querySelector('summary')?.focus();}};
   const fitPanel=()=>{
     if(!ref.current?.open)return;
     const panel=ref.current.querySelector<HTMLElement>('.reader-popover-panel')!;
+    if(fitHeight){panel.style.top='';panel.style.bottom='';panel.style.maxHeight='';}
     panel.style.translate='none';const bounds=panel.getBoundingClientRect();
     const shift=Math.max(12-bounds.left,Math.min(0,window.innerWidth-12-bounds.right));
     panel.style.translate=`${shift}px 0`;
+    const style=fitHeight?getComputedStyle(panel):null;
+    if(style?.position==='absolute'){
+      const below=window.innerHeight-bounds.top-12;
+      const above=ref.current.getBoundingClientRect().top-16;
+      const flip=bounds.height>below&&above>below;
+      if(flip){panel.style.top='auto';panel.style.bottom='calc(100% + 4px)';}
+      const available=`${Math.max(0,flip?above:below)}px`;
+      panel.style.maxHeight=style.maxHeight==='none'?available:`min(${style.maxHeight}, ${available})`;
+    }
   };
   useEffect(()=>{if(ref.current)ref.current.open=false;},[location.key]);
   useEffect(()=>{
@@ -31,7 +41,7 @@ export function ReaderPopover({label,triggerLabel,triggerRef,children,className=
     };
     document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);window.addEventListener('resize',fitPanel);
     return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape);window.removeEventListener('resize',fitPanel);};
-  },[]);
+  },[fitHeight]);
   return <details ref={ref} name="reader-picker" className={`reader-popover ${className}`}
     onBlur={event=>{if(event.relatedTarget&&!event.currentTarget.contains(event.relatedTarget as Node))event.currentTarget.open=false;}}>
     <summary ref={triggerRef} aria-label={triggerLabel} title={triggerLabel} className={`flex min-h-11 cursor-pointer items-center justify-between gap-2 text-[13px] ${active?'text-accent':'text-ink-3'} hover:text-accent`} onClick={event=>{

@@ -38,13 +38,30 @@ function shiftMonth(day:string,offset:number){
   return addDays(start,Math.min(Number(day.slice(8)),date.getUTCDate())-1);
 }
 
-function DateDraft({query,close}:{query:Record<string,string>;close:()=>void}){
-  const navigate=useNavigate(),today=beijingDate(Date.now());
-  const target=useReaderQuery(query);
-  const [draft,setDraft]=useState({from:target.from??'',to:target.to??''});
+type DateBasis={name:string;value:string;label:string;options:readonly {value:string;label:string}[];description?:string};
+type DateRangePickerProps={
+  from:string;
+  to:string;
+  draftRange?:{from:string;to:string};
+  action:string;
+  onApply:(from:string,to:string,basis?:string)=>void;
+  fromName?:string;
+  toName?:string;
+  hiddenFields?:Record<string,string>;
+  basis?:DateBasis;
+  quickApply?:boolean;
+  triggerLabel?:string;
+  triggerRef?:Ref<HTMLElement>;
+};
+
+function DateDraft({from:appliedFrom,to:appliedTo,action,onApply,fromName='from',toName='to',hiddenFields={},basis,quickApply=false,close}:
+  Omit<DateRangePickerProps,'triggerLabel'|'triggerRef'|'draftRange'>&{close:()=>void}){
+  const today=beijingDate(Date.now());
+  const [draft,setDraft]=useState({from:appliedFrom,to:appliedTo});
+  const [basisValue,setBasisValue]=useState(basis?.value??'');
   const [active,setActive]=useState<DateField>('from'),[edited,setEdited]=useState<DateField>('from');
   const [touched,setTouched]=useState({from:false,to:false}),[preview,setPreview]=useState<string|null>(null);
-  const initial=validDay(target.from??'')?target.from!:validDay(target.to??'')?target.to!:today;
+  const initial=validDay(appliedFrom)?appliedFrom:validDay(appliedTo)?appliedTo:today;
   const [focusDay,setFocusDay]=useState(initial),[month,setMonth]=useState(initial.slice(0,7));
   const calendar=useRef<HTMLTableElement>(null),moveFocus=useRef(false),monthButton=useRef<HTMLButtonElement>(null),yearInput=useRef<HTMLInputElement>(null);
   const [jumpOpen,setJumpOpen]=useState(false),[jumpYear,setJumpYear]=useState(''),[jumpMonth,setJumpMonth]=useState(''),[jumpError,setJumpError]=useState('');
@@ -67,7 +84,12 @@ function DateDraft({query,close}:{query:Record<string,string>;close:()=>void}){
     if(active==='from')setActive('to');
   };
   const setRange=(start:string,end:string)=>{
-    void navigate(readerLink(target,{from:start||null,to:end||null}));close();
+    if(quickApply){onApply(start,end);close();return;}
+    setDraft({from:start,to:end});
+    setTouched({from:false,to:false});
+    setActive('from');
+    setPreview(null);
+    show(start||end||today);
   };
   const jump=()=>{
     if(!/^\d{1,4}$/.test(jumpYear)||Number(jumpYear)<1){setJumpError('请输入1至9999之间的年份。');return;}
@@ -86,8 +108,8 @@ function DateDraft({query,close}:{query:Record<string,string>;close:()=>void}){
   const previewFrom=preview&&active==='from'?preview:from,previewTo=preview&&active==='to'?preview:to;
   const hasPreview=!!preview&&!dateError(previewFrom)&&!dateError(previewTo)&&!(previewFrom&&previewTo&&previewFrom>previewTo);
   const shownFrom=hasPreview?previewFrom:from,shownTo=hasPreview?previewTo:to;
-  return <Form method="get" action="/" noValidate className="flex max-h-[inherit] flex-col" onSubmit={event=>{event.preventDefault();setTouched({from:true,to:true});if(invalid)return;void navigate(readerLink(target,{from:from||null,to:to||null}));close();}}>
-    {Object.entries(target).filter(([key])=>!['page','from','to'].includes(key)).map(([key,value])=><input key={key} type="hidden" name={key} value={value}/>)}
+  return <Form method="get" action={action} noValidate className="flex max-h-[inherit] flex-col" onSubmit={event=>{event.preventDefault();setTouched({from:true,to:true});if(invalid)return;onApply(from,to,basisValue||undefined);close();}}>
+    {Object.entries(hiddenFields).map(([key,value])=><input key={key} type="hidden" name={key} value={value}/>)}
     <div className="min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-4">
     <div aria-label="日期预设" className="mb-3 grid grid-cols-4 gap-1 border-b border-line pb-2 sm:flex sm:flex-wrap">
       <button type="button" className={presetAction} aria-pressed={preset==='all'} onClick={()=>setRange('','')}>不限日期</button>
@@ -96,12 +118,13 @@ function DateDraft({query,close}:{query:Record<string,string>;close:()=>void}){
     <div className="reader-date-content">
       <div className="reader-date-fields flex min-w-0 flex-col gap-3">
         <p className="text-sm font-medium text-ink">自定义范围</p>
+        {basis&&<label className="min-w-0 text-xs text-ink-3">{basis.label}<select name={basis.name} value={basisValue} onChange={event=>setBasisValue(event.currentTarget.value)} className={field}>{basis.options.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}
         {(['from','to'] as const).map(key=><div key={key} className="min-w-0">
           <div className="mb-1 flex min-h-6 items-center justify-between gap-2">
             <label htmlFor={`reader-date-${key}`} className={`text-xs ${active===key?'font-medium text-accent':'text-ink-3'}`}>{key==='from'?'起始日期':'结束日期'}</label>
             {key==='to'&&<button type="button" className="min-h-6 text-xs text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-accent" onClick={()=>{change('to',today);setActive('to');setTouched(previous=>({...previous,to:true}));}}>设为今天</button>}
           </div>
-          <input id={`reader-date-${key}`} className={field} data-active={active===key||undefined} type="text" name={key} placeholder="YYYY-MM-DD" autoComplete="off" spellCheck={false} maxLength={10} value={draft[key]} aria-invalid={!!errors[key]} aria-describedby={`reader-date-help reader-date-${key}-error`}
+          <input id={`reader-date-${key}`} className={field} data-active={active===key||undefined} type="text" name={key==='from'?fromName:toName} placeholder="YYYY-MM-DD" autoComplete="off" spellCheck={false} maxLength={10} value={draft[key]} aria-invalid={!!errors[key]} aria-describedby={`reader-date-help reader-date-${key}-error`}
             onFocus={()=>activate(key)} onChange={event=>change(key,event.currentTarget.value)} onBlur={event=>{
               setDraft(previous=>({...previous,[key]:normalizeDate(previous[key])}));
               // Choosing a day validates its replacement; an error here would move the day between pointerdown and click on mobile.
@@ -110,6 +133,7 @@ function DateDraft({query,close}:{query:Record<string,string>;close:()=>void}){
           <p id={`reader-date-${key}-error`} role={errors[key]?'alert':undefined} className={errors[key]?'mt-1 text-xs leading-relaxed text-red-700 dark:text-red-400':'hidden'}>{errors[key]}</p>
         </div>)}
         <p id="reader-date-help" className="text-xs leading-relaxed text-ink-3">北京时间，含起止当天；可只填一端。</p>
+        {basis?.description&&<p className="text-xs leading-relaxed text-ink-3">{basis.description}</p>}
       </div>
       <div>
         <div className="flex items-center justify-between">
@@ -152,9 +176,16 @@ function DateDraft({query,close}:{query:Record<string,string>;close:()=>void}){
   </Form>;
 }
 
-export function ReaderDatePicker({query,triggerRef}:{query:Record<string,string>;triggerRef?:Ref<HTMLElement>}){
+export function DateRangePicker({from,to,draftRange,triggerLabel,triggerRef,...draftProps}:DateRangePickerProps){
   const [session,setSession]=useState(0);
-  return <ReaderPopover label={dateRangeLabel(query.from,query.to)} triggerRef={triggerRef} className="relative shrink-0" active={!!(query.from||query.to)} panelClassName="reader-date-panel" onOpen={()=>setSession(value=>value+1)}>
-    {close=><DateDraft key={`${query.from??''}:${query.to??''}:${session}`} query={query} close={close}/>}
+  return <ReaderPopover label={dateRangeLabel(from,to)} triggerLabel={triggerLabel} triggerRef={triggerRef} className="relative shrink-0" active={!!(from||to)} panelClassName="reader-date-panel" fitHeight onOpen={()=>setSession(value=>value+1)}>
+    {close=><DateDraft key={`${from}:${to}:${draftProps.basis?.value??''}:${session}`} from={draftRange?.from??from} to={draftRange?.to??to} close={close} {...draftProps}/>}
   </ReaderPopover>;
+}
+
+export function ReaderDatePicker({query,triggerRef}:{query:Record<string,string>;triggerRef?:Ref<HTMLElement>}){
+  const target=useReaderQuery(query),navigate=useNavigate();
+  const hiddenFields=Object.fromEntries(Object.entries(target).filter(([key])=>!['page','from','to'].includes(key)));
+  return <DateRangePicker from={query.from??''} to={query.to??''} draftRange={{from:target.from??'',to:target.to??''}} action="/" triggerRef={triggerRef} hiddenFields={hiddenFields} quickApply
+    onApply={(from,to)=>{void navigate(readerLink(target,{from:from||null,to:to||null}));}}/>;
 }

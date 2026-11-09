@@ -1,6 +1,9 @@
 import {useLayoutEffect,useRef,useState,type ChangeEvent,type FormEvent} from "react";
 import {Form,Link,useLoaderData,useLocation,useNavigate,useNavigation,useNavigationType,type LoaderFunctionArgs} from "react-router";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {searchWords} from "@agidawn/contracts/search";
+import {IconCheck,IconChevronDown,IconFilter} from "../../../apps/web/app/components/icons.tsx";
+import {Menu} from "../../../apps/web/app/components/ui/Menu.tsx";
 import {adminGet} from "../../../apps/web/app/lib/admin.server.ts";
 import {readerViewQueryKeys,type ReaderLibrary} from "../contracts.ts";
 import {librarySearch} from "../library-navigation.ts";
@@ -37,6 +40,34 @@ const inputStyle="min-h-11 rounded-control border border-line bg-surface px-3 te
 const control=inputStyle+" mt-1 block w-full min-w-0";
 const action="inline-flex min-h-11 items-center text-sm text-accent underline underline-offset-4";
 const keywordForm="library-keyword-search";
+const extraFilters=[
+  {name:"starred",label:"收藏",width:"w-24",options:[["true","已收藏"],["false","未收藏"]]},
+  {name:"status",label:"阅读状态",width:"w-28",options:[["to-read","待读"],["reading","在读"],["read","已读"]]},
+  {name:"hasNote",label:"笔记",width:"w-24",options:[["true","有笔记"],["false","无笔记"]]},
+];
+// The main controls and gaps use 44.25rem. Allow some extra room at each step.
+const extraFilterWidths=[52,60,67];
+const sortOptions=[
+  {value:"collected",label:"收录时间（从新到旧）",shortLabel:"最新收录"},
+  {value:"note-updated",label:"笔记最近更新",shortLabel:"笔记更新"},
+];
+
+function LibrarySort({sort,onChange}:{sort:string;onChange:(sort:string)=>void}) {
+  const current=sortOptions.find(option=>option.value===sort)??sortOptions[0]!;
+  const label=`排序 · ${current.shortLabel}`;
+  return <Menu label={label} triggerClassName="group inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-control border border-line bg-surface px-3 text-sm text-accent hover:bg-bg-sunk focus-visible:outline-2 focus-visible:outline-accent data-[state=open]:bg-accent/10"
+    trigger={<><IconFilter size={16}/><span>{label}</span>
+      <IconChevronDown size={16} className="group-data-[state=open]:rotate-180"/>
+    </>}>
+    {()=> <DropdownMenu.RadioGroup className="w-56 max-w-full px-1.5" value={current.value} onValueChange={value=>{if(value!==current.value)onChange(value);}}>
+      {sortOptions.map(option=><DropdownMenu.RadioItem key={option.value} value={option.value}
+        className="flex min-h-10 cursor-default select-none items-center justify-between gap-2 rounded-mark px-2.5 text-sm outline-none data-[highlighted]:ring-2 data-[highlighted]:ring-inset data-[highlighted]:ring-accent data-[state=checked]:bg-accent/10 data-[state=checked]:font-medium data-[state=checked]:text-accent">
+        {option.label}
+        <DropdownMenu.ItemIndicator><IconCheck size={16}/></DropdownMenu.ItemIndicator>
+      </DropdownMenu.RadioItem>)}
+    </DropdownMenu.RadioGroup>}
+  </Menu>;
+}
 
 function KeywordSearch({page,onApply}:{
   page:Awaited<ReturnType<typeof loader>>;
@@ -54,7 +85,7 @@ function KeywordSearch({page,onApply}:{
     else onApply({q:input.value.trim()});
   }
   return <Form id={keywordForm} role="search" method="get" action="/admin/reader" onSubmit={validate} className="w-56 max-w-full">
-    {["limit","dateField","dateFrom","dateTo"].map(key=>page.query[key]&&<input key={key} type="hidden" name={key} value={page.query[key]}/>)}
+    {["limit","sort","dateField","dateFrom","dateTo"].map(key=>page.query[key]&&<input key={key} type="hidden" name={key} value={page.query[key]}/>)}
     <label htmlFor="library-keywords" className="block text-sm font-medium">关键词</label>
     <input ref={keywords} id="library-keywords" type="search" name="q" defaultValue={page.keywords}
       maxLength={200} enterKeyHint="search" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false}
@@ -68,6 +99,40 @@ function KeywordSearch({page,onApply}:{
 function LibrarySearch({page}:{page:Awaited<ReturnType<typeof loader>>}) {
   const location=useLocation(),navigation=useNavigation(),navigationType=useNavigationType(),navigate=useNavigate();
   const [draftRevision,setDraftRevision]=useState(0),previousLocation=useRef(location.key);
+  const toolbar=useRef<HTMLDivElement>(null),more=useRef<HTMLDetailsElement>(null);
+  const [visibleExtras,setVisibleExtras]=useState(0),lastVisible=useRef(0);
+  const movedFocus=useRef<{name:string;previous:Element}|null>(null);
+  useLayoutEffect(()=>{
+    const row=toolbar.current!;
+    const measure=()=>{
+      const rem=Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const next=extraFilterWidths.filter(width=>width*rem<=row.clientWidth).length;
+      const previous=lastVisible.current;
+      if(next===previous)return;
+      const focused=document.activeElement;
+      if(focused instanceof HTMLSelectElement&&focused.form?.id===keywordForm){
+        const index=extraFilters.findIndex(filter=>filter.name===focused.name);
+        if(index>=Math.min(previous,next)&&index<Math.max(previous,next))movedFocus.current={name:focused.name,previous:focused};
+      }else if(focused&&next===extraFilters.length&&focused===more.current?.querySelector("summary")){
+        movedFocus.current={name:extraFilters[previous]!.name,previous:focused};
+      }
+      lastVisible.current=next;
+      setVisibleExtras(next);
+    };
+    const observer=new ResizeObserver(measure);
+    observer.observe(row);
+    measure();
+    return ()=>observer.disconnect();
+  },[]);
+  useLayoutEffect(()=>{
+    const move=movedFocus.current;
+    movedFocus.current=null;
+    if(!move||(document.activeElement!==document.body&&document.activeElement!==move.previous))return;
+    const control=document.querySelector<HTMLSelectElement>(`select[form="${keywordForm}"][name="${move.name}"]`);
+    if(!control)return;
+    if(more.current?.contains(control))more.current.open=true;
+    control.focus({preventScroll:true});
+  },[visibleExtras]);
   // Filter changes preserve independent drafts. History, clearing and opening views restore applied values.
   useLayoutEffect(()=>{
     if (previousLocation.current===location.key) return;
@@ -86,31 +151,33 @@ function LibrarySearch({page}:{page:Awaited<ReturnType<typeof loader>>}) {
     if (!next.has("dateFrom")&&!next.has("dateTo")) next.delete("dateField");
     void navigate({pathname:"/admin/reader",search:next.toString()},{preventScrollReset:true,state:{libraryFilter:true}});
   }
-  const select=(name:string,fallback="")=>({
-    name,form:keywordForm,className:control,value:query.get(name)??fallback,
+  const select=(name:string)=>({
+    name,form:keywordForm,className:control,value:query.get(name)??"",
     onChange:(event:ChangeEvent<HTMLSelectElement>)=>apply({[name]:event.currentTarget.value}),
   });
+  const secondary=extraFilters.map(({name,label,width,options})=><label key={name} className={width+" max-w-full text-sm"}>
+    {label}<select {...select(name)}><option value="">全部</option>{options.map(([value,text])=><option key={value} value={value}>{text}</option>)}</select>
+  </label>);
   return <div className="mt-5" aria-busy={navigation.state!=="idle"}>
-    <div role="group" aria-label="筛选私人文章" className="flex flex-wrap items-start gap-x-3 gap-y-2">
+    <div ref={toolbar} role="group" aria-label="筛选私人文章" className="flex flex-wrap items-start gap-x-3 gap-y-2">
       <KeywordSearch key={draftRevision} page={page} onApply={apply}/>
       <label className="w-36 max-w-full text-sm">来源<select {...select("sourceId")}><option value="">全部来源</option>{page.filters.sources.map(source=><option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
       <label className="w-40 max-w-full text-sm">主题<select {...select("topic")}><option value="">全部主题</option>{page.filters.topics.map(topic=><option key={topic.slug} value={topic.slug}>{topic.name}</option>)}</select></label>
       <label className="w-36 max-w-full text-sm">类别<select {...select("category")}><option value="">全部类别</option>{page.filters.categories.map(category=><option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+      {secondary.slice(0,visibleExtras)}
     </div>
-    <div className="flex flex-wrap items-center gap-x-5">
-      <p id="library-search-help" className="text-sm text-ink-3">按 Enter 搜索标题、摘要、已保存正文和私人笔记，最多 6 个词，均需命中。来源、主题和类别即选即生效。</p>
-      <Link to="/admin/reader" className={action}>清除筛选</Link>
-    </div>
-    <details>
-      <summary className="min-h-11 w-fit cursor-pointer py-3 text-sm font-medium text-accent">更多筛选</summary>
-      <div className="grid min-w-0 gap-4 pb-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="text-sm">收藏<select {...select("starred")}><option value="">全部</option><option value="true">已收藏</option><option value="false">未收藏</option></select></label>
-        <label className="text-sm">阅读状态<select {...select("status")}><option value="">全部</option><option value="to-read">待读</option><option value="reading">在读</option><option value="read">已读</option></select></label>
-        <label className="text-sm">笔记<select {...select("hasNote")}><option value="">全部</option><option value="true">有笔记</option><option value="false">无笔记</option></select></label>
-        <label className="text-sm">排序<select {...select("sort","collected")}><option value="collected">收录时间（从新到旧）</option><option value="note-updated">笔记最近更新</option></select></label>
+    <div className="mt-2 flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+      <p id="library-search-help" className="text-sm text-ink-3">按 Enter 搜索标题、摘要、已保存正文和私人笔记，最多 6 个词，均需命中。</p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Link to="/admin/reader" className={action}>清除筛选</Link>
         <LibraryDates key={draftRevision} query={page.query} onApply={apply}/>
+        <LibrarySort sort={query.get("sort")??"collected"} onChange={sort=>apply({sort})}/>
       </div>
-    </details>
+    </div>
+    {visibleExtras<secondary.length&&<details ref={more}>
+      <summary className="min-h-11 w-fit cursor-pointer py-3 text-sm font-medium text-accent">更多筛选</summary>
+      <div className="flex flex-wrap gap-3 pb-3">{secondary.slice(visibleExtras)}</div>
+    </details>}
   </div>;
 }
 

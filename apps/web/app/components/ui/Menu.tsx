@@ -2,7 +2,9 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useRef, useState, type ReactNode } from "react";
 
 /** A small non-modal dropdown; outside controls remain actionable while it is open. */
-export function Menu({ trigger, label, children }: { trigger: ReactNode; label: string; children: (close: () => void) => ReactNode }) {
+export function Menu({ trigger, label, children, triggerClassName }: {
+  trigger: ReactNode; label: string; children: (close: () => void) => ReactNode; triggerClassName?: string;
+}) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null), panel = useRef<HTMLDivElement>(null);
   const lastOnOpen = useRef(false), tabExit = useRef(false);
@@ -20,7 +22,7 @@ export function Menu({ trigger, label, children }: { trigger: ReactNode; label: 
               lastOnOpen.current = event.key === "ArrowUp";
               if (lastOnOpen.current) { event.preventDefault(); setOpen(true); }
             }}
-            className={`inline-flex size-11 items-center justify-center rounded-control transition-colors focus-visible:outline-2 focus-visible:outline-accent ${open ? "bg-bg-sunk text-ink" : "text-ink-3 hover:bg-bg-sunk hover:text-ink"}`}
+            className={triggerClassName ?? `inline-flex size-11 items-center justify-center rounded-control transition-colors focus-visible:outline-2 focus-visible:outline-accent ${open ? "bg-bg-sunk text-ink" : "text-ink-3 hover:bg-bg-sunk hover:text-ink"}`}
           >
             {trigger}
           </button>
@@ -37,7 +39,7 @@ export function Menu({ trigger, label, children }: { trigger: ReactNode; label: 
           onFocus={event => {
             if (event.target !== event.currentTarget) return;
             event.preventDefault();
-            const items = Array.from(panel.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+            const items = Array.from(panel.current?.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemradio"]') ?? []);
             (items.at(lastOnOpen.current ? -1 : 0) ?? panel.current)?.focus();
           }}
           onKeyDownCapture={event => {
