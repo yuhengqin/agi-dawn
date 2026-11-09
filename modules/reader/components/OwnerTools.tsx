@@ -2,8 +2,9 @@ import {useEffect,useRef,useState} from "react";
 import {Link,useBlocker} from "react-router";
 import {OwnerRequestError,hasOwnerSession,OWNER_SESSION_ENDED,ownerRequest,ownerDownload} from "../client.ts";
 import type {ReaderState,ReaderNote} from "../contracts.ts";
+import {withLibrarySearch} from "../library-navigation.ts";
 const button="min-h-11 rounded-control border border-line px-4 text-sm hover:bg-bg-sunk disabled:opacity-50";
-export default function OwnerTools({articleId}:{articleId:string}) {
+export default function OwnerTools({articleId,libraryReturnSearch=""}:{articleId:string;libraryReturnSearch?:string}) {
   const [saved,setSaved]=useState<{state:ReaderState;note:ReaderNote}|null>(null),[draft,setDraft]=useState(""),[message,setMessage]=useState(""),[error,setError]=useState("");
   const [checking,setChecking]=useState(true),[busy,setBusy]=useState(false),[serverNote,setServerNote]=useState<string|null>(null);
   const base="/api/admin/reader/articles/"+articleId;
@@ -39,8 +40,9 @@ export default function OwnerTools({articleId}:{articleId:string}) {
   };
   if(!saved||checking)return null;
   const state=saved.state;
+  const articleHref=withLibrarySearch("/admin/reader/articles/"+articleId,libraryReturnSearch);
   return <section aria-label="站主私人阅读" className="my-8 border-y border-line py-5">
-    <div className="mb-4 flex flex-wrap items-center gap-3"><h2 className="mr-auto text-lg font-semibold">私人阅读</h2><Link to="/admin/reader" className="text-sm text-accent">私人书库</Link><Link to={"/admin/reader/articles/"+articleId} className="text-sm text-accent">私人阅读全文</Link><Link to={"/admin/reader/articles/"+articleId+'#versions'} className="text-sm text-accent">归档版本</Link></div>
+    <div className="mb-4 flex flex-wrap items-center gap-3"><h2 className="mr-auto text-lg font-semibold">私人阅读</h2><Link to={"/admin/reader"+libraryReturnSearch} className="text-sm text-accent">私人书库</Link><Link to={articleHref} className="text-sm text-accent">私人阅读全文</Link><Link to={articleHref+"#versions"} className="text-sm text-accent">归档版本</Link></div>
     <div className="mb-4 flex flex-wrap items-center gap-3">
       <button className={button} disabled={busy} aria-pressed={state.starred} onClick={()=>command(async()=>{const next=await ownerRequest<ReaderState>(base+"/state","PATCH",{expectedVersion:state.version,starred:!state.starred});setSaved({...saved,state:next});})}>{state.starred?"取消收藏":"收藏文章"}</button>
       <label>阅读状态 <select aria-label="阅读状态" className={button} disabled={busy} value={state.status} onChange={event=>{const status=event.target.value;void command(async()=>{const next=await ownerRequest<ReaderState>(base+"/state","PATCH",{expectedVersion:state.version,status});setSaved({...saved,state:next});});}}>

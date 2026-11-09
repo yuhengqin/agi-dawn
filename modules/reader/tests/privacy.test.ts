@@ -276,6 +276,10 @@ test('bulk classification changes only selected fields and preserves private dat
   const protectedRows=async()=>({articles:await sql`SELECT * FROM articles WHERE id=ANY(${ids}::text[]) ORDER BY id`,notes:await sql`SELECT * FROM reader_notes WHERE article_id=ANY(${ids}::text[]) ORDER BY article_id`,state:await sql`SELECT * FROM reader_state WHERE article_id=ANY(${ids}::text[]) ORDER BY article_id`,snapshots:await sql`SELECT * FROM reader_snapshots WHERE article_id=ANY(${ids}::text[]) ORDER BY id`});
   const original=await protectedRows(),unselected=await sql`SELECT * FROM publications WHERE article_id=${c}`;
   const url='/api/admin/reader/classification',payload={articles:[{id:a,expectedVersion:2},{id:b,expectedVersion:0}],category:category.id,addTopicSlugs:['performance-cost'],removeTopicSlugs:['mcp-tool-use']};
+  const beforeFiltered=await app.inject({url:'/api/admin/reader/library?'+new URLSearchParams({sourceId:source,category:'uncategorized',topic:'mcp-tool-use'}),headers});
+  assert.equal(beforeFiltered.statusCode,200,beforeFiltered.body);
+  const beforeB=beforeFiltered.json().items.find((item:{id:string})=>item.id===b);
+  assert.equal(beforeB.category,null);assert.deepEqual(beforeB.topicSlugs,['skills-extensions','mcp-tool-use']);
   assert.equal((await app.inject({method:'PATCH',url,payload})).statusCode,401);
   assert.equal((await app.inject({method:'PATCH',url,headers:{cookie:headers.cookie},payload})).statusCode,403);
   const saved=await app.inject({method:'PATCH',url,headers,payload});assert.equal(saved.statusCode,200,saved.body);assert.equal(saved.headers['cache-control'],'no-store');
@@ -288,6 +292,7 @@ test('bulk classification changes only selected fields and preserves private dat
   assert.deepEqual(await protectedRows(),original);assert.deepEqual(await sql`SELECT * FROM publications WHERE article_id=${c}`,unselected);
   const filtered=(await app.inject({url:'/api/admin/reader/library?'+new URLSearchParams({sourceId:source,category:category.id,topic:'performance-cost',q:'article'}),headers})).json();
   assert.deepEqual(filtered.items.map((item:{id:string})=>item.id),[b]);assert.equal(filtered.items[0].classificationVersion,1);
+  assert.equal(filtered.items[0].category,category.id);assert.deepEqual(filtered.items[0].topicSlugs,['skills-extensions','performance-cost']);
   const publicBody=(await app.inject('/api/site/items/'+b)).body;assert(publicBody.includes('Saved body'));assert(!publicBody.includes('Private bulk note'));assert(!publicBody.includes('classificationVersion'));
   const cleared=await app.inject({method:'PATCH',url,headers,payload:{articles:[{id:b,expectedVersion:1}],category:null,addTopicSlugs:[],removeTopicSlugs:[]}});
   assert.equal(cleared.statusCode,200,cleared.body);assert.equal((await sql`SELECT category FROM publications WHERE article_id=${b}`)[0]!.category,null);

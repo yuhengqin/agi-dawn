@@ -32,7 +32,7 @@ export interface ReaderViewQuery {q?:string;sourceId?:string;category?:string;to
 export const readerViewQueryKeys=["q","sourceId","category","topic","starred","status","hasNote","sort","dateField","dateFrom","dateTo"] as const;
 export interface SavedReaderView {id:string;name:string;filters:ReaderViewQuery;version:number;createdAt:string;updatedAt:string}
 export interface ReaderLibrary {
-  items:Array<{id:string;title:string;source:string;withdrawn:boolean;classificationVersion:number;state:ReaderState;note:{snippet:string;updatedAt:string}|null;matches:LibraryMatch[]}>;
+  items:Array<{id:string;title:string;source:string;withdrawn:boolean;category:string|null;topicSlugs:string[];classificationVersion:number;state:ReaderState;note:{snippet:string;updatedAt:string}|null;matches:LibraryMatch[]}>;
   nextCursor:string|null;filters:LibraryFilters;
 }
 export interface BulkClassificationPatch {

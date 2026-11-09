@@ -111,7 +111,7 @@ export async function readLibrary(input: unknown):Promise<ReaderLibrary> {
   const whitespace="\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff";
   const hasNote=sql`btrim(coalesce(n.text,''),${whitespace})<>''`,noteTime=sql`CASE WHEN ${hasNote} THEN n.updated_at END`;
   const dateTime=q.dateField==="note-updated"?noteTime:sql`a.discovered_at`;
-  const candidates=(db:Db,batchAfter:typeof after,limit:number)=>db<LibraryRow[]>`SELECT a.id,coalesce(p.title,a.title) AS title,s.name AS source,a.discovered_at,p.visibility,coalesce(o.version,0) AS classification_version,r.starred,r.status,r.version,r.updated_at,n.text AS note,${noteTime} AS note_updated_at,
+  const candidates=(db:Db,batchAfter:typeof after,limit:number)=>db<LibraryRow[]>`SELECT a.id,coalesce(p.title,a.title) AS title,s.name AS source,a.discovered_at,p.visibility,p.category,p.tags,coalesce(o.version,0) AS classification_version,r.starred,r.status,r.version,r.updated_at,n.text AS note,${noteTime} AS note_updated_at,
     to_char(a.discovered_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_at,to_char(${noteTime} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS note_at
     ${words.length?sql`,CASE WHEN p.article_id IS NOT NULL THEN p.summary WHEN jsonb_typeof(o.fields->'summary')='string' THEN nullif(trim(o.fields->>'summary'),'') ELSE a.excerpt END AS summary`:sql``}
     FROM articles a JOIN sources s ON s.id=a.source_id LEFT JOIN publications p ON p.article_id=a.id LEFT JOIN reader_state r ON r.article_id=a.id
@@ -141,7 +141,8 @@ export async function readLibrary(input: unknown):Promise<ReaderLibrary> {
     }
     return found;
   }):await candidates(sql,after,q.limit+1);
-  const items = rows.slice(0,q.limit).map(r => ({ id:r.id,title:r.title,source:r.source,withdrawn:r.visibility==="withdrawn",classificationVersion:r.classification_version,
+  const items = rows.slice(0,q.limit).map(r => ({ id:r.id,title:r.title,source:r.source,withdrawn:r.visibility==="withdrawn",category:r.category,
+    topicSlugs:topics.filter(topic=>topic.tags.some(tag=>r.tags?.includes(tag))).map(topic=>topic.slug),classificationVersion:r.classification_version,
     state:{articleId:r.id,starred:r.starred??false,status:r.status??"to-read",version:r.version??0,updatedAt:r.updated_at?.toISOString()??null},note:r.note_updated_at?{snippet:truncate(collapseWhitespace(r.note??""),160),updatedAt:r.note_updated_at.toISOString()}:null,matches:matches.get(r.id)??[] }));
   const last = rows[q.limit-1];
   return {items,nextCursor:rows.length>q.limit&&last?encodeCursor("reader-library",{binding,...position(last)}):null,

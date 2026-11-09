@@ -1,7 +1,9 @@
 import {useEffect,useRef,useState} from "react";
 import {Link,useOutletContext,useRevalidator} from "react-router";
+import * as Dialog from "@radix-ui/react-dialog";
 import {OwnerRequestError,ownerRequest} from "../client.ts";
 import type {BulkClassificationPatch,BulkClassificationResult,BulkReaderStatePatch,BulkReaderStateResult,ReaderLibrary,ReaderState} from "../contracts.ts";
+import {withLibrarySearch} from "../library-navigation.ts";
 import {fullDateTime} from "../../../apps/web/app/lib/format.ts";
 import NoteBatchExport from './NoteBatchExport.tsx';
 
@@ -10,16 +12,25 @@ const button="min-h-12 rounded-control border border-line px-4 disabled:opacity-
 const matchLabels={title:"标题",summary:"摘要",body:"正文",note:"私人笔记"};
 const statusLabels={'to-read':"待读",reading:"在读",read:"已读"};
 
-export default function LibraryOrganizer({items,filters,navigating}:{items:ReaderLibrary["items"];filters:ReaderLibrary["filters"];navigating:boolean}){
+export default function LibraryOrganizer({items,filters,navigating,returnSearch,hasCursor}:{
+  items:ReaderLibrary["items"];
+  filters:ReaderLibrary["filters"];
+  navigating:boolean;
+  returnSearch:string;
+  hasCursor:boolean;
+}){
   const [selected,setSelected]=useState<string[]>([]),[category,setCategory]=useState("");
-  const [actions,setActions]=useState<Record<string,"add"|"remove"|"">>({}),[review,setReview]=useState(false);
+  const [actions,setActions]=useState<Record<string,"add"|"remove"|"">>({}),[review,setReview]=useState(false),[editing,setEditing]=useState(false);
   const [kind,setKind]=useState<"classification"|"state">("classification"),[starred,setStarred]=useState(""),[status,setStatus]=useState<ReaderState["status"]|"">("");
   const [saving,setSaving]=useState(false),[exporting,setExporting]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState("");
-  const savingRef=useRef(false),selectAll=useRef<HTMLInputElement>(null);
+  const savingRef=useRef(false),selectAll=useRef<HTMLInputElement>(null),trigger=useRef<HTMLButtonElement>(null);
+  const results=useRef<HTMLDivElement>(null),feedback=useRef<HTMLParagraphElement>(null);
   const {expireSession}=useOutletContext<{expireSession:()=>void}>(),revalidator=useRevalidator();
   const busy=saving||navigating||revalidator.state!=="idle",chosen=items.filter(item=>selected.includes(item.id));
   const additions=filters.topics.filter(topic=>actions[topic.slug]==="add"),removals=filters.topics.filter(topic=>actions[topic.slug]==="remove");
-  const reset=()=>{setSelected([]);setCategory("");setActions({});setKind("classification");setStarred("");setStatus("");setReview(false);setError("");};
+  const categoryNames=new Map(filters.categories.map(item=>[item.id,item.name]));
+  const topicNames=new Map(filters.topics.map(item=>[item.slug,item.name]));
+  const reset=()=>{setSelected([]);setCategory("");setActions({});setKind("classification");setStarred("");setStatus("");setReview(false);setEditing(false);setError("");};
   // A refreshed result page must never retain hidden selections or old versions.
   useEffect(()=>{reset();},[items]);
   useEffect(()=>{if(selectAll.current)selectAll.current.indeterminate=chosen.length>0&&chosen.length<items.length;},[chosen.length,items.length]);
@@ -43,14 +54,33 @@ export default function LibraryOrganizer({items,filters,navigating}:{items:Reade
       else setError("未能确认保存结果，请重新载入列表核对后再整理。");
     }finally{savingRef.current=false;setSaving(false);}
   };
-  return <div aria-busy={busy}>
-    {items.length>0&&<fieldset disabled={busy} className="min-w-0 border-y border-line py-3"><legend className="sr-only">选择本页文章</legend>
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2"><label className="flex min-h-12 cursor-pointer items-center gap-3"><input ref={selectAll} type="checkbox" name="selectAll" checked={chosen.length===items.length} onChange={event=>select(event.target.checked?items.map(item=>item.id):[])} className="size-4 accent-accent"/>全选本页</label><span>已选{chosen.length}篇</span>{chosen.length>0&&<button type="button" className={button} onClick={()=>select([])}>取消选择</button>}</div>
-      <p className="text-sm text-ink-3">仅整理本页所选文章，切换筛选、翻页或重载会清除选择。</p>
+  return <div ref={results} tabIndex={-1} aria-busy={busy}>
+    <Dialog.Root open={editing} onOpenChange={open=>{if(!busy){setEditing(open);if(!open)setReview(false);}}}>
+    {items.length>0&&<fieldset disabled={busy} className="min-w-0 border-y border-line bg-bg py-2 lg:sticky lg:top-0 lg:z-10"><legend className="sr-only">选择本页文章</legend>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2"><input ref={selectAll} type="checkbox" name="selectAll" checked={chosen.length===items.length} onChange={event=>select(event.target.checked?items.map(item=>item.id):[])} className="size-4 accent-accent"/>全选本页</label>
+        <span aria-live="polite" className="min-w-18 text-sm text-ink-3">已选{chosen.length}篇</span>
+        <button type="button" disabled={!chosen.length} className={button} onClick={()=>select([])}>取消选择</button>
+        <Dialog.Trigger asChild><button ref={trigger} type="button" disabled={!chosen.length||exporting} className={button}>批量整理</button></Dialog.Trigger>
+        <NoteBatchExport ids={chosen.map(item=>item.id)} result={items} blocked={busy} onBusy={setExporting}/>
+      </div>
+      <p className="mt-1 text-sm text-ink-3">仅操作本页所选文章，切换筛选、翻页或重载会清除选择。</p>
     </fieldset>}
-    {chosen.length>0&&<NoteBatchExport ids={chosen.map(item=>item.id)} result={items} blocked={busy} onBusy={setExporting}/>}
-    {chosen.length>0&&<form method="post" action="/admin/reader" aria-label="批量整理文章" className="my-5 border-b border-line pb-5" onSubmit={event=>{event.preventDefault();void submit();}}>
-      <fieldset disabled={busy||exporting} className="min-w-0"><legend className="text-lg font-semibold">批量整理</legend>
+    <Dialog.Portal>
+      <Dialog.Overlay className="fixed inset-0 z-[75] grid place-items-center bg-ink/30 p-4">
+        <Dialog.Content className="max-h-[min(48rem,90dvh)] w-full max-w-2xl overflow-y-auto rounded-sheet bg-raised p-5 shadow-2xl ring-1 ring-line-strong"
+          onCloseAutoFocus={event=>{
+            event.preventDefault();
+            if (trigger.current&&!trigger.current.matches(":disabled")) trigger.current.focus({preventScroll:true});
+            else (feedback.current??results.current)?.focus();
+          }}>
+          <div className="flex items-center justify-between gap-4">
+            <Dialog.Title className="text-lg font-semibold">批量整理</Dialog.Title>
+            <Dialog.Close asChild><button type="button" disabled={busy} className={button}>关闭</button></Dialog.Close>
+          </div>
+          <Dialog.Description className="mt-1 text-sm text-ink-3">已选 {chosen.length} 篇，确认后才会保存。</Dialog.Description>
+    <form method="post" action="/admin/reader" aria-label="批量整理文章" className="mt-4" onSubmit={event=>{event.preventDefault();void submit();}}>
+      <fieldset disabled={busy||exporting} className="min-w-0"><legend className="sr-only">批量整理操作</legend>
         <div hidden={review}>
           <fieldset className="mt-4 min-w-0"><legend className="font-medium">整理内容</legend><div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">{([{value:"classification",label:"分类与主题"},{value:"state",label:"收藏与阅读状态"}] as const).map(option=><label key={option.value} className="flex min-h-12 cursor-pointer items-center gap-3"><input type="radio" name="bulkKind" value={option.value} checked={kind===option.value} onChange={()=>{setKind(option.value);setError("");}} className="size-4 accent-accent"/>{option.label}</label>)}</div></fieldset>
           {kind==="classification"?<>
@@ -71,15 +101,21 @@ export default function LibraryOrganizer({items,filters,navigating}:{items:Reade
         </section>}
         <div className="mt-5 flex flex-wrap gap-3"><button type="submit" className="min-h-12 rounded-control bg-accent px-4 text-white disabled:opacity-50">{saving?"整理中…":review?`确认整理${chosen.length}篇`:"检查批量变更"}</button>{review&&<button type="button" className={button} onClick={()=>setReview(false)}>返回调整</button>}</div>
       </fieldset>
-    </form>}
-    {error&&<div className="my-4"><p role="alert" className="text-hot">{error}</p><button type="button" disabled={busy} className={button+" mt-3"} onClick={()=>{reset();setMessage("");void revalidator.revalidate();}}>重新载入列表并清除选择</button></div>}
-    {message&&<p role="status" className="my-4">{message}</p>}
+    </form>
+    {error&&<div className="mt-4"><p role="alert" className="text-hot">{error}</p><button type="button" disabled={busy} className={button+" mt-3"} onClick={()=>{reset();setMessage("");void revalidator.revalidate();}}>重新载入列表并清除选择</button></div>}
+        </Dialog.Content>
+      </Dialog.Overlay>
+    </Dialog.Portal>
+    </Dialog.Root>
+    {message&&<p ref={feedback} tabIndex={-1} role="status" className="my-3 scroll-mt-24 text-sm">{message}</p>}
     <fieldset disabled={busy} className="min-w-0"><legend className="sr-only">筛选结果</legend><ol className="divide-y divide-line">{items.map(item=><li className="flex min-w-0 gap-3 py-4" key={item.id}>
-      <label className="flex min-h-12 w-12 shrink-0 cursor-pointer items-start justify-center pt-2"><input type="checkbox" name="article" value={item.id} checked={selected.includes(item.id)} onChange={event=>select(event.target.checked?[...selected,item.id]:selected.filter(id=>id!==item.id))} className="size-4 accent-accent"/><span className="sr-only">选择 {item.title}</span></label>
-      <div className="min-w-0 flex-1"><Link className="break-words text-lg text-accent" to={"/admin/reader/articles/"+item.id}>{item.title}</Link><p className="mt-1 text-sm text-ink-3">{item.source} · {statusLabels[item.state.status]} {item.state.starred?"· 已收藏":""} {item.withdrawn?"· 已下架":""}</p>
+      <label className="flex min-h-12 w-12 shrink-0 cursor-pointer items-start justify-center pt-2"><input type="checkbox" name="article" value={item.id} checked={selected.includes(item.id)} onChange={event=>select(event.target.checked?[...selected,item.id]:selected.filter(id=>id!==item.id))} className="size-4 scroll-mt-24 accent-accent"/><span className="sr-only">选择 {item.title}</span></label>
+      <div className="min-w-0 flex-1"><Link className="scroll-mt-24 break-words text-lg text-accent" to={withLibrarySearch("/admin/reader/articles/"+item.id,returnSearch)}>{item.title}</Link><p className="mt-1 text-sm text-ink-3">{item.source} · {statusLabels[item.state.status]} {item.state.starred?"· 已收藏":""} {item.withdrawn?"· 已下架":""}</p>
+        {item.category!==undefined&&<p className="mt-1 break-words text-sm text-ink-3">分类：{item.category?(categoryNames.get(item.category)??item.category):"待分类"}
+          {!!item.topicSlugs?.length&&<> · 主题：{item.topicSlugs.map(slug=>topicNames.get(slug)??slug).join("、")}</>}</p>}
         {item.note&&<div className="mt-3 text-sm leading-relaxed"><p className="break-words"><span className="font-medium">{item.matches.some(match=>match.field==='note')?'私人笔记（命中关键词）':'已保存笔记'}：</span>{item.matches.find(match=>match.field==='note')?.snippet??item.note.snippet}</p><p className="mt-1 text-ink-3">笔记保存：<time dateTime={item.note.updatedAt}>{fullDateTime(item.note.updatedAt)}</time></p></div>}
         {item.matches.length>0&&<div className="mt-3 space-y-2 text-sm leading-relaxed">{item.matches.filter(match=>!item.note||match.field!=='note').map(match=><p key={match.field} className="break-words"><span className="font-medium">{matchLabels[match.field]}：</span>{match.snippet}</p>)}</div>}</div>
     </li>)}</ol></fieldset>
-    {!items.length&&<p>没有符合条件的文章。</p>}
+    {!items.length&&<p className="py-4">{hasCursor?"这一页已没有符合条件的文章。":"没有符合条件的文章。"}</p>}
   </div>;
 }

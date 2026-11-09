@@ -7,7 +7,7 @@ import type {LibraryMatch} from "./contracts.ts";
 
 export interface LibraryRow {
   id:string;title:string;source:string;summary:string|null;note:string|null;discovered_at:Date;cursor_at:string;note_at:string|null;note_updated_at:Date|null;
-  visibility:string|null;classification_version:number;starred:boolean|null;status:"to-read"|"reading"|"read"|null;version:number|null;updated_at:Date|null;
+  visibility:string|null;category:string|null;tags:string[]|null;classification_version:number;starred:boolean|null;status:"to-read"|"reading"|"read"|null;version:number|null;updated_at:Date|null;
 }
 function bodyText(html:string){
   const $=cheerio.load(html,null,false);

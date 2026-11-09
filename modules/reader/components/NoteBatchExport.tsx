@@ -1,10 +1,11 @@
-import {useLayoutEffect,useRef,useState} from 'react';
+import {useId,useLayoutEffect,useRef,useState} from 'react';
 import {useOutletContext} from 'react-router';
 import {ownerDownload,OwnerRequestError} from '../client.ts';
 import type {ReaderLibrary} from '../contracts.ts';
 
 export default function NoteBatchExport({ids,result,blocked,onBusy}:{ids:string[];result:ReaderLibrary['items'];blocked:boolean;onBusy:(value:boolean)=>void}){
   const [running,setRunning]=useState(false),[leaving,setLeaving]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+  const description=useId();
   const pending=useRef<AbortController|null>(null),generation=useRef(0),departing=useRef(false),url=useRef<string|null>(null),key=JSON.stringify(ids);
   const {expireSession}=useOutletContext<{expireSession:()=>void}>();
   const invalidate=()=>{generation.current++;pending.current?.abort();pending.current=null;if(url.current){URL.revokeObjectURL(url.current);url.current=null;}};
@@ -32,9 +33,9 @@ export default function NoteBatchExport({ids,result,blocked,onBusy}:{ids:string[
       else if(!abort.signal.aborted&&started===generation.current)setError(error instanceof OwnerRequestError?`导出失败：${error.message}。选择和整理草稿已保留。`:'导出失败，请重试。选择和整理草稿已保留。');
     }finally{if(started===generation.current){pending.current=null;setRunning(false);onBusy(false);}}
   };
-  return <section aria-label="批量导出笔记" aria-busy={running} className="my-4 min-w-0">
-    <button type="button" disabled={blocked||running||leaving} className="min-h-12 rounded-control border border-line px-4 disabled:opacity-50" onClick={()=>void download()}>{running?'导出中…':'导出所选笔记 Markdown（ZIP）'}</button>
-    <p className="mt-2 text-sm leading-relaxed text-ink-3">每篇文章一个 Markdown 文件，只读取服务端已保存笔记；无笔记的文章也保留文件。不保存整理草稿。</p>
+  return <section aria-label="批量导出笔记" aria-busy={running} className="min-w-0">
+    <button type="button" disabled={blocked||running||leaving||!ids.length} aria-describedby={description} className="min-h-12 rounded-control border border-line px-4 disabled:opacity-50" onClick={()=>void download()}>{running?'导出中…':'导出所选笔记 Markdown（ZIP）'}</button>
+    <p id={description} className="sr-only">每篇文章一个 Markdown 文件，只读取服务端已保存笔记。无笔记的文章也保留文件。</p>
     {error&&<p role="alert" className="mt-2 text-sm text-hot">{error}</p>}{message&&<p role="status" className="mt-2 text-sm">{message}</p>}
   </section>;
 }
