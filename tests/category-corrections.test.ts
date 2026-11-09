@@ -18,11 +18,33 @@ test("placeholder categories can be extended, renamed with CAS and assigned with
   const {articleId}=await upsertMaterial({sourceId:source,url:"https://example.org/"+source,title:"Categorized material",via:"fetch"});
   await overrideFields(articleId,{fields:{category:category.id},version:0,reason:"organize"},"test");
   assert.deepEqual((await loadReaderList({sourceId:source,category:category.id})).items.map(i=>i.id),[articleId]);
-  await renameCategory(category.id,{name:"Renamed",expectedVersion:category.version},"test");
+  const renamed=await renameCategory(category.id,{name:"Renamed",expectedVersion:category.version},"test");
+  assert.deepEqual(renamed,{id:category.id,name:"Renamed",version:category.version+1});
+  const changes=await sql`SELECT before,after FROM audit_log WHERE action='category.rename' AND subject=${`category:${category.id}`}`;
+  assert.deepEqual([...changes],[{before:{name:category.name,version:category.version},after:{name:"Renamed",version:renamed.version}}]);
+  await assert.rejects(renameCategory(category.id,{name:"Renamed",expectedVersion:category.version},"test"),{code:"conflict"});
   await assert.rejects(renameCategory(category.id,{name:"Stale",expectedVersion:category.version},"test"),{code:"conflict"});
   await overrideFields(articleId,{fields:{category:null},version:1,reason:"uncategorize"},"test");
   assert.equal((await loadReaderList({sourceId:source,category:category.id})).items.length,0);
   assert.deepEqual((await loadReaderList({sourceId:source,category:"uncategorized"})).items.map(i=>i.id),[articleId]);
+});
+
+test("saving a category under the same name skips the update and rename audit",async()=>{
+  const category=await addCategory({name:"Unchanged "+tag()},"test");
+  const before=await sql`SELECT name,version,updated_at FROM article_categories WHERE id=${category.id}`;
+  const result=await renameCategory(category.id,{name:`  ${category.name}  `,expectedVersion:category.version},"test");
+  assert.deepEqual(result,category);
+  assert.deepEqual(await sql`SELECT name,version,updated_at FROM article_categories WHERE id=${category.id}`,before);
+  assert.equal((await sql`SELECT 1 FROM audit_log WHERE action='category.rename' AND subject=${`category:${category.id}`}`).length,0);
+});
+
+test("the unchanged virtual category stays virtual until its name changes",async()=>{
+  const id="uncategorized";
+  assert.deepEqual(await renameCategory(id,{name:"待分类",expectedVersion:0},"test"),{id,name:"待分类",version:0});
+  assert.equal((await sql`SELECT 1 FROM article_categories WHERE id=${id}`).length,0);
+  assert.equal((await sql`SELECT 1 FROM audit_log WHERE subject='category:uncategorized'`).length,0);
+  assert.deepEqual(await renameCategory(id,{name:"待整理",expectedVersion:0},"test"),{id,name:"待整理",version:1});
+  assert.ok((await listCategories()).some(category=>category.id===id&&category.name==="待整理"));
 });
 
 async function taxonomyFixture(){
