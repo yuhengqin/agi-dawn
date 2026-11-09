@@ -9,11 +9,9 @@ import type { Screen } from "../components/shell/screens";
 import { edgeTtl } from "../lib/api.server";
 import { webModules } from "../site-modules";
 import { pageMeta } from "../lib/seo";
-import { setFontPreference, useFontPreference } from "../lib/local-state";
-import { Select } from "../components/ui/Controls";
-import { ThemeSwitch } from "../components/shell/ThemeSwitch";
+import { InfoLink } from "../components/shell/InfoLink";
 import { Filings } from "../components/shell/Filings";
-import { IconBookmark, IconChevronRight, IconGrid, IconHeart, IconMessage, IconMoon, IconPlug, IconSparkles } from "../components/icons";
+import { IconBookmark, IconChevronRight, IconGrid, IconHeart, IconMessage, IconSparkles } from "../components/icons";
 
 export const handle: Screen = { tab: "me", name: "我的" };
 
@@ -26,7 +24,7 @@ export function meta() {
 }
 
 /**
- * "我的", the phone's last tab (the address stays /more): this browser's bookmarks and appearance first,
+ * "我的", the phone's last tab (the address stays /more): the private library first,
  * then the tools, then the site's own pages.
  */
 type Row = { to: string; label: string; icon: ReactNode; detail?: ReactNode };
@@ -48,10 +46,10 @@ function Group({ title, children }: { title?: string; children: ReactNode }) {
   );
 }
 
-function RowLink({ row, dot = false }: { row: Row; dot?: boolean }) {
+function RowLink({ row, dot = false, reloadDocument }: { row: Row; dot?: boolean; reloadDocument?: boolean }) {
   return (
     <li>
-      <Link viewTransition to={row.to} className="flex min-h-[52px] items-center gap-3 px-4 text-[16px] font-medium text-ink transition-colors active:bg-bg-sunk lg:hover:bg-bg-sunk">
+      <InfoLink viewTransition reloadDocument={reloadDocument} to={row.to} className="flex min-h-[52px] items-center gap-3 px-4 text-[16px] font-medium text-ink transition-colors active:bg-bg-sunk lg:hover:bg-bg-sunk">
         <span className="text-ink-3">{row.icon}</span>
         <span className="flex flex-1 items-center gap-2">
           {row.label}
@@ -59,7 +57,7 @@ function RowLink({ row, dot = false }: { row: Row; dot?: boolean }) {
         </span>
         {row.detail && <span className="text-[14px] font-normal text-ink-4">{row.detail}</span>}
         <IconChevronRight size={16} className="text-ink-4" />
-      </Link>
+      </InfoLink>
     </li>
   );
 }
@@ -67,7 +65,6 @@ function RowLink({ row, dot = false }: { row: Row; dot?: boolean }) {
 export default function MorePage() {
   const root = useRouteLoaderData<typeof rootLoader>("root");
   const changelogDot = useChangelogDot(root?.changelogVersion ?? null);
-  const font = useFontPreference();
   // The count is this browser's: shown once the page runs here, never in the shared server copy.
   return (
     <div className="mx-auto max-w-[var(--page-max-reading)] pb-8">
@@ -75,22 +72,7 @@ export default function MorePage() {
       <h1 className="hidden pb-4 pt-1 text-[22px] font-bold text-ink lg:block">我的</h1>
       <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-4 2xl:grid-cols-3">
         <Group>
-          <RowLink row={{ to: "/admin/reader", label: "站主私人书库", icon: <IconBookmark size={20} />, detail:"登录后管理收藏、笔记与归档" }} />
-          <li className="flex min-h-[56px] items-center gap-3 px-4 text-[16px] font-medium text-ink">
-            <span className="text-ink-3">
-              <IconMoon size={20} />
-            </span>
-            <span className="flex-1">外观</span>
-            <ThemeSwitch className="w-[126px]" />
-          </li>
-          <li className="flex min-h-[56px] items-center gap-3 px-4 text-[16px] font-medium text-ink">
-            <span className="w-5 text-center text-ink-3" aria-hidden="true">Aa</span>
-            <span className="flex-1">字体</span>
-            <Select aria-label="字体" value={font ?? "system"} onChange={(e) => setFontPreference(e.target.value === "browser" ? "browser" : null)}>
-              <option value="system">默认字体</option>
-              <option value="browser">浏览器默认字体</option>
-            </Select>
-          </li>
+          <RowLink reloadDocument row={{ to: "/admin/reader", label: "站主私人书库", icon: <IconBookmark size={20} />, detail:"登录后管理收藏、笔记与归档" }} />
         </Group>
         <Group title="工具与入口">
           {tools().map((r) => (

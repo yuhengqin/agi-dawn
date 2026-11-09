@@ -1,9 +1,9 @@
-// Failure modes: startup overwrites the saved choice, malformed/unavailable storage breaks the
-// document, denied writes prevent even an in-tab choice, or version-1 backups lose/replace a preference.
+// Failure modes: startup fails to remove the retired font key, failed cleanup breaks appearance,
+// or version-1 backups lose/replace an unrelated preference.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
-import { APPEARANCE_BOOT_SCRIPT, getFontPreference, KEYS, setFontPreference } from "../apps/web/app/lib/local-state.ts";
+import { APPEARANCE_BOOT_SCRIPT, KEYS } from "../apps/web/app/lib/local-state.ts";
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -12,10 +12,7 @@ class MemoryStorage {
   setItem(key: string, value: string) { if (this.denied) throw new Error("full"); this.values.set(key, value); }
   removeItem(key: string) { if (this.denied) throw new Error("full"); this.values.delete(key); }
 }
-const store = new MemoryStorage();
-Object.defineProperty(globalThis, "window", { configurable: true, value: { localStorage: store, sessionStorage: new MemoryStorage() } });
-
-test("appearance startup preserves saved preferences, drafts and session history", () => {
+test("appearance startup removes the legacy font key and preserves other preferences and session history", () => {
   const local = new MemoryStorage(), session = new MemoryStorage();
   const saved = {
     "agidawn-theme": "dark", "agidawn-font": "browser",
@@ -34,43 +31,52 @@ test("appearance startup preserves saved preferences, drafts and session history
   });
   boot();
   for (const [key, value] of Object.entries(saved)) {
-    assert.equal(local.getItem(key), value);
+    assert.equal(local.getItem(key), key === "agidawn-font" ? null : value);
   }
   assert.equal(attributes["data-theme"], "dark");
-  assert.equal(attributes["data-font"], "browser");
+  assert.equal(attributes["data-font"], undefined);
   assert.equal(session.getItem("agidawn:last-page"), "/items/saved");
   assert.equal(session.getItem("agidawn:screens"), '{"0":{"name":"文章","key":"default"}}');
   assert.equal(session.getItem("agidawn-render-recovery-release"), "release-A");
   assert.equal(session.values.size, 3);
   local.denied = true;
   assert.doesNotThrow(boot);
+  assert.equal(attributes["data-theme"], "dark");
+  assert.equal(attributes["data-font"], undefined);
   assert.equal(local.getItem("agidawn-feedback-draft-v1"), saved["agidawn-feedback-draft-v1"]);
 });
 
-test("appearance startup applies a saved browser font before rendering and safely handles invalid storage", () => {
-  for (const font of ["browser", "bad", null, "denied"]) {
+test("legacy font cleanup touches only its key and does not block theme or reading display", () => {
+  for (const denied of [false, true]) {
+    const local = new MemoryStorage();
+    local.setItem("agidawn-font", "browser");
+    local.setItem(KEYS.theme, "dark");
+    local.setItem(KEYS.readingDisplay, '{"size":"large","spacing":"loose","width":"wide"}');
+    local.setItem("agidawn-feedback-draft-v1", '{"text":"keep"}');
+    const originalRemove = local.removeItem.bind(local);
+    const removed: string[] = [];
+    const read: string[] = [];
+    const originalGet = local.getItem.bind(local);
+    local.getItem = (key: string) => { read.push(key); return originalGet(key); };
+    local.removeItem = (key: string) => {
+      removed.push(key);
+      if (denied && key === "agidawn-font") throw new Error("blocked");
+      originalRemove(key);
+    };
     const attributes: Record<string, string> = {};
     runInNewContext(APPEARANCE_BOOT_SCRIPT, {
-      localStorage: { getItem: (key: string) => { if (font === "denied") throw new Error("blocked"); return key === KEYS.font ? font : "dark"; } },
+      localStorage: local,
       window: { matchMedia: () => ({ matches: false }) },
       document: { documentElement: { setAttribute: (key: string, value: string) => { attributes[key] = value; } }, querySelectorAll: () => [] },
     });
-    assert.equal(attributes["data-font"], font === "browser" ? "browser" : "system");
-    assert.equal(attributes["data-theme"], font === "denied" ? "light" : "dark");
+    assert.deepEqual(removed, ["agidawn-font"]);
+    assert.deepEqual(read, [KEYS.theme, KEYS.readingDisplay]);
+    assert.equal(local.getItem("agidawn-font"), denied ? "browser" : null);
+    assert.equal(local.getItem("agidawn-feedback-draft-v1"), '{"text":"keep"}');
+    assert.equal(attributes["data-font"], undefined);
+    assert.equal(attributes["data-theme"], "dark");
+    assert.deepEqual(["size", "spacing", "width"].map((key) => attributes[`data-reading-${key}`]), ["large", "loose", "wide"]);
   }
-});
-
-test("font choices remain usable when browser persistence is denied", () => {
-  setFontPreference("browser");
-  assert.equal(getFontPreference(), "browser");
-  assert.equal(store.getItem(KEYS.font),"browser");
-  setFontPreference(null);
-  store.denied = true;
-  setFontPreference("browser");
-  assert.equal(getFontPreference(), "browser", "a choice still works in this tab when persistence is blocked");
-  setFontPreference(null);
-  assert.equal(getFontPreference(), null);
-  store.denied = false;
 });
 
 test('appearance startup validates reading settings before the first frame',()=>{

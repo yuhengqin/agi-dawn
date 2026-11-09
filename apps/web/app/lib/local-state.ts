@@ -3,7 +3,6 @@ import { useEffect, useSyncExternalStore } from "react";
 
 export const KEYS = {
   theme: "agidawn-theme",
-  font: "agidawn-font",
   readingDisplay: "agi-dawn-reading-display-v1",
   figureNotices: "agi-dawn-figure-notices-v1",
   changelogSeen: "agidawn-changelog-seen-version",
@@ -70,7 +69,6 @@ function onStorage(event: StorageEvent) {
   if (event.storageArea && event.storageArea !== storage("local")) return;
   const key=event.key;
   if (key === null || key === KEYS.theme) unsavedTheme = undefined;
-  if (key === null || key === KEYS.font) unsavedFont = undefined;
   if (key === null || key === KEYS.readingDisplay) unsavedReadingDisplay = undefined;
   if (key === null || key === KEYS.figureNotices) unsavedFigureNotices = undefined;
   if (key === null) cache.clear();
@@ -92,7 +90,6 @@ function subscribeKey(key: string) {
   };
 }
 const subscribeTheme = subscribeKey(KEYS.theme);
-const subscribeFont = subscribeKey(KEYS.font);
 const subscribeReadingDisplay = subscribeKey(KEYS.readingDisplay);
 const subscribeFigureNotices = subscribeKey(KEYS.figureNotices);
 const subscribeChangelog = subscribeKey(KEYS.changelogSeen);
@@ -110,19 +107,6 @@ function invalidate(key: string) {
 }
 
 // appearance
-export type FontPreference = "browser" | null;
-let unsavedFont: FontPreference | undefined;
-
-export function getFontPreference(): FontPreference {
-  return unsavedFont !== undefined ? unsavedFont : readRaw(KEYS.font) === "browser" ? "browser" : null;
-}
-
-export function setFontPreference(pref: FontPreference) {
-  // A denied write still leaves the choice usable in this tab, like an unsaved preference.
-  unsavedFont = writeRaw(KEYS.font, pref) ? undefined : pref;
-  emit(KEYS.font);
-}
-
 export interface ReadingDisplay {size:"default"|"large"|"larger";spacing:"compact"|"default"|"loose";width:"narrow"|"default"|"wide"}
 export const DEFAULT_READING_DISPLAY:ReadingDisplay={size:"default",spacing:"default",width:"default"};
 const readingValues={size:["default","large","larger"],spacing:["compact","default","loose"],width:["narrow","default","wide"]} as const;
@@ -207,12 +191,8 @@ export function useAppearanceSync() {
     try{const s=storage('local');for(let i=(s?.length??0)-1;i>=0;i--){const key=s!.key(i);if(key?.startsWith(KEYS.figureNotices+':'))s!.removeItem(key);}}catch{}
   },[]);
   const pref = useThemePreference();
-  const font = useFontPreference();
   const reading = useReadingDisplay();
   useEffect(() => {applyReadingDisplay(getReadingDisplay());}, [reading]);
-  useEffect(() => {
-    document.documentElement.setAttribute("data-font", getFontPreference() ?? "system");
-  }, [font]);
   useEffect(() => {
     // Read the stored choice itself: during hydration the hook still reports the server's "none".
     const current = getThemePreference();
@@ -231,7 +211,7 @@ export function useAppearanceSync() {
 }
 
 /** Inline script run before paint so the first frame already has the reader's appearance. */
-export const APPEARANCE_BOOT_SCRIPT = `(function(){var f='system';try{f=localStorage.getItem('${KEYS.font}')==='browser'?'browser':'system'}catch(e){}document.documentElement.setAttribute('data-font',f);try{var t=localStorage.getItem('${KEYS.theme}');if(t==='light'||t==='dark'){var c=t==='dark'?'${THEME_COLOR.dark}':'${THEME_COLOR.light}';document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=c})}else{t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)}catch(e){document.documentElement.setAttribute('data-theme','light')}})();`+readingBootScript;
+export const APPEARANCE_BOOT_SCRIPT = `(function(){try{localStorage.removeItem('agidawn-font')}catch(e){}try{var t=localStorage.getItem('${KEYS.theme}');if(t==='light'||t==='dark'){var c=t==='dark'?'${THEME_COLOR.dark}':'${THEME_COLOR.light}';document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=c})}else{t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)}catch(e){document.documentElement.setAttribute('data-theme','light')}})();`+readingBootScript;
 
 // changelog red dot
 function getChangelogSeen(): string | null {
@@ -283,10 +263,6 @@ export function lastPage(): string | null {
 // React hooks
 export function useThemePreference(): ThemePreference {
   return useSyncExternalStore(subscribeTheme, getThemePreference, () => null);
-}
-
-export function useFontPreference(): FontPreference {
-  return useSyncExternalStore(subscribeFont, getFontPreference, () => null);
 }
 
 export function useChangelogSeen(): string | null {

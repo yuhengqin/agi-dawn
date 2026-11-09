@@ -5,10 +5,11 @@ import {
 import type { SiteMeta } from "@agidawn/contracts/site";
 import { SITE } from "@agidawn/site";
 import { RingMark } from "@agidawn/site/brand/Logo.tsx";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import type { Route } from "./+types/root";
 import "./app.css";
-import { Sidebar } from "./components/shell/Sidebar";
+import { COLLAPSED_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, Sidebar } from "./components/shell/Sidebar";
+import { InfoDialogs } from "./components/shell/InfoDialogs";
 import { TabBar } from "./components/shell/TabBar";
 import { PullToRefresh } from "./components/shell/PullToRefresh";
 import { usePageTransition } from "./components/shell/transitions";
@@ -84,16 +85,27 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
   const navigation = useNavigation();
   const site=useRouteLoaderData<typeof loader>('root');
   const article=useRouteLoaderData('routes/item');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
+  const shellStyle = { "--desktop-sidebar-width": `${sidebarCollapsed ? COLLAPSED_SIDEBAR_WIDTH : sidebarWidth}px` } as CSSProperties;
   // The phone search and pull-to-refresh are client-side, mounted once the page is interactive.
   const [interactive, setInteractive] = useState(false);
   useEffect(() => setInteractive(true), []);
   return (
-    <div className="site-shell flex min-h-dvh">
+    <InfoDialogs><div className="site-shell flex min-h-dvh" style={shellStyle}>
       <NavigationProgress active={navigation.state === "loading"} />
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[70] focus:rounded-control focus:bg-surface focus:px-3 focus:py-2">
         跳到正文
       </a>
-      <Sidebar changelogVersion={changelogVersion} categories={site?.categories??[]} initiallyCollapsed={site?.categoriesCollapsed??false}/>
+      <Sidebar
+        changelogVersion={changelogVersion}
+        categories={site?.categories ?? []}
+        initiallyCategoriesCollapsed={site?.categoriesCollapsed ?? false}
+        collapsed={sidebarCollapsed}
+        width={sidebarWidth}
+        onToggle={() => setSidebarCollapsed(value => !value)}
+        onResize={setSidebarWidth}
+      />
       {/* Phone shell (≤ 960px): each page's top bar (PhoneBar), one centred column, the tab bar below.
           Desktop: the page fills the main area up to the list width (--page-max-wide), centred beyond it. */}
       <main id="main" className="min-w-0 flex-1 pb-[calc(72px+env(safe-area-inset-bottom))] lg:px-7 lg:pb-[72px] lg:pt-6">
@@ -105,7 +117,7 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
       <TabBar changelogVersion={changelogVersion} />
       {interactive && <PullToRefresh />}
       {!article&&interactive&&<div className="floating-tools"><ThemeToggle/><BackToTop/></div>}
-    </div>
+    </div></InfoDialogs>
   );
 }
 

@@ -7,6 +7,44 @@
 @source "../../../modules/reader/pages";
 @source "../../../modules/reader/components";
 
+.site-sidebar :is(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sidebar-options-trigger { cursor: pointer; }
+.sidebar-options {
+  --options-inline-inset: calc(var(--spacing) * 2.5);
+  /* The trigger is 44px high, with 12px below it and an 8px gap to the panel. */
+  position: fixed;
+  inset: auto auto 64px var(--options-inline-inset);
+  display: none;
+  /* Match the trigger inside the sidebar padding and its 1px end border. */
+  width: calc(var(--desktop-sidebar-width) - 2 * var(--options-inline-inset) - 1px);
+  max-height: calc(100dvh - 76px);
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+/* The collapsed rail still needs a readable panel for the text labels. */
+.sidebar-options[data-collapsed="true"] { width: 160px; }
+.sidebar-options:popover-open { display: block; }
+.sidebar-options-trigger:has(+ .sidebar-options:popover-open) { background: var(--bg-sunk); color: var(--ink); }
+.sidebar-options-trigger:has(+ .sidebar-options:popover-open) .sidebar-options-chevron { transform: rotate(180deg); }
+.sidebar-resize-handle {
+  position: absolute;
+  inset: 0 -3px 0 auto;
+  z-index: 1;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.sidebar-resize-handle:is(:hover, :active, :focus-visible) { box-shadow: inset 4px 0 var(--accent-soft); }
+.sidebar-resize-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
 .reader-popover > summary { list-style: none; }
 .reader-popover > summary::-webkit-details-marker { display: none; }
 .reader-popover-panel {
@@ -130,9 +168,6 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* The initial family is the reader's standard browser font, unlike system-ui or sans-serif. */
-:root[data-font="browser"] { font-family: initial; }
-[data-font="browser"] body, [data-font="browser"] .font-sans { font-family: inherit; }
 /* Touch screens (no hover): pressed states for rows and cards. */
 @custom-variant touch (@media (hover: none));
 
@@ -696,7 +731,7 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 .article-reading-body { display: flow-root; padding-top: 24px; }
 .article-reading-body, .article-reading-body .prose :is(h2,h3,h4,h5) { scroll-margin-top: calc(var(--bar-h) + var(--article-toolbar-h) + 16px); }
 .article-reading-body .prose > :first-child { margin-top: 0; }
-.article-progress { position: fixed; z-index: 45; top: 0; left: 194px; right: 0; height: 2px; pointer-events: none; }
+.article-progress { position: fixed; z-index: 45; top: 0; left: var(--desktop-sidebar-width, 194px); right: 0; height: 2px; pointer-events: none; }
 .article-progress > div { height: 100%; background: var(--accent); transform-origin: left; transform: scaleX(var(--article-progress)); }
 .article-outline-section { display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--line); padding-top: 14px; }
 .article-outline-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--ink-3); font-size: 12px; }

@@ -1133,6 +1133,158 @@ for(const engine of [chromium,webkit])test(`not-found idle redirect stops for pe
   }finally{release();releaseExplore();await browser.close();await web?.stop();}
 });
 
+for (const engine of [chromium, webkit]) test(`desktop sidebar keeps navigation and options available when collapsed (${engine.name()})`, async () => {
+  const browser = await engine.launch();
+  let web: WebServer | undefined;
+  const version = "2026-10-27T08:00";
+  let feedbackRequests = 0;
+  let feedbackBody = "";
+  let releaseFeedback!: () => void;
+  const pendingFeedback = new Promise<void>(resolve => { releaseFeedback = resolve; });
+  try {
+    web = await startWebServer(fakeApi(async (url, res, req) => {
+      if (url.pathname === "/api/site/articles") return readerPage([], url);
+      if (url.pathname === "/api/site/categories") return { items: [{ id: "coding", name: "AI 编程" }] };
+      if (url.pathname === "/api/site/sources") return { items: [] };
+      if (url.pathname === "/api/site/topics") return { topics: [] };
+      if (url.pathname === "/api/site/meta") return { changelogVersion: version };
+      if (url.pathname === "/api/site/changelog") return {
+        latestVersion: version,
+        releases: [{ date: "2026-10-27", time: "08:00", kind: "公告", title: "本机开发版", body: ["测试更新内容"] }],
+      };
+      if (url.pathname === "/api/site/feedback" && req.method === "POST") {
+        feedbackRequests++;
+        for await (const chunk of req) feedbackBody += chunk;
+        if (feedbackRequests === 1) await pendingFeedback;
+        res.statusCode = feedbackRequests === 1 ? 429 : 201;
+        return feedbackRequests === 1 ? { detail: "请稍后再试" } : { id: 42 };
+      }
+      if (url.pathname.startsWith("/api/admin/")) {
+        res.statusCode = 401;
+        return { code: "unauthorized" };
+      }
+      if (url.pathname === "/api/auth/login") {
+        res.writeHead(302, { Location: "/admin/login?" + url.searchParams });
+        return res.end();
+      }
+    }));
+    const page = await browser.newPage({ viewport: { width: 1280, height: 500 }, colorScheme: "light", reducedMotion: "reduce" });
+    const url = web.origin + "/?category=coding";
+    await visit(page, url);
+    const sidebar = page.locator("aside").first();
+    const primary = sidebar.getByRole("navigation", { name: "主导航", exact: true });
+    const categories = sidebar.getByRole("navigation", { name: "文章类别", exact: true });
+    const explore = primary.getByRole("link", { name: "探索", exact: true });
+    const category = categories.getByRole("link", { name: "AI 编程", exact: true });
+    const width = () => sidebar.evaluate(el => el.getBoundingClientRect().width);
+    const exploreTop = () => explore.evaluate(el => el.getBoundingClientRect().top);
+    await expect(primary.getByRole("link", { name: "文章", exact: true })).toHaveAttribute("aria-current", "page");
+    assert(await exploreTop() < await category.evaluate(el => el.getBoundingClientRect().top));
+    const top = await exploreTop();
+    const categoryToggle = sidebar.getByRole("button", { name: /^类别/ });
+    await categoryToggle.click();
+    await expect(categories).toBeHidden();
+    assert.equal(await exploreTop(), top);
+    await categoryToggle.click();
+
+    const widthHandle = sidebar.getByRole("separator", { name: "调整侧栏宽度" });
+    const initial = await width();
+    await widthHandle.press("ArrowRight");
+    assert(await width() > initial);
+    const expandedWidth = await width();
+    await sidebar.getByRole("button", { name: "收起侧栏", exact: true }).click();
+    assert(await width() < initial);
+    await expect(categories).toBeHidden();
+    await expect(explore).toBeVisible();
+
+    const trigger = sidebar.getByRole("button", { name: "我的", exact: true });
+    const options = sidebar.getByRole("region", { name: "我的选项" });
+    await expect(options).toBeHidden();
+    await trigger.press("Enter");
+    await expect(options).toBeInViewport({ ratio: 1 });
+    assert((await options.boundingBox())!.y < (await trigger.boundingBox())!.y);
+    await page.keyboard.press("Tab");
+    await expect(options.getByRole("link", { name: "后台管理" })).toBeFocused();
+    await expect(options.getByRole("radiogroup", { name: "外观" })).toHaveCount(0);
+    await expect(options.getByRole("combobox", { name: "字体" })).toHaveCount(0);
+    for (const [name, href] of [["后台管理", "/admin/reader"], ["关于", "/about"], ["更新日志", "/changelog"], ["反馈", "/feedback"]]) {
+      await expect(options.getByRole("link", { name, exact: true })).toHaveAttribute("href", href!);
+    }
+    await page.keyboard.press("Escape");
+    await expect(options).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await page.getByRole("searchbox", { name: "搜索文章" }).click();
+    await expect(options).toBeHidden();
+
+    await sidebar.getByRole("button", { name: "展开侧栏", exact: true }).click();
+    assert.equal(await width(), expandedWidth);
+    await expect(category).toHaveAttribute("aria-current", "page");
+    await trigger.click();
+    await options.getByRole("link", { name: "关于", exact: true }).click();
+    const about = page.getByRole("dialog", { name: /关于/ });
+    await expect(about).toContainText("原文版权归各来源所有");
+    await expect(options).toBeHidden();
+    await expect(page).toHaveURL(url);
+    await page.keyboard.press("Escape");
+    await expect(about).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    const changelogLink = options.getByRole("link", { name: "更新日志", exact: true });
+    await expect(changelogLink).toHaveAccessibleDescription("有新的更新");
+    await changelogLink.click();
+    const changelog = page.getByRole("dialog", { name: "更新日志" });
+    await expect(changelog).toContainText("测试更新内容");
+    await changelog.getByRole("button", { name: "关闭", exact: true }).click();
+    await expect(changelog).toBeHidden();
+    await expect(trigger).not.toHaveAccessibleDescription("有新的更新");
+    await expect(page).toHaveURL(url);
+    const openFeedback = async () => {
+      await trigger.click();
+      await options.getByRole("link", { name: "反馈", exact: true }).click();
+    };
+    await openFeedback();
+    const feedback = page.getByRole("dialog", { name: "反馈", exact: true });
+    const message = feedback.getByRole("textbox", { name: "想说点什么？" });
+    const screenshot = feedback.getByRole("img", { name: "截图预览" });
+    await message.fill("弹窗反馈草稿");
+    await feedback.locator("input[type=file]").setInputFiles({ name: "feedback.png", mimeType: "image/png",
+      buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64") });
+    await page.keyboard.press("Escape");
+    await openFeedback();
+    await expect(message).toHaveValue("弹窗反馈草稿");
+    await expect(screenshot).toBeVisible();
+    await feedback.getByRole("button", { name: "发送反馈" }).click();
+    await expect.poll(() => feedbackRequests).toBe(1);
+    await page.keyboard.press("Escape");
+    await openFeedback();
+    await expect(feedback.getByRole("button", { name: "发送反馈" })).toBeDisabled();
+    await expect(screenshot).toBeVisible();
+    releaseFeedback();
+    await expect(feedback.getByRole("alert")).toContainText("请稍后再试");
+    await expect(message).toHaveValue("弹窗反馈草稿");
+    await feedback.getByRole("button", { name: "发送反馈" }).click();
+    await expect(feedback).toContainText("#42");
+    assert.equal(feedbackRequests, 2);
+    assert(feedbackBody.includes(url));
+    assert(feedbackBody.includes('filename="feedback.png"'));
+    await page.keyboard.press("Escape");
+    await expect(feedback).toBeHidden();
+    await expect(page).toHaveURL(url);
+    await trigger.click();
+    await options.getByRole("link", { name: "后台管理", exact: true }).click();
+    await expect(page).toHaveURL(web.origin + "/admin/login?return=%2Fadmin%2Freader");
+    await expect(page.getByLabel("管理员密码")).toBeVisible();
+    await visit(page, web.origin + "/more");
+    await page.getByRole("link", { name: /^站主私人书库/ }).click();
+    await expect(page).toHaveURL(web.origin + "/admin/login?return=%2Fadmin%2Freader");
+  } finally {
+    releaseFeedback();
+    await browser.close();
+    await web?.stop();
+  }
+});
+
 for(const engine of [chromium,webkit])test(`global categories persist and browser history restores complete list and article positions (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined;
   const article=itemDetail({id:'history-article',title:'History article',category:'coding',bodyHtml:'<pre><code>const value = 1;</code></pre>'.repeat(3)+'<p>'+('Long article paragraph.</p><p>'.repeat(100))+'</p>'});
@@ -1463,8 +1615,10 @@ for(const engine of [chromium,webkit])test(`floating theme toggle follows the di
     await page.setViewportSize({width:390,height:667});await page.evaluate(()=>scrollTo(0,1500));await expect(page.getByRole('button',{name:'回到顶部',exact:true})).toBeVisible();
     await page.getByLabel('阅读显示设置',{exact:true}).click();await expect(page.getByText('阅读显示设置',{exact:true})).toBeInViewport({ratio:1});await page.keyboard.press('Escape');
     await page.getByRole('button',{name:'开启专注模式',exact:true}).click();await expect(toggle).toBeVisible();await toggle.click();await expect(html).toHaveAttribute('data-theme','dark');
-    await visit(other,web.origin+'/more');await expect(other.getByRole('radiogroup',{name:'外观',exact:true})).toBeVisible();await other.getByRole('radio',{name:'跟随系统',exact:true}).click();await expect(html).toHaveAttribute('data-theme','light');
-    await expect(other.getByRole('radio',{name:'跟随系统',exact:true})).toBeChecked();
+    await visit(other,web.origin+'/more');await expect(other.getByRole('radiogroup',{name:'外观',exact:true})).toHaveCount(0);
+    await expect(other.getByRole('combobox',{name:'字体',exact:true})).toHaveCount(0);
+    await other.getByRole('button',{name:'主题切换',exact:true}).click();await expect(html).toHaveAttribute('data-theme','light');
+    assert.equal(await other.evaluate(()=>localStorage.getItem('agidawn-theme')),null);
     const denied=await browser.newContext({viewport:{width:390,height:844},colorScheme:'light',reducedMotion:'reduce'});
     await denied.addInitScript(()=>Object.defineProperty(window,'localStorage',{get(){throw new DOMException('blocked','SecurityError');}}));
     const blocked=await denied.newPage();await visit(blocked,web.origin+'/');

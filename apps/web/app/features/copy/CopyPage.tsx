@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router";
 import type { CopyDocument, RenderedCopy } from "../../lib/markdown";
 import { ArticleLayout, RailSection } from "../../components/ui/Page";
 import { PhoneBar } from "../../components/shell/PhoneBar";
+import { InfoLink } from "../../components/shell/InfoLink";
 
 /**
  * Legal and policy pages, read like articles: the document on the page in one column, its facts in the
@@ -75,7 +75,7 @@ export function LegalFooterLinks({ links, note }: { links: Array<{ to: string; l
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
       {links.map((l) => (
-        <Link key={l.to} id={l.id} to={l.to} className="text-accent hover:underline">{l.label}</Link>
+        <InfoLink key={l.to} id={l.id} to={l.to} className="text-accent hover:underline">{l.label}</InfoLink>
       ))}
       {note && <span className="text-ink-4">{note}</span>}
     </div>
