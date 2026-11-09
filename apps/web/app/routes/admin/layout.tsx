@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
 import { Suspense,useEffect,useState } from "react";
 import { SITE } from "@agidawn/site";
-import { Await, NavLink, Outlet, useLocation, useNavigation, type ShouldRevalidateFunction } from "react-router";
+import { Await, Link, Outlet, useLocation, useNavigation, type ShouldRevalidateFunction } from "react-router";
 import type { Route } from "./+types/layout";
 import { RingMark } from "@agidawn/site/brand/Logo.tsx";
 import { NavigationProgress } from "../../components/shell/Chrome";
@@ -60,17 +60,15 @@ function NavCount({ counts, countsKey, name, className }: Counts & { name: strin
   );
 }
 
-function NavItem({ to, label, count, counts, countsKey, tone }: AdminNavEntry & Counts) {
+function NavItem({ to, label, count, counts, countsKey, tone, active }: AdminNavEntry & Counts & {active: boolean}) {
   return (
-    <NavLink to={to} className="group relative block">
-      {({ isActive }) => (
-        <span className={`relative flex items-center justify-between rounded-control px-3 py-[7px] text-[13.5px] transition-colors ${isActive ? "font-medium text-ink" : "text-ink-3 hover:text-ink"}`}>
-          {isActive && <motion.span layoutId="admin-nav" className="absolute inset-0 rounded-control bg-surface shadow-sm ring-1 ring-line" transition={{ type: "spring", stiffness: 520, damping: 38 }} />}
-          <span className="relative">{label}</span>
-          <NavCount counts={counts} countsKey={countsKey} name={count} className={`num relative min-w-5 rounded-full px-1.5 text-center text-[11px] font-semibold leading-5 ${tone === "bad" ? "bg-hot text-white" : "bg-accent-soft text-accent"}`} />
-        </span>
-      )}
-    </NavLink>
+    <Link to={to} aria-current={active ? "page" : undefined} className="group relative block">
+      <span className={`relative flex items-center justify-between rounded-control px-3 py-[7px] text-[13.5px] transition-colors ${active ? "font-medium text-ink" : "text-ink-3 hover:text-ink"}`}>
+        {active && <motion.span layoutId="admin-nav" className="absolute inset-0 rounded-control bg-surface shadow-sm ring-1 ring-line" transition={{ type: "spring", stiffness: 520, damping: 38 }} />}
+        <span className="relative">{label}</span>
+        <NavCount counts={counts} countsKey={countsKey} name={count} className={`num relative min-w-5 rounded-full px-1.5 text-center text-[11px] font-semibold leading-5 ${tone === "bad" ? "bg-hot text-white" : "bg-accent-soft text-accent"}`} />
+      </span>
+    </Link>
   );
 }
 
@@ -90,6 +88,11 @@ export default function AdminLayout({ loaderData }: Route.ComponentProps) {
   if(expired)return <p role="alert" className="p-8">登录已失效，正在返回登录页。</p>;
   const groups = nav();
   const flat = groups.flatMap((g) => g.items);
+  const pathname = location.pathname.toLowerCase().replace(/\/+$/, "");
+  const activeTo = flat.reduce((best, {to}) => {
+    const target = to.toLowerCase();
+    return to.length > best.length && (pathname === target || pathname.startsWith(target + "/")) ? to : best;
+  }, "");
   return (
     <div className="flex min-h-dvh bg-bg">
       <NavigationProgress active={navigation.state === "loading"} />
@@ -104,7 +107,7 @@ export default function AdminLayout({ loaderData }: Route.ComponentProps) {
               <div className="mb-1 px-3 text-[11.5px] font-medium tracking-wide text-ink-4">{g.group}</div>
               <div className="space-y-0.5">
                 {g.items.map((i) => (
-                  <NavItem key={i.to} {...i} counts={counts} countsKey={countsKey} />
+                  <NavItem key={i.to} {...i} counts={counts} countsKey={countsKey} active={i.to === activeTo} />
                 ))}
               </div>
             </div>
@@ -129,12 +132,12 @@ export default function AdminLayout({ loaderData }: Route.ComponentProps) {
           </div>
           <nav className="no-scrollbar flex gap-1 overflow-x-auto px-3 py-2">
             {flat.map((i) => {
-              const active = location.pathname === i.to || location.pathname.startsWith(`${i.to}/`);
+              const active = i.to === activeTo;
               return (
-                <NavLink key={i.to} to={i.to} className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[13px] ${active ? "bg-ink text-bg" : "text-ink-3"}`}>
+                <Link key={i.to} to={i.to} aria-current={active ? "page" : undefined} className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[13px] ${active ? "bg-ink text-bg" : "text-ink-3"}`}>
                   {i.label}
                   <NavCount counts={counts} countsKey={countsKey} name={i.count} className="num ml-1 text-[11px] opacity-70" />
-                </NavLink>
+                </Link>
               );
             })}
           </nav>

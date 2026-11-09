@@ -684,6 +684,86 @@ test('saved views merge a delayed initial directory with completed creates, edit
   }finally{release?.();releaseRefresh?.();await browser.close();await web?.stop();}
 });
 
+test('category management keeps drafts separate and recovers a stale rename in place',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  let category={id:'agents',name:'Agent',version:1};
+  const writes:number[]=[];
+  try{
+    web=await startWebServer(fakeApi(async(url,res,req)=>{
+      if(url.pathname==='/api/admin/me')return {name:'Owner',csrf:'test-csrf'};
+      if(url.pathname==='/api/site/categories')return {items:[category]};
+      if(url.pathname==='/api/admin/categories/agents'&&req.method==='PATCH'){
+        let text='';for await(const chunk of req)text+=chunk;
+        const {name,expectedVersion}=JSON.parse(text);writes.push(expectedVersion);
+        if(expectedVersion!==category.version){res.statusCode=409;return {detail:'分类已改变，请重新载入'};}
+        category={...category,name,version:category.version+1};return category;
+      }
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900}});
+    await visit(page,web.origin+'/admin/reader/categories');
+    await expect(page.locator('aside a[aria-current="page"]')).toHaveText(['分类管理']);
+    const add=page.getByRole('textbox',{name:'新增分类'});
+    await add.fill('新增分类草稿');
+    const row=page.getByRole('listitem');
+    await row.getByRole('button',{name:'改名'}).click();
+    const name=row.getByRole('textbox');
+    await expect(name).toBeFocused();
+    const save=row.getByRole('button',{name:'保存',exact:true});
+    await expect(save).toBeDisabled();
+    await name.fill('Agent 工程');
+    category={...category,name:'另一窗口已改名',version:2};
+    await name.press('Enter');
+    await expect(row.getByRole('alert')).toBeVisible();
+    await expect(name).toHaveValue('Agent 工程');
+    await row.getByRole('button',{name:'核对已保存版本'}).click();
+    await expect(row).toContainText('另一窗口已改名');
+    await expect(name).toHaveValue('Agent 工程');
+    await expect(name).toBeFocused();
+    await save.click();
+    await expect(row.getByRole('status')).toContainText('已保存');
+    await expect(add).toHaveValue('新增分类草稿');
+    assert.deepEqual(writes,[1,2]);
+  }finally{await browser.close();await web?.stop();}
+});
+
+test('a slow category catalog check cannot replace a confirmed rename',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  let category={id:'agents',name:'Agent',version:1},delay=false;
+  const checkStarted=Promise.withResolvers<void>(),releaseCheck=Promise.withResolvers<void>();
+  try{
+    web=await startWebServer(fakeApi(async(url,res,req)=>{
+      if(url.pathname==='/api/admin/me')return {name:'Owner',csrf:'test-csrf'};
+      if(url.pathname==='/api/site/categories'){
+        const snapshot={items:[category]};
+        if(delay){checkStarted.resolve();await releaseCheck.promise;}
+        return snapshot;
+      }
+      if(url.pathname==='/api/admin/categories'&&req.method==='POST'){
+        res.statusCode=409;return {detail:'分类名称已存在'};
+      }
+      if(url.pathname==='/api/admin/categories/agents'&&req.method==='PATCH'){
+        category={...category,name:'Agent 工程',version:2};return category;
+      }
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900}});
+    await visit(page,web.origin+'/admin/reader/categories');
+    const add=page.getByRole('form',{name:'新增分类'});
+    await add.getByRole('textbox').fill('Agent');
+    await add.getByRole('button',{name:'新增',exact:true}).click();
+    delay=true;
+    await add.getByRole('button',{name:'核对分类列表'}).click();
+    await checkStarted.promise;
+    const row=page.getByRole('listitem');
+    await row.getByRole('button',{name:'改名 Agent',exact:true}).click();
+    await row.getByRole('textbox').fill('Agent 工程');
+    await row.getByRole('button',{name:'保存',exact:true}).click();
+    await expect(row.getByRole('status')).toContainText('已保存');
+    releaseCheck.resolve();
+    await expect(add.getByRole('status')).toBeVisible();
+    await expect(row.getByRole('button',{name:'改名 Agent 工程',exact:true})).toBeVisible();
+  }finally{releaseCheck.resolve();await browser.close();await web?.stop();}
+});
+
 test('topic management creates and renames topics and updates library, article and bulk choices',async()=>{
   const browser=await chromium.launch();let web:WebServer|undefined;
   let topics=[{slug:'mcp',name:'MCP 与工具调用',definition:'Existing tools topic',version:1,articleCount:2}];
@@ -709,7 +789,7 @@ test('topic management creates and renames topics and updates library, article a
     }));
     const context=await browser.newContext({viewport:{width:390,height:844}});await context.addCookies([{name:'testowner',value:'1',url:web.origin}]);const page=await context.newPage();
     const response=await page.goto(web.origin+'/admin/reader/topics');assert.equal(response!.status(),200);await visit(page,page.url());await expect(page.getByRole('heading',{name:'主题管理',exact:true})).toBeVisible();
-    const add=page.getByRole('form',{name:'新增主题',exact:true});await add.getByRole('textbox',{name:'主题名称',exact:true}).fill('模型压缩');await add.getByRole('textbox',{name:'主题说明',exact:true}).fill('压缩与量化 <img src=x>');await add.getByRole('button',{name:'新增主题',exact:true}).click();
+    const add=page.getByRole('form',{name:'新增主题',exact:true});await expect(add).toBeHidden();await page.getByRole('button',{name:'新增主题',exact:true}).click();await add.getByRole('textbox',{name:'主题名称',exact:true}).fill('模型压缩');await add.getByRole('textbox',{name:'主题说明',exact:true}).fill('压缩与量化 <img src=x>');await add.getByRole('button',{name:'新增主题',exact:true}).click();
     await expect(page.getByRole('region',{name:'模型压缩',exact:true})).toContainText('0篇');assert.equal(await page.locator('img[src="x"]').count(),0);
     const existing=page.getByRole('region',{name:'MCP 与工具调用',exact:true});await existing.getByText('编辑主题',{exact:true}).click();
     await existing.getByRole('textbox',{name:'主题名称',exact:true}).fill('工具与协议');await existing.getByRole('textbox',{name:'主题说明',exact:true}).fill('Revised tools description');await existing.getByRole('button',{name:'保存主题',exact:true}).click();
@@ -722,7 +802,7 @@ test('topic management creates and renames topics and updates library, article a
   }finally{await browser.close();await web?.stop();}
 });
 
-test('topic management keeps conflicting drafts, explicitly reloads versions and clears private controls on expiry',async()=>{
+test('topic management compares conflicting versions without losing drafts and clears private controls on expiry',async()=>{
   const browser=await chromium.launch();let web:WebServer|undefined;
   let topic={slug:'stable-topic',name:'Existing topic',definition:'Saved description',version:1,articleCount:3},conflict=true;
   try{
@@ -731,13 +811,19 @@ test('topic management keeps conflicting drafts, explicitly reloads versions and
       if(!req.headers.cookie?.includes('testowner=1')){res.statusCode=401;return {};}
       if(url.pathname==='/api/admin/me')return {name:'Owner',csrf:'test-csrf'};
       if(url.pathname==='/api/admin/reader/topics'&&req.method==='GET')return {items:[topic]};
-      if(req.method==='PATCH'){let text='';for await(const chunk of req)text+=chunk;const body=JSON.parse(text);if(conflict){topic={...topic,definition:'Other window saved',version:2};res.statusCode=409;return {detail:'主题已改变'};}assert.equal(body.expectedVersion,2);topic={...topic,...body,version:3};return topic;}
+      if(req.method==='PATCH'){let text='';for await(const chunk of req)text+=chunk;const body=JSON.parse(text);if(conflict){topic={...topic,name:'Concurrent name',definition:'Other window saved',version:2};res.statusCode=409;return {detail:'主题已改变'};}assert.equal(body.expectedVersion,2);assert.equal(body.name,'Concurrent name');topic={...topic,...body,version:3};return topic;}
     }));
-    const context=await browser.newContext({viewport:{width:320,height:700}});await context.addCookies([{name:'testowner',value:'1',url:web.origin}]);const page=await context.newPage();const response=await page.goto(web.origin+'/admin/reader/topics');assert.equal(response!.status(),200);await visit(page,page.url());
-    const add=page.getByRole('form',{name:'新增主题',exact:true});await add.getByRole('textbox',{name:'主题名称',exact:true}).fill('Keep new draft');await add.getByRole('textbox',{name:'主题说明',exact:true}).fill('Keep new description');
-    const editor=page.getByRole('region',{name:'Existing topic',exact:true});await editor.getByText('编辑主题',{exact:true}).click();await editor.getByRole('textbox',{name:'主题说明',exact:true}).fill('Unsaved conflicting description');await editor.getByRole('button',{name:'保存主题',exact:true}).click();
+    const context=await browser.newContext({viewport:{width:1440,height:900}});await context.addCookies([{name:'testowner',value:'1',url:web.origin}]);const page=await context.newPage();const response=await page.goto(web.origin+'/admin/reader/topics');assert.equal(response!.status(),200);await visit(page,page.url());
+    await expect(page.locator('aside a[aria-current="page"]')).toHaveText(['主题管理']);
+    const add=page.getByRole('form',{name:'新增主题',exact:true});await page.getByRole('button',{name:'新增主题',exact:true}).click();await add.getByRole('textbox',{name:'主题名称',exact:true}).fill('Keep new draft');await add.getByRole('textbox',{name:'主题说明',exact:true}).fill('Keep new description');
+    const editor=page.getByRole('region',{name:/^(Existing topic|Concurrent name)$/});await editor.getByText('编辑主题',{exact:true}).click();await editor.getByRole('textbox',{name:'主题说明',exact:true}).fill('Unsaved conflicting description');
+    page.once('dialog',dialog=>dialog.dismiss());
+    await editor.getByRole('link',{name:'查看3篇文章',exact:true}).click();
+    await expect(page).toHaveURL(/\/admin\/reader\/topics$/);
+    await expect(editor.getByRole('textbox',{name:'主题说明',exact:true})).toHaveValue('Unsaved conflicting description');
+    await editor.getByRole('button',{name:'保存主题',exact:true}).click();
     await expect(editor.getByRole('alert')).toContainText('输入已保留');await expect(editor.getByRole('textbox',{name:'主题说明',exact:true})).toHaveValue('Unsaved conflicting description');
-    await editor.getByRole('button',{name:'载入已保存版本',exact:true}).click();await expect(editor.getByRole('textbox',{name:'主题说明',exact:true})).toHaveValue('Other window saved');await expect(add.getByRole('textbox',{name:'主题名称',exact:true})).toHaveValue('Keep new draft');
+    await editor.getByRole('button',{name:'核对已保存版本',exact:true}).click();await expect(editor.getByRole('textbox',{name:'主题说明',exact:true})).toHaveValue('Unsaved conflicting description');await expect(editor.getByRole('textbox',{name:'主题名称',exact:true})).toHaveValue('Concurrent name');await expect(editor).toContainText('Other window saved');await expect(add.getByRole('textbox',{name:'主题名称',exact:true})).toHaveValue('Keep new draft');
     conflict=false;await editor.getByRole('textbox',{name:'主题说明',exact:true}).fill('Final description');await editor.getByRole('button',{name:'保存主题',exact:true}).click();await expect(editor.getByRole('status')).toContainText('已保存');await expect(add.getByRole('textbox',{name:'主题说明',exact:true})).toHaveValue('Keep new description');
     await context.clearCookies();await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page).toHaveURL(/\/admin\/login/);await expect(page.getByRole('textbox',{name:'主题说明',exact:true})).toHaveCount(0);assert(!(await page.content()).includes('Keep new draft'));
   }finally{await browser.close();await web?.stop();}
@@ -762,6 +848,7 @@ test('topic refresh failure after a successful save preserves every draft and ca
       }
     }));
     const context=await browser.newContext();await context.addCookies([{name:'testowner',value:'1',url:web.origin}]);const page=await context.newPage();await visit(page,web.origin+'/admin/reader/topics');
+    await page.getByRole('button',{name:'新增主题',exact:true}).click();
     const add=page.getByRole('form',{name:'新增主题',exact:true}),first=page.getByRole('region',{name:'First topic',exact:true}),second=page.getByRole('region',{name:'Second topic',exact:true});
     await add.getByRole('textbox',{name:'主题名称',exact:true}).fill('New topic draft');await add.getByRole('textbox',{name:'主题说明',exact:true}).fill('New description draft');
     await second.getByText('编辑主题',{exact:true}).click();await second.getByRole('textbox',{name:'主题说明',exact:true}).fill('Other row unsaved draft');
