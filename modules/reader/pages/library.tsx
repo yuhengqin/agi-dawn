@@ -25,7 +25,7 @@ export default function LibraryPage(){const page=useLoaderData<typeof loader>(),
     <div className="flex items-end gap-4"><button type="submit" className="min-h-12 rounded-control bg-accent px-5 text-white disabled:opacity-50">{busy?'筛选中…':'筛选'}</button><Link to="/admin/reader" className="flex min-h-12 items-center text-accent underline">清除筛选</Link></div>
   </fieldset></Form>
   <SavedViews query={page.query} catalog={page.filters}/>
-  <div className="mb-4 flex flex-wrap gap-x-6"><Link to={'/admin/reader?'+reviewQuery} className="inline-flex min-h-12 items-center text-accent underline">笔记回顾</Link><Link to="/admin/reader/topics" className="inline-flex min-h-12 items-center text-accent underline">管理主题</Link></div>
+  <div className="mb-4 flex flex-wrap gap-x-6"><Link to={'/admin/reader?'+reviewQuery} className="inline-flex min-h-12 items-center text-accent underline">笔记回顾</Link><Link to="/admin/reader/taxonomy#topics" className="inline-flex min-h-12 items-center text-accent underline">管理主题</Link></div>
   <LibraryOrganizer key={"organizer:"+JSON.stringify(page.query)} items={page.items} filters={page.filters} navigating={busy}/>
   {page.nextCursor&&<Link className="mt-6 inline-block underline" to={"/admin/reader?"+new URLSearchParams({...page.query,cursor:page.nextCursor})}>{page.query.sort==='note-updated'?'下一页':'更早的文章'}</Link>}
 </section>;}

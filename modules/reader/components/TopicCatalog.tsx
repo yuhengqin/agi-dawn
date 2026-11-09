@@ -1,19 +1,13 @@
 import {useEffect,useId,useRef,useState} from "react";
-import {Link,useLoaderData,useOutletContext,type LoaderFunctionArgs} from "react-router";
-import {adminGet} from "../../../apps/web/app/lib/admin.server.ts";
+import {Link,useOutletContext} from "react-router";
 import {OwnerRequestError,ownerRequest} from "../client.ts";
 import type {ManagedTopic} from "../contracts.ts";
 import {
   mergeTaxonomyCatalog,primaryTaxonomyButton,secondaryTaxonomyButton,taxonomyInput,
-  useTaxonomyCommand,useTaxonomyDraft,useTaxonomyDraftGuard,type TrackTaxonomyDraft,
-} from "../components/TaxonomyForms.ts";
+  useTaxonomyCommand,useTaxonomyDraft,type TrackTaxonomyDraft,
+} from "./TaxonomyForms.ts";
 
-export const headers=()=>({"Cache-Control":"no-store"});
-export const shouldRevalidate=()=>true;
-const catalog="/api/admin/reader/topics";
-export async function loader({request}:LoaderFunctionArgs){
-  return adminGet<{items:ManagedTopic[]}>(request,catalog);
-}
+export const topicCatalogPath="/api/admin/reader/topics";
 const control=taxonomyInput+" mt-1 block w-full text-base";
 type Refresh=()=>Promise<boolean>;
 
@@ -26,17 +20,17 @@ function TopicHeader({refresh,track}:{refresh:Refresh;track:TrackTaxonomyDraft})
   return <>
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-semibold">主题管理</h1>
+        <h2 id="topics" tabIndex={-1} className="scroll-mt-24 text-lg font-semibold lg:scroll-mt-6">主题</h2>
         <p className="mt-2 text-sm text-ink-3">主题可跨分类关联文章。改名和编辑说明会保留已有归属。</p>
       </div>
       <button type="button" aria-expanded={open} aria-controls={formId} className={open?secondaryTaxonomyButton:primaryTaxonomyButton}
         disabled={!!command.pending} onClick={()=>setOpen(!open)}>{open?"收起新增":dirty?"新增主题（有草稿）":"新增主题"}</button>
     </header>
-    <form id={formId} hidden={!open} method="post" action="/admin/reader/topics" aria-label="新增主题" aria-busy={!!command.pending}
+    <form id={formId} hidden={!open} method="post" aria-label="新增主题" aria-busy={!!command.pending}
       className="mt-5 rounded-panel border border-line bg-surface p-4" onSubmit={event=>{
         event.preventDefault();
         void command.run("save",async()=>{
-          await ownerRequest<ManagedTopic>(catalog,"POST",{name,definition});
+          await ownerRequest<ManagedTopic>(topicCatalogPath,"POST",{name,definition});
           setName("");setDefinition("");await refresh();
           return "主题已新增";
         });
@@ -73,7 +67,7 @@ function TopicRow({topic,refresh,track,onVersion}:{topic:ManagedTopic;refresh:Re
   return <section aria-labelledby={headingId} className="min-w-0 px-4 py-3">
     <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
       <div className="min-w-0 flex-1 break-words">
-        <h3 id={headingId} className="font-semibold">{topic.name}</h3>
+        <h4 id={headingId} className="font-semibold">{topic.name}</h4>
         <p className="mt-1 whitespace-pre-wrap leading-relaxed text-ink-3">{topic.definition}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -84,12 +78,12 @@ function TopicRow({topic,refresh,track,onVersion}:{topic:ManagedTopic;refresh:Re
       </div>
     </div>
     {!open&&dirty&&<p className="mt-1 text-sm text-ink-3">主题修改尚未保存</p>}
-    <form id={formId} hidden={!open} method="post" action="/admin/reader/topics" aria-label={"编辑主题："+topic.name}
+    <form id={formId} hidden={!open} method="post" aria-label={"编辑主题："+topic.name}
       aria-busy={!!command.pending} className="mt-3 border-t border-line pt-3" onSubmit={event=>{
         event.preventDefault();
         if(!changed)return;
         void command.run("save",async()=>{
-          const value=await ownerRequest<ManagedTopic>(catalog+"/"+encodeURIComponent(topic.slug),"PATCH",{name,definition,expectedVersion:current.version});
+          const value=await ownerRequest<ManagedTopic>(topicCatalogPath+"/"+encodeURIComponent(topic.slug),"PATCH",{name,definition,expectedVersion:current.version});
           accept(value);setComparison(null);onVersion(value);await refresh();
           return "主题已保存";
         });
@@ -104,7 +98,7 @@ function TopicRow({topic,refresh,track,onVersion}:{topic:ManagedTopic;refresh:Re
         <div className="flex flex-wrap gap-2">
           <button type="submit" disabled={!changed} className={primaryTaxonomyButton}>{command.pending==="save"?"保存中…":"保存主题"}</button>
           <button type="button" className={secondaryTaxonomyButton} onClick={()=>void command.run("read",async()=>{
-            const {items}=await ownerRequest<{items:ManagedTopic[]}>(catalog);
+            const {items}=await ownerRequest<{items:ManagedTopic[]}>(topicCatalogPath);
             const value=items.find(item=>item.slug===topic.slug);
             if(!value)throw new OwnerRequestError(404,"主题不存在");
             // Keep local changes only for fields the editor actually touched.
@@ -118,7 +112,7 @@ function TopicRow({topic,refresh,track,onVersion}:{topic:ManagedTopic;refresh:Re
       {command.error&&<p role="alert" className="mt-2 text-sm text-hot">{command.error}</p>}
       {command.message&&<p role="status" className="mt-2 text-sm text-ink-3">{command.message}</p>}
       {comparison&&<div className="mt-3 rounded-control bg-bg-sunk p-3 text-sm">
-        <h4 className="font-semibold">已保存版本</h4>
+        <h5 className="font-semibold">已保存版本</h5>
         <p className="mt-1 break-words">{comparison.name}</p>
         <p className="mt-1 whitespace-pre-wrap break-words text-ink-3">{comparison.definition}</p>
         {changed&&<p className="mt-2 text-ink-3">保存后会以当前输入为准，请先核对差异。</p>}
@@ -127,17 +121,17 @@ function TopicRow({topic,refresh,track,onVersion}:{topic:ManagedTopic;refresh:Re
   </section>;
 }
 
-export default function TopicsPage(){
-  const loaded=useLoaderData<typeof loader>(),[items,setItems]=useState(loaded.items);
+export function TopicCatalog({topics,track}:{topics:ManagedTopic[];track:TrackTaxonomyDraft}){
+  const [items,setItems]=useState(topics);
   const [refreshError,setRefreshError]=useState(""),[refreshing,setRefreshing]=useState(false);
-  const refreshId=useRef(0),{expireSession}=useOutletContext<{expireSession:()=>void}>(),track=useTaxonomyDraftGuard();
+  const refreshId=useRef(0),{expireSession}=useOutletContext<{expireSession:()=>void}>();
   const updateCatalog=(snapshot:ManagedTopic[])=>setItems(current=>mergeTaxonomyCatalog(current,snapshot,item=>item.slug));
-  useEffect(()=>{updateCatalog(loaded.items);},[loaded.items]);
+  useEffect(()=>{updateCatalog(topics);},[topics]);
   const onVersion=(value:ManagedTopic)=>setItems(current=>current.map(item=>item.slug===value.slug&&item.version<=value.version?value:item));
   const refresh=async()=>{
     const id=++refreshId.current;setRefreshing(true);
     try{
-      const value=await ownerRequest<{items:ManagedTopic[]}>(catalog);
+      const value=await ownerRequest<{items:ManagedTopic[]}>(topicCatalogPath);
       if(id===refreshId.current){updateCatalog(value.items);setRefreshError("");}
       return true;
     }catch(error){
@@ -146,7 +140,7 @@ export default function TopicsPage(){
       return false;
     }finally{if(id===refreshId.current)setRefreshing(false);}
   };
-  return <section className="mx-auto max-w-4xl px-5 py-8">
+  return <section aria-labelledby="topics" className="border-t border-line pt-6">
     <TopicHeader refresh={refresh} track={track}/>
     {refreshError&&<div aria-busy={refreshing} className="mt-4">
       <p role="alert" className="text-hot">{refreshError}</p>
@@ -154,7 +148,7 @@ export default function TopicsPage(){
         {refreshing?"刷新中…":"重试刷新主题列表"}
       </button>
     </div>}
-    <h2 className="mt-6 text-lg font-semibold">已有主题</h2>
+    <h3 className="mt-5 font-semibold">已有主题</h3>
     <p className="mb-3 mt-1 text-sm text-ink-3">关联篇数按私人书库统计，包含已下架文章和停用来源的历史。</p>
     <div className="divide-y divide-line rounded-panel border border-line bg-surface">
       {items.map(topic=><TopicRow key={topic.slug} topic={topic} refresh={refresh} track={track} onVersion={onVersion}/>)}
