@@ -10,6 +10,17 @@ export function figurePresentationIssues(html:string):BodyIssue[]{
 }
 
 const months=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+const decorationOnly=/^(?:\p{Extended_Pictographic}|\uFE0F|\u200D)+$/u;
+
+/** Ghost renders a callout's icon in its own block; extraction leaves it as a lone paragraph. */
+function isCalloutDecoration($:cheerio.CheerioAPI,node:import('domhandler').Element):boolean {
+  const paragraph=$(node);
+  if(!paragraph.is('p')||paragraph.children().length||paragraph.parents('a,figure,blockquote,pre,code').length)return false;
+  const text=paragraph.text().trim();
+  if(!text||text.length>8||!decorationOnly.test(text))return false;
+  const previous=paragraph.prev();
+  return (previous.length===0||previous.is('hr'))&&paragraph.next().is('p')&&!!collapseWhitespace(paragraph.next().text());
+}
 function dateOnly(value:string):string|null {
   const text=collapseWhitespace(value),chinese=/^(\d{4})年(\d{1,2})月(\d{1,2})日$/.exec(text.replace(/\s+/g,''));
   if(chinese)return `${chinese[1]}-${chinese[2]!.padStart(2,'0')}-${chinese[3]!.padStart(2,'0')}`;
@@ -82,11 +93,9 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
     link.replaceWith(thumbnails.flatMap(image=>image.toArray()).concat(head.toArray(),description.flatMap(text=>$('<p>').text(text).toArray())));
     card.find('figcaption').remove();changed=true;
   });
-  if(host==='ghuntley.com'){
-    const path=page.pathname.replace(/\/+$/,''),opening=$.root().children().first();
-    const decoration=path==='/z80'?'✨':path==='/stdlib'?'🗞️':null;
-    if(decoration&&opening.is('p')&&!opening.children().length&&opening.text().trim()===decoration&&opening.next().is('p')){opening.remove();changed=true;}
-    if(path==='/open-webui'){
+  if(host==='ghuntley.com')$('p').each((_,node)=>{if(isCalloutDecoration($,node)){$(node).remove();changed=true;}});
+  if(host==='ghuntley.com'&&page.pathname.replace(/\/+$/,'')==='/open-webui'){
+    {
       const first=$.root().children().first(),card=first.next(),rest=card.next(),prefix=collapseWhitespace(first.text()),chinese=prefix==='这是对';
       const title=card.find('p > a').filter((_,node)=>{
         try{const target=new URL($(node).attr('href')??'',page);return target.hostname.replace(/^www\./,'')==='ghuntley.com'&&target.pathname.replace(/\/+$/,'')==='/screwed'&&!!$(node).text().trim();}catch{return false;}
@@ -101,7 +110,7 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
   }
   if(host==='ghuntley.com')$('figure[data-reader-card="true"]').each((_,node)=>{
     const card=$(node),images=card.find('img');
-    if(images.length>1)images.each((_,image)=>{try{if(new URL($(image).attr('src')??'').pathname.includes('/content/images/icon/')){$(image).closest('a').remove();changed=true;}}catch{}});
+    if(images.length>1)images.each((_,image)=>{try{if(new URL($(image).attr('src')??'').pathname.includes('/content/images/icon/')){$(image).closest('a').remove();changed=true;}}catch{/* Unresolvable image URLs keep their link. */}});
     card.children('p').each((_,paragraph)=>{const p=$(paragraph);if(collapseWhitespace(p.text())==='Geoffrey HuntleyGeoffrey Huntley'){p.text('Geoffrey Huntley');changed=true;}});
     const metadata=card.children('p').last(),text=metadata.text(),separated=text.replace(/^(GitHub|The Register|Latent Patterns|One Useful Thing)(?=\S)/,'$1 · ');
     if(separated!==text&&!metadata.find('a,img,video').length){metadata.text(separated);changed=true;}
@@ -147,7 +156,7 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
   if(host==='browser-use.com'){
     $('img').each((_,node)=>{try{let image=new URL($(node).attr('src')??'',page);if(image.pathname==='/_next/image'&&image.searchParams.get('url'))image=new URL(image.searchParams.get('url')!,page);
       if(image.pathname.includes('/benchmark-behind-the-benchmark/')){$(node).attr('data-reader-image-surface','dark');changed=true;}
-    }catch{}});
+    }catch{/* Unresolvable image URLs keep their default surface. */}});
     const first=$.root().children().first();
     if(first.is('ul')){
       const names=first.children('li').toArray().map(node=>collapseWhitespace($(node).text()));
@@ -157,7 +166,7 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
       const link=$(node),images=link.find('img');if(images.length!==1||link.text().trim()||!['','文章图表','Article figure'].includes(images.attr('alt')??''))return;
       try{const target=new URL(link.attr('href')??'',page);if(!target.hash)return;target.hash='';const original=new URL(page);original.hash='';
         if(target.href===original.href){link.remove();changed=true;}
-      }catch{}
+      }catch{/* Unresolvable figure links stay unchanged. */}
     });
   }
   if(day&&(host==='developers.googleblog.com'||host==='browser-use.com')){
@@ -197,7 +206,7 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
         if(target.origin===page.origin&&target.pathname===page.pathname&&target.searchParams.get('action')==='share'){
           paragraph.remove();changed=true;
         }
-      }catch{}
+      }catch{/* Unresolvable share links stay unchanged. */}
     });
     const children=$.root().children(),last=children.last(),candidate=last.is('hr')?children.eq(children.length-2):last;
     if(candidate.is('p')&&['No posts','无帖子'].includes(collapseWhitespace(candidate.text()))){candidate.remove();changed=true;}

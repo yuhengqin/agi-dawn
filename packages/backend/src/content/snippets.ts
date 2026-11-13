@@ -20,8 +20,10 @@ export function plainMetadata(translated:string,source:string):string {
 export function cleanSummary(input:string|null,context:SummaryContext={}):string|null {
   if(input===null)return null;
   let text=collapseWhitespace(input),host='';
-  try{host=new URL(context.url??'').hostname.replace(/^www\./,'');}catch{}
+  try{host=new URL(context.url??'').hostname.replace(/^www\./,'');}catch{/* An unparsable URL keeps host-specific rules off. */}
   if(host==='uber.com'&&/^uber[.!。]?$/i.test(text))return null;
+  // Ghost repeats the callout icon in its preview; the icon is publisher chrome, not the summary.
+  if(host==='ghuntley.com')text=text.replace(/^(?:\p{Extended_Pictographic}|\uFE0F|\u200D)+(?=\S)/u,'');
   if(host==='ghuntley.com'&&/^0:00\s*\/\s*\d{1,2}:\d{2}(?::\d{2})?\s+1[×x]\s+/.test(text)){
     text=text.replace(/^0:00\s*\/\s*\d{1,2}:\d{2}(?::\d{2})?\s+1[×x]\s+/,'').replace(/\s+\*\s+/g,' ');
   }

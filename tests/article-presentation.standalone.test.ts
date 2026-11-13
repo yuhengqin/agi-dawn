@@ -108,14 +108,21 @@ test('independent bookmarks and unverified opening fragments retain their paragr
   }
 });
 
-test('confirmed Ghost callout decorations do not become the first paragraph',()=>{
-  for(const [slug,icon] of [['z80','✨'],['stdlib','🗞️']]){
+test('Ghost callout decorations do not become the first paragraph',()=>{
+  for(const [slug,icon] of [['z80','✨'],['stdlib','🗞️'],['agent','😎'],['slop','🎉']]){
     const prose='<p>A useful notice with <code>ls</code> and <a href="https://example.org">a link</a>.</p><p>✨ stays in later prose.</p>';
     assert.equal(cleanArticlePresentation(`<p>${icon}</p>`+prose,{url:`https://ghuntley.com/${slug}/`}),prose);
-    for(const url of ['https://other.example/'+slug+'/','https://ghuntley.com/another/'])assert.equal(cleanArticlePresentation(`<p>${icon}</p>`+prose,{url}),`<p>${icon}</p>`+prose);
+    assert.equal(cleanArticlePresentation(`<p>${icon}</p>`+prose,{url:'https://ghuntley.com/another/'}),prose);
+    assert.equal(cleanArticlePresentation(`<p>${icon}</p>`+prose,{url:'https://other.example/'+slug+'/'}),`<p>${icon}</p>`+prose);
     const meaningful=`<p><a href="https://example.org">${icon}</a></p>`+prose;
     assert.equal(cleanArticlePresentation(meaningful,{url:`https://ghuntley.com/${slug}/`}),meaningful);
   }
+  const hero='<blockquote>Coverage of the hackathon.</blockquote><hr>',body='<p>A field report from the event.</p><p>😎 stays in later prose.</p>';
+  assert.equal(cleanArticlePresentation(hero+'<p>😎</p>'+body,{url:'https://ghuntley.com/ralph/'}),hero+body);
+  const midArticle='<p>Opening prose.</p><p>😎</p><p>Later prose.</p>';
+  assert.equal(cleanArticlePresentation(midArticle,{url:'https://ghuntley.com/ralph/'}),midArticle);
+  const beforeHeading='<p>😎</p><h2>Later section</h2><p>Prose.</p>';
+  assert.equal(cleanArticlePresentation(beforeHeading,{url:'https://ghuntley.com/ralph/'}),beforeHeading);
 });
 
 test('paired historical Substack footnotes and their return links stay inside the current body',()=>{

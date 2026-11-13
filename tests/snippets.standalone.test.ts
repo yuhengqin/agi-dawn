@@ -13,6 +13,14 @@ test('summary cleanup removes a matching RSS footer without hiding useful short 
   assert.equal(cleanSummary('Use <model> & keep &lt;literal&gt; unchanged.',context),'Use <model> & keep &lt;literal&gt; unchanged.');
 });
 
+test('a Ghost callout icon does not lead the summary',()=>{
+  assert.equal(cleanSummary('✨Daniel Joyce used this technique.',{url:'https://ghuntley.com/z80/'}),'Daniel Joyce used this technique.');
+  assert.equal(cleanSummary('🗞️I recently shipped a follow-up post.',{url:'https://ghuntley.com/stdlib/'}),'I recently shipped a follow-up post.');
+  assert.equal(cleanSummary('😎 以下内容于上个月开发完成。',{url:'https://ghuntley.com/agent/'}),'😎 以下内容于上个月开发完成。');
+  assert.equal(cleanSummary('💀 Ugh, merge conflicts.',{url:'https://ghuntley.com/patch/'}),'💀 Ugh, merge conflicts.');
+  assert.equal(cleanSummary('✨Daniel Joyce used this technique.',{url:'https://other.example/z80/'}),'✨Daniel Joyce used this technique.');
+});
+
 test('known source noise is omitted without applying a length threshold',()=>{
   assert.equal(cleanSummary('Uber',{title:'A rollout',url:'https://www.uber.com/us/en/blog/rollout/'}),null);
   assert.equal(cleanSummary('Uber',{title:'A rollout',url:'https://other.example/article'}),'Uber');
