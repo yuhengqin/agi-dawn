@@ -1,5 +1,12 @@
 import * as cheerio from 'cheerio';
-import {collapseWhitespace} from '../lib/text.ts';
+import {collapseWhitespace,isChineseText} from '../lib/text.ts';
+
+/** Infer prose language without counting code or generated reader notices. */
+export function isChineseBody(html:string,language?:string|null):boolean{
+  const $=cheerio.load(html,null,false);
+  $('pre,code,math,svg,[data-reader-math],[data-reader-embed],figure[data-reader-figure-status="missing"] > p:first-child').remove();
+  return isChineseText($.root().text(),language);
+}
 
 export function estimateReadingMinutes(text:string):number|null{
   if(!text.trim())return null;
@@ -8,7 +15,8 @@ export function estimateReadingMinutes(text:string):number|null{
 }
 export function isTruncatedExcerpt(summary:string|null,body:string|null):boolean{
   if(!summary||!body||/[.!?。！？…]["'”’）)]*$/.test(summary.trim()))return false;
-  const text=collapseWhitespace(summary),full=collapseWhitespace(body),at=full.indexOf(text);
+  const compact=(text:string)=>text.normalize('NFKC').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/\s+/g,'');
+  const text=compact(summary),full=compact(body),at=full.indexOf(text);
   return text.length>=24&&at>=0&&at<=300&&full.length>at+text.length;
 }
 export function articleIntro(summary:string|null,html:string|null,original?:{summary:string|null;html:string|null}):string|null{

@@ -74,6 +74,7 @@ test('English bodies with generated Chinese notices or Chinese product names sti
     '<p>What 通义千问 teaches us about building better coding agents.</p>',
   ]){
     const {articleId}=await upsertMaterial({...input(html),language:undefined});
+    assert.equal((await detail(articleId)).body?.contentLanguage,null);
     await run();
     const item=await detail(articleId);
     assert.equal(item.body?.language,'translation');
@@ -84,9 +85,10 @@ test('English bodies with generated Chinese notices or Chinese product names sti
 test('Chinese prose remains untranslated when its protected code contains much more English text',async()=>{
   const html='<p>这是中文技术文章，代码保持原样，无需翻译正文。</p><pre><code>'+('const example = "English code stays unchanged";\n'.repeat(20))+'</code></pre>';
   const {articleId}=await upsertMaterial({...input(html),language:undefined});
+  assert.equal((await detail(articleId)).body?.contentLanguage,'zh');
   const calls=provider.hits();await run();
   assert.equal(provider.hits(),calls);
-  assert.equal((await detail(articleId)).body?.language,'original');
+  const shown=await detail(articleId);assert.equal(shown.body?.language,'original');assert.equal(shown.body?.contentLanguage,'zh');
   const [state]=await sql`SELECT status FROM reader_translations WHERE article_id=${articleId}`;
   assert.equal(state!.status,'skipped');
 });

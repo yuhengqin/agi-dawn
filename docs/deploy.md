@@ -223,6 +223,8 @@ DATABASE_URL=postgres://127.0.0.1:5432/reader_restore node scripts/verify-reader
 
 一起更新 API、worker 并重建 web；无需新增依赖或数据库迁移。对旧结构的展示清理只在读取展示层生效，不写回文章正文、译文或私人快照。
 
+2026-11-13 的补修在公开正文响应增加 `contentLanguage`（`zh` 或 `null`），供页面区分中文内容与站内翻译身份；原有 `language` 含义保持。API 与 Web 应同次更新；旧字段回退只需恢复旧程序和对应 Web 构建，不回填正文或重新运行翻译。已保存 OpenAI 交互图说明和已确认的截断摘要直接按新展示规则读取。详见[补修验收](reader/article-semantics-followup-2026-11-13.md)。
+
 Uber 来源启用新提取适配器时，通过现有来源管理合并 `config.detail.bodyAdapter='uber'`，保留其他配置；模板 seed 不会更新运行时来源配置。回退到旧代码前，先从运行配置移除此 adapter 值。
 
 新提取修复 OpenAI 语义标题 slug 误判和 Uber 标题内图片装饰。已丢失的文字仍需逐篇恢复；本节说明升级与回退方式，不表示本机维护已经执行。

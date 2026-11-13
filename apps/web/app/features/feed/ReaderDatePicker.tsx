@@ -187,5 +187,5 @@ export function ReaderDatePicker({query,triggerRef}:{query:Record<string,string>
   const target=useReaderQuery(query),navigate=useNavigate();
   const hiddenFields=Object.fromEntries(Object.entries(target).filter(([key])=>!['page','from','to'].includes(key)));
   return <DateRangePicker from={query.from??''} to={query.to??''} draftRange={{from:target.from??'',to:target.to??''}} action="/" triggerRef={triggerRef} hiddenFields={hiddenFields} quickApply
-    onApply={(from,to)=>{void navigate(readerLink(target,{from:from||null,to:to||null}));}}/>;
+    onApply={(from,to)=>{void navigate(readerLink(target,{from:from||null,to:to||null}),{flushSync:true});}}/>;
 }

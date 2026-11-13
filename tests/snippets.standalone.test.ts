@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {cleanSummary,metadataAddsMarkup,plainMetadata} from '@agidawn/backend/content/snippets';
-import {articleIntro,estimateReadingMinutes,isTruncatedExcerpt} from '@agidawn/backend/content/reading';
+import {articleIntro,estimateReadingMinutes,isTruncatedExcerpt,isChineseBody} from '@agidawn/backend/content/reading';
 import {matchRanges,searchWords} from '@agidawn/contracts/search';
 import {toReaderItem,type ReaderRow} from '@agidawn/backend/publication/items';
 
@@ -79,4 +79,29 @@ test('an ellipsis is justified by an actual opening excerpt, not missing punctua
   assert.equal(isTruncatedExcerpt(excerpt,'An unrelated article about another subject.'),false);
   assert.equal(isTruncatedExcerpt('A useful short summary',null),false);
   assert.equal(isTruncatedExcerpt('A complete sentence.','A complete sentence. More content.'),false);
+});
+
+test('opening excerpt detection ignores markup spacing without classifying unrelated unfinished summaries',()=>{
+  const summary='This follows "deliberate intentional practice". A sufficiently long opening fragment';
+  const body='This follows " deliberate intentional practice ". A sufficiently long opening fragment continues here.';
+  assert.equal(isTruncatedExcerpt(summary,body),true);
+  assert.equal(isTruncatedExcerpt(summary,'An unrelated discussion without this opening.'),false);
+});
+
+test('only a proven truncated preview loses its final incomplete sentence',()=>{
+  const english='A complete opening sentence. https://example.org/article The unfinished next sentence';
+  assert.equal(cleanSummary(english,{truncated:true}),'A complete opening sentence.');
+  assert.equal(cleanSummary('一个完整的开头。下一句没有写完',{truncated:true}),'一个完整的开头。');
+  assert.equal(cleanSummary('一个完整的开头。https://example.org/ 下一句没有写完',{truncated:true}),'一个完整的开头。');
+  assert.equal(cleanSummary('Use a 3.5 ms window. More unfinished wording',{truncated:true}),'Use a 3.5 ms window.');
+  for(const fragment of ['We compared MCP vs. CLI while evalu','We interviewed Dr. Smith about deploy','We used e.g. a shared cache to'])assert.equal(cleanSummary('The service is available today. '+fragment,{truncated:true}),'The service is available today.');
+  assert.equal(cleanSummary('A useful independent summary without punctuation'),'A useful independent summary without punctuation');
+  assert.equal(cleanSummary(english),english);
+});
+
+test('display language follows prose rather than code, reader notices or an original representation label',()=>{
+  const chinese='<p>这是包含 PostgreSQL 与 OpenAI 术语的中文技术说明。这里主要使用中文介绍系统设计和部署流程。</p><pre><code>'+('const value = "English code";\n'.repeat(40))+'</code></pre>';
+  assert.equal(isChineseBody(chinese),true);assert.equal(isChineseBody(chinese,'en'),false,'worker declaration precedence is retained');
+  assert.equal(isChineseBody('<p>Read the architecture.</p><figure data-reader-figure-status="missing"><p>此图未保存，查看原文</p></figure>'),false);
+  assert.equal(isChineseBody('<p>What 通义千问 teaches us about building reliable systems.</p>'),false);
 });

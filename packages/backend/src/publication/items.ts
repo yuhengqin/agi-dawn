@@ -39,8 +39,12 @@ export async function withReaderMetadata(items:ReaderItemSummary[],known?:Map<st
   const translations=known??await serverModules().find(module=>module.publicationMetadata)?.publicationMetadata?.(items);
   return items.map(item=>{
     const translated=translations?.get(item.id),context={title:item.title,url:item.links.original};
-    return {...item,summary:cleanSummary(item.summary,context),metadataTranslation:translated?{
-      title:translated.title,summary:cleanSummary(translated.summary,{...context,title:translated.title}),
+    const summary=cleanSummary(item.summary,{...context,truncated:item.summaryTruncated});
+    const translatedContext={...context,title:translated?.title,truncated:item.summaryTruncated};
+    const translatedSummary=translated?cleanSummary(translated.summary,translatedContext):null;
+    const before=translated?.summary?cleanSummary(translated.summary,{...context,title:translated.title}):cleanSummary(item.summary,context);
+    return {...item,summary,summaryTruncated:!!item.summaryTruncated&&(translatedSummary??summary)===before,metadataTranslation:translated?{
+      title:translated.title,summary:translatedSummary,
     }:null};
   });
 }

@@ -1,6 +1,6 @@
 import {collapseWhitespace} from '../lib/text.ts';
 
-type SummaryContext={title?:string;url?:string};
+type SummaryContext={title?:string;url?:string;truncated?:boolean};
 const tags=(text:string):string[]=>text.match(/<\/?[a-zA-Z][^<>]*>/g)??[];
 
 /** Metadata is text; retain tag-shaped literals that were already in the source. */
@@ -34,6 +34,15 @@ export function cleanSummary(input:string|null,context:SummaryContext={}):string
   if(host==='ghuntley.com'&&/\S&$/.test(text)){
     const boundary=text.search(/[.!?。！？][^.!?。！？]*&$/u);
     text=boundary>=0?text.slice(0,boundary+1):text.slice(0,-1);
+  }
+  if(context.truncated){
+    let end=0;
+    for(const match of text.matchAll(/(?<!\.)[.!?](?!\.)(?:["'”’）)\]]+)?(?=\s|$|\p{Script=Han})|[。！？](?:["'”’）)\]]+)?/gu)){
+      // Prefer an earlier sentence to leaving a preview cut at an abbreviation or initial.
+      if(match[0].startsWith('.')&&/\b(?:[a-z]|Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|Fig|Eq|No|Inc|Ltd)\.$/i.test(text.slice(0,match.index+1)))continue;
+      end=match.index+match[0].length;
+    }
+    if(end>0&&end<text.length)text=text.slice(0,end).trimEnd();
   }
   return text||null;
 }

@@ -3,6 +3,7 @@ import {beijingDate} from '@agidawn/contracts/time';
 import {collapseWhitespace} from '../lib/text.ts';
 import type {BodyIssue} from '@agidawn/contracts/site';
 import {restoreFootnotes} from './footnotes.ts';
+import {normalizeOpenAIFigures} from './openai-presentation.ts';
 
 export function figurePresentationIssues(html:string):BodyIssue[]{
   return html.includes('data-reader-figure-status="missing"')?[{kind:'missing-figure',message:'部分图表未保存，请通过图示旁的链接查看原文。'}]:[];
@@ -184,5 +185,6 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
     const children=$.root().children(),last=children.last(),candidate=last.is('hr')?children.eq(children.length-2):last;
     if(candidate.is('p')&&['No posts','无帖子'].includes(collapseWhitespace(candidate.text()))){candidate.remove();changed=true;}
   }
+  if(host==='openai.com')changed=normalizeOpenAIFigures($,page)||changed;
   return changed?$.html():html;
 }

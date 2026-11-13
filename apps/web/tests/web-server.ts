@@ -34,7 +34,7 @@ export function itemDetail(fields:DetailFixture): ReaderItemDetail {
   const {bodyHtml='<p>固定正文</p>',outline=[],translation,...rest}=fields;
   return {
     ...feedItem({id:fields.id,title:fields.title}),topics:[],related:[],intro:fields.metadataTranslation?.summary??fields.summary??'固定摘要',
-    body:translation?{html:translation.bodyHtml,outline:translation.outline,complete:translation.complete,language:'translation',readingMinutes:1}:bodyHtml?{html:bodyHtml,outline,complete:true,language:'original',readingMinutes:1}:null,
+    body:translation?{html:translation.bodyHtml,outline:translation.outline,complete:translation.complete,language:'translation',contentLanguage:'zh',readingMinutes:1}:bodyHtml?{html:bodyHtml,outline,complete:true,language:'original',contentLanguage:null,readingMinutes:1}:null,
     ...rest,
   };
 }

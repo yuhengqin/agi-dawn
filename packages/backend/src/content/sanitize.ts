@@ -54,7 +54,7 @@ export function sanitizeBody(html: string, baseUrl?: string): string {
       '*':['id'],
       a: ["href", "title"],
       figure: ['data-reader-card','data-reader-figure-status','data-reader-figure-loss'],
-      p: ['data-reader-embed'],
+      p: ['data-reader-embed','data-reader-outline-slot'],
       img: ["src", "alt", "width", "height", "title", "data-reader-inline",'data-reader-image-surface'],
       video: ["src", "poster", "width", "height", "controls", "playsinline", "preload", "aria-label"],
       source: ["src", "type"],

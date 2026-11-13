@@ -30,6 +30,7 @@ const notices={pending:"全文暂未就绪。可以先阅读摘要，或访问�
 export default function Item(){const item=useLoaderData<typeof loader>();return <ItemReading key={item.id} item={item}/>;}
 function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useState(false),[outlineCollapsed,setOutlineCollapsed]=useState(false);
   const translated=item.body?.language==='translation'?item.body:null,metadata=item.metadataTranslation,outline=item.body?.outline??[],html=item.body?.html??null;
+  const languageLabel=translated?'中文译文':item.body?.contentLanguage==='zh'?'中文正文':null;
   const reading=useArticleReading(outline,html,focus,outlineCollapsed),outlineProps={outline,current:reading.current,navigate:reading.navigate,progress:reading.progress};
   useEffect(()=>{
     if(!focus)return;
@@ -54,7 +55,7 @@ function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useS
           <time dateTime={item.publishedAt??item.discoveredAt}><IconCalendar size={15}/><span><span className={item.publishedAt?"sr-only":undefined}>{item.publishedAt?"发布时间：":"收录时间："}</span>{readerDate(item.publishedAt??item.discoveredAt)}</span></time>
           <div className="article-reading-meta"><ArticleEngagementBar item={item} compact/>
           {item.readingMinutes&&<span className="reader-meta-item whitespace-nowrap"><IconClock size={15}/><span>约 {item.readingMinutes} 分钟</span></span>}
-          {translated&&<span className="article-language">中文译文</span>}
+          {languageLabel&&<span className="article-language">{languageLabel}</span>}
           </div>
         </div>
           <a href={item.links.original} target="_blank" rel="noreferrer" className="article-tool-link article-original-link text-accent">打开原文<IconExternal size={16}/></a>

@@ -236,11 +236,44 @@ test('a video poster is not repeated as a second image while its description rem
 });
 
 test('nested lost diagrams have one fallback without losing their nested explanations or headings',()=>{
-  const context={url:'https://openai.com/index/scaling-git-at-openai'};
-  const note='<p><a href="https://openai.com/index/scaling-git-at-openai">此图未保存，查看原文</a></p>';
+  const context={url:'https://example.org/nested-diagram'};
+  const note='<p><a href="https://example.org/nested-diagram">此图未保存，查看原文</a></p>';
   const html='<figure data-reader-figure-status="missing">'+note+'<figure data-reader-figure-status="missing">'+note+'<figcaption><h2>Implementation</h2><p>Inner explanation.</p></figcaption></figure><figcaption>Outer explanation.</figcaption></figure>';
   const result=cleanArticlePresentation(html,context),$=cheerio.load(result,null,false);
   assert.equal($('a').length,1);assert.equal($('h2').text(),'Implementation');assert.equal($('figcaption').length,2);
   assert.match($.root().text(),/Inner explanation/);assert.match($.root().text(),/Outer explanation/);
+  assert.equal(cleanArticlePresentation(result,context),result);
+});
+
+test('lost Git widgets expose their explanations as body paragraphs and preserve chapter anchor slots',()=>{
+  const context={url:'https://openai.com/index/scaling-git-at-openai'};
+  const html='<h2>Before</h2><figure><figure><figcaption><h2>Simulated Git server implementations</h2><p>Track independent readers and writers.</p></figcaption><p>Fetching 27 trunk packs.</p></figure><figcaption><p>Compare the approaches in the original simulation.</p></figcaption></figure><h2>After</h2>';
+  const result=cleanArticlePresentation(html,context),$=cheerio.load(result,null,false),outlined=withOutline(sanitizeBody(result,context.url),{excludeFigures:true});
+  assert.equal($('figcaption h2,figcaption h3,figcaption h4').length,0);
+  const explanation=$('p').filter((_,n)=>$(n).text()==='Track independent readers and writers.');assert.equal(explanation.parents('figure,figcaption').length,0);
+  assert.match($.root().text(),/Compare the approaches/);assert.doesNotMatch($.root().text(),/Fetching 27/);
+  assert.equal($('a').filter((_,n)=>$(n).text()==='此图未保存，查看原文').length,1);
+  assert.deepEqual(outlined.outline.map(h=>[h.text,h.id]),[['Before','sec-1'],['After','sec-3']]);
+  assert.equal(cleanArticlePresentation(result,context),result);
+});
+
+test('Chinese storage figure captions are localized labels while complete diagrams and chapter anchors stay intact',()=>{
+  const context={url:'https://openai.com/index/scaling-storage-one-billion-users-part-two'};
+  const figure='<figure><img src="https://example.org/diagram.png" width="800" height="600"><figcaption><p>Figure 02a · Logical partition key limits</p><h2>Different clients, the same partition key</h2></figcaption></figure>';
+  const html='<h2>前文</h2><p>'+('这是关于存储架构的中文说明。'.repeat(15))+'</p>'+figure+'<h2>后文</h2>';
+  const result=cleanArticlePresentation(html,context),$=cheerio.load(result,null,false);
+  assert.equal($('figure h2,figure h3,figure h4').length,0);assert.match($('figcaption').text(),/图 02a · 逻辑分区键上限/);assert.match($('figcaption').text(),/不同客户端，相同的分区键/);
+  assert.equal($('img').attr('src'),'https://example.org/diagram.png');assert.doesNotMatch(result,/此图未保存/);
+  assert.deepEqual(withOutline(result,{excludeFigures:true}).outline.map(h=>h.id),['sec-1','sec-3']);
+  const english=cleanArticlePresentation('<p>'+('This article explains storage architecture in English. '.repeat(20))+'</p>'+figure,context);assert.match(english,/Different clients, the same partition key/);
+  assert.equal(cleanArticlePresentation(result,context),result);
+});
+
+test('a storage legend icon does not stand in for a missing diagram or turn figure labels into sections',()=>{
+  const context={url:'https://openai.com/index/scaling-storage-one-billion-users-part-one'};
+  const html='<figure><figcaption><p>图 03 · 追踪 asyncio 延迟</p><h3>并发不等于 CPU 并行</h3><p>请求可以并发，但 CPU 执行需要排队。</p></figcaption><img src="https://example.org/icon.png" width="16" height="16"><ul><li>请求</li><li>响应</li></ul><h4>CPU 工作量低</h4><p>0.0 / 40 个示意单位</p></figure>';
+  const result=cleanArticlePresentation(html,context),$=cheerio.load(result,null,false);
+  assert.equal($('figure h2,figure h3,figure h4').length,0);assert.equal($('figure[data-reader-figure-status="missing"]').length,1);assert.equal($('li').length,2);
+  assert.match($.root().text(),/请求可以并发/);assert.match($.root().text(),/CPU 工作量低/);assert.doesNotMatch($.root().text(),/0.0 \/ 40/);
   assert.equal(cleanArticlePresentation(result,context),result);
 });

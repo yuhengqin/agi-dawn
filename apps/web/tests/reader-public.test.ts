@@ -33,6 +33,21 @@ test('an empty pending article does not invite readers to a missing summary',asy
   }finally{await browser.close();await web.stop();}
 });
 
+for(const engine of [chromium,webkit])test(`article language labels identify Chinese originals without calling them site translations (${engine.name()})`,async()=>{
+  const original=itemDetail({id:'chinese-original',title:'Original title',body:{html:'<p>这段中文正文包含检索词。</p>',outline:[],language:'original',contentLanguage:'zh',complete:true,readingMinutes:1},matches:[{field:'body',language:'original',snippet:'这段中文正文包含检索词。'}]});
+  const translated=itemDetail({id:'site-translation',title:'Translated title',translation:{bodyHtml:'<p>这是本站译文。</p>',outline:[],complete:true}});
+  const english=itemDetail({id:'english-original',title:'English title',bodyHtml:'<p>This prose remains English.</p>'});
+  const unavailable=itemDetail({id:'no-body-label',title:'No body',bodyHtml:null});
+  const articles=[original,translated,english,unavailable],web=await startWebServer(fakeApi(url=>articles.find(article=>url.pathname==='/api/site/items/'+article.id))),browser=await engine.launch();
+  try{
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});await visit(page,web.origin+'/items/'+original.id+'?q=检索词');
+    await expect(page.getByText('中文正文',{exact:true})).toBeVisible();await expect(page.getByText('中文译文',{exact:true})).toHaveCount(0);
+    await expect(page.getByRole('region',{name:'搜索定位',exact:true})).not.toContainText('当前显示中文译文');
+    await visit(page,web.origin+'/items/'+translated.id);await expect(page.getByText('中文译文',{exact:true})).toBeVisible();await expect(page.getByText('中文正文',{exact:true})).toHaveCount(0);
+    for(const article of [english,unavailable]){await visit(page,web.origin+'/items/'+article.id);await expect(page.getByText('中文正文',{exact:true})).toHaveCount(0);await expect(page.getByText('中文译文',{exact:true})).toHaveCount(0);}
+  }finally{await browser.close();await web.stop();}
+});
+
 test('code wrapping is controllable and preserves the original copied source',async()=>{
   const source='  preserve this indentation and every character. '.repeat(50)+'\n';
   const article=itemDetail({id:'code-wrapping',title:'Readable long prompts',bodyHtml:'<pre data-code-kind="prompt"><code>'+source+'</code></pre>'});
@@ -105,7 +120,7 @@ test('article like controls share pending requests and recover together after a 
 test('desktop reading improvements expose search evidence, immediate presets and an article footer',async()=>{
   const browser=await chromium.launch();let web:WebServer|undefined;
   const item=feedItem({id:'experience',title:'Agent cost guide',readingMinutes:4,matches:[{field:'body',language:'translation',snippet:'The cost of each task is visible here.'}],bodyState:{status:'partial',bodyRevision:1,refreshPending:false,issues:[{kind:'missing-figure',message:'部分图表未保存，请查看原文。'}]}});
-  const article=itemDetail({...item,body:{html:'<h2 id="sec-1">Section</h2><p>Readable article.</p>',outline:[{id:'sec-1',text:'Section',level:2}],language:'translation',complete:true,readingMinutes:4},intro:null,related:[feedItem({id:'related',title:'Another useful article'})]});
+  const article=itemDetail({...item,body:{html:'<h2 id="sec-1">Section</h2><p>Readable article.</p>',outline:[{id:'sec-1',text:'Section',level:2}],language:'translation',contentLanguage:'zh',complete:true,readingMinutes:4},intro:null,related:[feedItem({id:'related',title:'Another useful article'})]});
   try{
     web=await startWebServer(fakeApi(url=>{
       if(url.pathname==='/api/site/articles')return readerPage([item],url);
@@ -835,6 +850,30 @@ for(const engine of [chromium,webkit])test(`reader filters compose pending searc
     await page.getByRole('button',{name:'应用日期',exact:true}).click();
     await settled({...dated,from:'2026-10-05',to:'2026-10-29',limit:'100',q:'article-source',sourceId:'first'});
   }finally{release();await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`date edits reopen with the requested range before its response (${engine.name()})`,async()=>{
+  let release=()=>{},begun=()=>{};const pending=new Promise<void>(resolve=>release=resolve),started=new Promise<void>(resolve=>begun=resolve);
+  const web=await startWebServer(fakeApi(async url=>{
+    if(url.pathname==='/api/site/articles'){
+      if(url.searchParams.get('from')==='2026-10-05'){begun();await pending;}
+      return readerPage([feedItem({id:'date-pending',title:'Date result'})],url);
+    }
+    if(url.pathname==='/api/site/categories'||url.pathname==='/api/site/sources')return {items:[]};
+    if(url.pathname==='/api/site/topics')return {topics:[]};
+  })),browser=await engine.launch();
+  try{
+    const page=await browser.newPage({viewport:{width:1440,height:900}});await visit(page,web.origin+'/?from=2026-10-03&to=2026-10-28');
+    await page.getByRole('group',{name:'文章检索工具',exact:true}).locator('summary').click();
+    await page.getByLabel('起始日期',{exact:true}).fill('2026-10-05');
+    // Reopen in the same task so a delayed navigation render cannot win the race by chance.
+    await page.getByRole('button',{name:'应用日期',exact:true}).evaluate(button=>{
+      const trigger=button.closest('details')!.querySelector('summary')!;
+      (button as HTMLButtonElement).form!.requestSubmit();trigger.click();
+    });
+    await started;await expect(page.getByLabel('起始日期',{exact:true})).toHaveValue('2026-10-05');
+    release();await expect(page).toHaveURL(/from=2026-10-05/);
+  }finally{release();await browser.close();await web.stop();}
 });
 
 for(const engine of [chromium,webkit])for(const immediate of [false,true])test(`reader search preserves text entered while a source request is finishing (${engine.name()}${immediate?', immediate input':''})`,async()=>{
@@ -1589,7 +1628,7 @@ for(const engine of [chromium,webkit])test(`short articles finish their visible 
 
 for(const engine of [chromium,webkit])test(`stored translation displays title, summary, body and outline with one original link (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined,writes=0;
-  const article=itemDetail({id:'translation-ui',title:'A translated article',summary:'An original summary.',metadataTranslation:{title:'翻译后的文章标题',summary:'已经翻译的文章摘要。'},body:{html:'<h2 id="sec-1">中文标题</h2><p>已经保存的中文译文。</p>',outline:[{id:'sec-1',text:'中文标题',level:2}],language:'translation',complete:false,readingMinutes:1}});
+  const article=itemDetail({id:'translation-ui',title:'A translated article',summary:'An original summary.',metadataTranslation:{title:'翻译后的文章标题',summary:'已经翻译的文章摘要。'},body:{html:'<h2 id="sec-1">中文标题</h2><p>已经保存的中文译文。</p>',outline:[{id:'sec-1',text:'中文标题',level:2}],language:'translation',contentLanguage:'zh',complete:false,readingMinutes:1}});
   try{
     web=await startWebServer(fakeApi((url,res,req)=>{if(url.pathname==='/api/site/articles')return readerPage([article,feedItem({id:'not-translated',title:'Untranslated title'})],url);if(['/api/site/categories','/api/site/sources'].includes(url.pathname))return {items:[]};if(url.pathname==='/api/site/topics')return {topics:[]};if(url.pathname==='/api/site/items/translation-ui')return article;if(url.pathname==='/api/admin/me'){res.statusCode=401;return {};}if(req.method!=='GET'&&url.pathname!=='/api/site/track')writes++;}));
     const page=await browser.newPage({viewport:{width:390,height:800}});await visit(page,web.origin+'/');

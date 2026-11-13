@@ -5,7 +5,7 @@ import {cleanArticlePresentation} from '../content/presentation.ts';
 import {materialRepresentationHash,serverModules,type MaterialCapture} from "../modules.ts";
 import {READER_COLUMNS,READER_FROM,readerVisible,toReaderItem,withReaderMetadata,type ReaderRow} from "./items.ts";
 import {listTopics} from "./topics.ts";
-import {articleIntro,estimateReadingMinutes} from '../content/reading.ts';
+import {articleIntro,estimateReadingMinutes,isChineseBody} from '../content/reading.ts';
 import {stripTagMarkup} from '../lib/text.ts';
 export async function loadItemDetail(id:string):Promise<{kind:"found";item:ReaderItemDetail}|{kind:"not_found"}>{
   const [row]=await sql<(ReaderRow&{body_html:string|null;raw_title:string;raw_url:string;raw_published_at:Date|null})[]>`
@@ -22,7 +22,7 @@ export async function loadItemDetail(id:string):Promise<{kind:"found";item:Reade
     const render=async(html:string)=>clean(rewrite?await rewrite({...input,html:clean(html)}):html.replace(/<img\b[^>]*>/gi,''));
     const translated=await serverModules().find(module=>module.publicationTranslation)?.publicationTranslation?.(input);
     const outlined=withOutline(await render(translated?.html??input.html),{excludeFigures:true});
-    body={...outlined,language:translated?'translation':'original',complete:translated?.complete??true,readingMinutes:estimateReadingMinutes(stripTagMarkup(outlined.html,' '))};
+    body={...outlined,language:translated?'translation':'original',contentLanguage:isChineseBody(outlined.html)?'zh':null,complete:translated?.complete??true,readingMinutes:estimateReadingMinutes(stripTagMarkup(outlined.html,' '))};
   }
   const topics=(await listTopics()).filter(topic=>topic.tags.some(tag=>row.tags.includes(tag))).map(({slug,name})=>({slug,name}));
   const [metadata]=await withReaderMetadata([summary]);
