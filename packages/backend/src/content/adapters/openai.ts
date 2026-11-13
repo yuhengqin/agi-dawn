@@ -14,3 +14,8 @@ export function adaptOpenAI(document:ContentDocument):void{
     list.remove();
   }
 }
+
+/** Prose slugs such as hidden/share/author are not publisher controls. Run after permalink cleanup. */
+export function protectOpenAIHeadings(document:ContentDocument):void{
+  for(const heading of document.querySelector('article#mainContent')?.querySelectorAll('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]')??[])heading.removeAttribute('id');
+}

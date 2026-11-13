@@ -15,8 +15,14 @@ export function articleIntro(summary:string|null,html:string|null,original?:{sum
   if(!summary||!html)return summary;
   if(original?.summary&&original.html&&articleIntro(original.summary,original.html)===null)return null;
   const $=cheerio.load(html,null,false);
-  const first=$('p').filter((_,node)=>!$(node).closest('figure,blockquote,pre,[data-reader-embed]').length&&$(node).text().trim().length>0).first().text();
-  const normalize=(text:string)=>collapseWhitespace(text.normalize('NFKC')).replace(/(?:\.{2,}|…+)$/u,'').trim().toLowerCase();
-  const intro=normalize(summary),paragraph=normalize(first);
+  const opening:string[]=[];
+  for(const node of $.root().children().toArray()){
+    const block=$(node);if(block.is('h1,h2,h3,h4,h5,h6'))break;
+    if(block.is('figure,pre,[data-reader-embed]'))continue;
+    const text=block.text().trim();if(text)opening.push(text);
+    if(opening.join('').length>=3000)break;
+  }
+  const normalize=(text:string)=>collapseWhitespace(text.normalize('NFKC')).replace(/(?:\.{2,}|…+)$/u,'').replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/\s+/g,'').toLowerCase();
+  const intro=normalize(summary),paragraph=normalize(opening.join(' '));
   return intro===paragraph||(intro.length>=24&&paragraph.startsWith(intro))?null:summary;
 }

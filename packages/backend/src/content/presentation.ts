@@ -10,18 +10,51 @@ export function figurePresentationIssues(html:string):BodyIssue[]{
 
 const months=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 function dateOnly(value:string):string|null {
-  const text=collapseWhitespace(value),chinese=/^(\d{4})年(\d{1,2})月(\d{1,2})日$/.exec(text);
+  const text=collapseWhitespace(value),chinese=/^(\d{4})年(\d{1,2})月(\d{1,2})日$/.exec(text.replace(/\s+/g,''));
   if(chinese)return `${chinese[1]}-${chinese[2]!.padStart(2,'0')}-${chinese[3]!.padStart(2,'0')}`;
-  const english=/^([a-z]{3})[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i.exec(text);
+  const reordered=text.replace(/^(\d{1,2})\s+([a-z]+)\s+(\d{4})$/i,'$2 $1, $3');
+  const english=/^([a-z]{3})[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i.exec(reordered);
   const month=english?months.indexOf(english[1]!.toLowerCase()):-1;
   return english&&month>=0?`${english[3]}-${String(month+1).padStart(2,'0')}-${english[2]!.padStart(2,'0')}`:null;
 }
 
 /** Deterministic display cleanup for confirmed publisher chrome, including already saved bodies. */
-export function cleanArticlePresentation(html:string,context:{url:string;publishedAt?:string|null;issues?:readonly BodyIssue[]}):string {
+export function cleanArticlePresentation(html:string,context:{url:string;publishedAt?:string|null;issues?:readonly BodyIssue[];author?:string|null}):string {
   let page:URL;try{page=new URL(context.url);}catch{return html;}
   const linked=restoreFootnotes(html,context.url),host=page.hostname.replace(/^www\./,''),$=cheerio.load(linked,null,false);let changed=linked!==html;
   const day=context.publishedAt?beijingDate(context.publishedAt):null;
+  const first=$.root().children().first(),leading=collapseWhitespace(first.text());
+  if(day&&first.is('p')){
+    const byline=/^(?:By|作者)\s+Geoffrey Huntley\s*(?:in\s+|[，,]\s*)?AI\s*[—-]\s*(.+)$/i.exec(leading);
+    if(host==='ghuntley.com'&&byline&&[day,context.publishedAt?.slice(0,10)].some(value=>value===dateOnly(byline[1]!))){first.remove();changed=true;}
+    if(host==='developers.openai.com'&&dateOnly(leading.replace(/\s+(?:Audio|音频)$/i,''))===day){first.remove();changed=true;}
+  }
+  if(host==='developers.googleblog.com'&&first.is('p')&&context.author){
+    const compact=leading.replace(/\s+/g,''),known=context.author.split(/[,;、]/).some(name=>compact.startsWith(name.trim().replace(/\s+/g,'')));
+    if(known&&/(?:SoftwareEngineeringIntern|SoftwareEngineerIntern|软件工程实习生)GoogleCloud$/i.test(compact)){first.remove();changed=true;}
+  }
+  $('a').filter((_,node)=>!$(node).attr('href')&&!$(node).attr('id')).each((_,node)=>{$(node).replaceWith($(node).contents());changed=true;});
+  if(host==='claude.dev'||host==='anthropic.com'){
+    $('figure video[poster]').each((_,node)=>{
+      const video=$(node),holder=video.parent().is('p')?video.parent():video,next=holder.next('p'),image=next.children('img');
+      if(image.length!==1||next.children().length!==1||next.text().trim()||!video.attr('width')||!video.attr('height'))return;
+      try{if(new URL(video.attr('poster')!,page).href!==new URL(image.attr('src')??'',page).href)return;}catch{return;}
+      if(video.attr('width')!==image.attr('width')||video.attr('height')!==image.attr('height'))return;
+      const description=image.attr('alt')?.trim(),label=video.attr('aria-label');if(label&&description&&label!==description)return;
+      if(description)video.attr('aria-label',description);next.remove();changed=true;
+    });
+    $('figcaption > b,figcaption > strong').each((_,node)=>{
+      if(!/^(?:图|figure)\s*[\dA-Z]+$/i.test($(node).text().trim())||node.next?.type!=='tag'||node.next.name!=='span')return;
+      $(node).after(' ');changed=true;
+    });
+    $('pre').each((_,node)=>{
+      const pre=$(node),head=pre.prev('p'),match=/^CODE\s*(JavaScript|TypeScript|Python|Shell|Bash|Text|JSON|SQL|Go|Rust|CSS|HTML)$/i.exec(head.text().trim());
+      if(!match||head.find('a,img,video,code').length)return;
+      const language=match[1]!.toLowerCase(),declared=pre.attr('data-language');
+      if(declared&&declared!==language)return;
+      pre.attr('data-language',language);pre.find('code').first().addClass(`language-${language}`);head.remove();changed=true;
+    });
+  }
   if(host==='openai.com'||host==='developers.openai.com'){
     $('a span').each((_,node)=>{
       const element=$(node),link=element.closest('a'),text=collapseWhitespace(element.text());
@@ -52,10 +85,29 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
     const card=$(node),images=card.find('img');
     if(images.length>1)images.each((_,image)=>{try{if(new URL($(image).attr('src')??'').pathname.includes('/content/images/icon/')){$(image).closest('a').remove();changed=true;}}catch{}});
     card.children('p').each((_,paragraph)=>{const p=$(paragraph);if(collapseWhitespace(p.text())==='Geoffrey HuntleyGeoffrey Huntley'){p.text('Geoffrey Huntley');changed=true;}});
+    const metadata=card.children('p').last(),text=metadata.text(),separated=text.replace(/^(GitHub|The Register|Latent Patterns|One Useful Thing)(?=\S)/,'$1 · ');
+    if(separated!==text&&!metadata.find('a,img,video').length){metadata.text(separated);changed=true;}
     const visit=(element:import('domhandler').AnyNode)=>{if(element.type==='text'){const next=element.data.replace(/&#(?:0*39|x0*27);/gi,"'");if(next!==element.data){element.data=next;changed=true;}}else if('children'in element&&!(element.type==='tag'&&['pre','code'].includes(element.name)))for(const child of element.children)visit(child);};visit(node);
   });
+  if(host==='ghuntley.com')$('video').each((_,node)=>{
+    const holder=$(node).parent().is('p')?$(node).parent():$(node),clock=holder.next('p'),duration=clock.next('p');
+    if(clock.text().trim()==='0:00'&&/^\/\s*\d{1,2}:\d{2}(?::\d{2})?$/.test(duration.text().trim())&&!clock.find('a,img,video,code').length&&!duration.find('a,img,video,code').length){clock.remove();duration.remove();changed=true;}
+  });
   $('figure').each((_,node)=>{
-    const figure=$(node);if(figure.is('[data-reader-card]')||figure.find('table,pre,blockquote,video,picture').length)return;
+    const figure=$(node);if(figure.is('[data-reader-card]')||figure.find('table,pre,blockquote,video,picture,ul,ol,dl').length)return;
+    if(figure.children('figure[data-reader-figure-status="missing"]').length){
+      const notes=figure.children('p').filter((_,paragraph)=>{
+        const p=$(paragraph),a=p.children('a');return a.length===1&&p.text().trim()==='此图未保存，查看原文'&&a.attr('href')===page.href;
+      }),copy=figure.clone();copy.children('figure,figcaption').remove();copy.children('p').filter((_,p)=>$(p).text().trim()==='此图未保存，查看原文').remove();
+      if(!copy.text().trim()&&!copy.find('img').length){notes.remove();figure.removeAttr('data-reader-figure-status data-reader-figure-loss');changed=true;return;}
+    }
+    if(figure.children('[data-reader-embed]').length){
+      if(figure.is('[data-reader-figure-status="missing"]')){
+        figure.children('p').filter((_,paragraph)=>/^此图未保存[，,]\s*查看原文$/.test($(paragraph).text().trim())).remove();
+        figure.removeAttr('data-reader-figure-status');changed=true;
+      }
+      return;
+    }
     const usefulImage=figure.find('img').toArray().some(image=>{
       const img=$(image),width=Number(img.attr('width')),height=Number(img.attr('height'));
       return img.attr('data-reader-inline')!=='true'&&!(width>0&&height>0&&Math.max(width,height)<=32);
@@ -63,12 +115,11 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
     if(usefulImage)return;
     const copy=figure.clone();copy.find('figcaption,h2,h3,h4,[data-reader-embed]').remove();
     const captionOnly=!!figure.find('figcaption').length&&!copy.text().trim();
-    const knownDrawing=(host==='openai.com'||host==='claude.dev')&&figure.find('figcaption').length>0&&!figure.find('a').length;
-    const recordedLoss=figure.is('[data-reader-figure-loss="true"]')||!!figure.find('figcaption').length&&context.issues?.some(issue=>issue.kind==='missing-figure');
-    if(!captionOnly&&!knownDrawing&&!recordedLoss&&!figure.is('[data-reader-figure-status="missing"]'))return;
+    const recordedLoss=figure.is('[data-reader-figure-loss="true"]');
+    if(!captionOnly&&!recordedLoss&&!figure.is('[data-reader-figure-status="missing"]'))return;
     if(figure.is('[data-reader-figure-status="missing"]'))return;
     figure.attr('data-reader-figure-status','missing').removeAttr('data-reader-figure-loss');
-    if(knownDrawing)figure.find('p,span').filter((_,element)=>/^(?:Select a branch to include|选择一个分支以包含|Held\s*Fetch\s*Missing|已持有获取缺失的分支依赖项)/i.test(collapseWhitespace($(element).text()))).remove();
+    if(host==='openai.com')figure.find('p,span').filter((_,element)=>/^(?:Select a branch to include|选择一个分支以包含|Held\s*Fetch\s*Missing|已持有获取缺失的分支依赖项)/i.test(collapseWhitespace($(element).text()))).remove();
     figure.prepend($('<p>').append($('<a>').attr('href',page.href).text('此图未保存，查看原文')));changed=true;
   });
   $('p').each((_,node)=>{

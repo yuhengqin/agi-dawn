@@ -29,9 +29,14 @@ function restore(text:string|null,input:ReturnType<typeof shield>):string|null{
   const prose=(html:string)=>{const $=cheerio.load(html,null,false);$(protectedElements).remove();return $.root().text().replace(/⟦\d+⟧/g,'').replace(/https?:\/\/[^\s<>]+/g,'').replace(/\s+/g,' ').trim();};
   const before=prose(input.html),after=prose(text);
   if(!/[{}\[\]]/.test(before)&&/[{}\[\]]/.test(after))return null;
-  if(!/\p{Script=Han}/u.test(before)&&!(/\p{Script=Han}/u.test(after))
-    &&(before.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g)?.length??0)>=8
-    &&before.toLowerCase()===after.toLowerCase())return null;
+  const words=(value:string)=>value.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g)??[];
+  const sourceWords=words(before),targetWords=words(after),han=(value:string)=>(value.match(/\p{Script=Han}/gu)??[]).length;
+  const ordinaryHeading=/^(?:introduction|overview|background|conclusions?|summary|acknowledg(?:e)?ments?|results|discussion)$/i.test(before)
+    ||/^(?:what|why|how|when|where)\b/i.test(before)||/\bwithout\b/i.test(before);
+  if(han(before)===0&&(sourceWords.length>=8||ordinaryHeading)){
+    if(han(after)===0)return null;
+    if(sourceWords.length>=8&&han(after)<4&&targetWords.join(' ').toLowerCase().includes(sourceWords.join(' ').toLowerCase()))return null;
+  }
   const counts=new Map<number,number>();
   for(const match of text.matchAll(/⟦(\d+)⟧/g)){const n=Number(match[1]);counts.set(n,(counts.get(n)??0)+1);}
   if(counts.size!==input.tokens.length||input.tokens.some((_,i)=>counts.get(i)!==1))return null;

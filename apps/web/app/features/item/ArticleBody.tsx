@@ -26,6 +26,7 @@ interface CodeControls {
 
 function CodeBlockTools({ source, body }: CodeControls) {
   const [collapsed, setCollapsed] = useState(body.hidden);
+  const [wrapped,setWrapped]=useState(body.dataset.wrap==='true');
   const [status, setStatus] = useState<"" | "copied" | "error">("");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const active = useRef(true);
@@ -42,6 +43,7 @@ function CodeBlockTools({ source, body }: CodeControls) {
     timer.current = setTimeout(() => setStatus(""), ok ? 1800 : 2400);
   };
   return <>
+    <button type="button" className="code-block-wrap" aria-label="代码自动换行" aria-pressed={wrapped} onClick={()=>{body.dataset.wrap=String(!wrapped);setWrapped(!wrapped);}}>换行</button>
     <button type="button" className="code-block-toggle" aria-label={collapsed ? "展开代码" : "折叠代码"} aria-expanded={!collapsed} aria-controls={body.id}
       onClick={() => { body.hidden = !collapsed; setCollapsed(!collapsed); }}><IconChevronDown size={16}/></button>
     <button type="button" className="code-block-copy" aria-label="复制代码" data-status={status || undefined} onClick={() => void copy()}>
@@ -107,6 +109,7 @@ function enhanceCode(root: HTMLElement, prefix: string): { controls: CodeControl
     head.append(identity, tools);
     const body = document.createElement("div");
     body.className = "code-block-body";
+    body.dataset.wrap=String(prompt||isPlainLanguage(language));
     body.id = `${prefix}-code-${index}`;
     const gutter = document.createElement("span");
     gutter.className = "code-block-lines";

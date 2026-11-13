@@ -28,8 +28,9 @@ test("a short laptop window keeps several outline entries and can reach the last
     web = await startWebServer(api);
     for (const height of [657, 560]) {
       const page = await browser.newPage({ viewport: { width: 1366, height }, reducedMotion: "reduce" });
-      await page.goto(web.origin + "/items/outline-short");
-      const nav = page.getByRole("navigation", { name: "本文目录" });
+      await visit(page,web.origin + "/items/outline-short");
+      await page.getByLabel('展开文章目录',{exact:true}).click();
+      const nav = page.getByRole("navigation", { name: "手机文章目录" });
       await expect(nav).toBeVisible();
       await page.waitForTimeout(100);
       const entry = await nav.locator("a").first().evaluate((a) => a.getBoundingClientRect().height);
@@ -55,7 +56,7 @@ test("outline keyboard scrolling stays inside its boundary in WebKit", async () 
   const web = await startWebServer(outlineApi(item));
   const browser = await webkit.launch();
   try {
-    const page = await browser.newPage({ viewport: { width: 1366, height: 768 }, reducedMotion: "reduce" });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 768 }, reducedMotion: "reduce" });
     await visit(page, web.origin + "/items/outline-keys");
     const nav = page.getByRole("navigation", { name: "本文目录" });
     await expect(nav).toBeVisible();
@@ -95,7 +96,7 @@ for (const engine of [chromium, webkit]) test(`the desktop outline collapses wit
   const web = await startWebServer(outlineApi(item));
   const browser = await engine.launch();
   try {
-    const page = await browser.newPage({ viewport: { width: 1366, height: 768 }, reducedMotion: "reduce" });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 768 }, reducedMotion: "reduce" });
     await visit(page, web.origin + "/items/" + item.id);
     const nav = page.getByRole("navigation", { name: "本文目录", exact: true });
     const collapse = page.getByRole("button", { name: "收起本文目录", exact: true });
@@ -143,7 +144,7 @@ for (const engine of [chromium, webkit]) test(`the desktop outline collapses wit
     await page.getByLabel("展开文章目录", { exact: true }).click();
     await expect(page.getByRole("navigation", { name: "手机文章目录", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
-    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.setViewportSize({ width: 1440, height: 768 });
     await expect(expand).toBeVisible();
     await expand.click();
     await nav.getByRole("link", { name: "End", exact: true }).click();
@@ -154,11 +155,15 @@ for (const engine of [chromium, webkit]) test(`the desktop outline collapses wit
     await expect(nav).toBeVisible();
     for (const width of [1920, 1440, 1280]) {
       await page.setViewportSize({ width, height: 768 });
-      let defaultGain = 0;
+      let defaultGain:number|undefined;
       for (const preference of ["默认", "窄", "宽"]) {
         await page.getByLabel("阅读显示设置", { exact: true }).click();
         await page.getByRole("group", { name: "正文宽度", exact: true }).getByRole("radio", { name: preference, exact: true }).check();
         await page.keyboard.press("Escape");
+        if(!await collapse.isVisible()){
+          await expect(page.getByLabel('展开文章目录',{exact:true})).toBeVisible();
+          continue;
+        }
         const expanded = await body.boundingBox();
         assert.ok(expanded);
         await collapse.click();
@@ -166,9 +171,9 @@ for (const engine of [chromium, webkit]) test(`the desktop outline collapses wit
         await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThan(expanded.width);
         const gain = await body.evaluate(el => el.getBoundingClientRect().width) - expanded.width;
         if (preference === "默认") defaultGain = gain;
-        else if (preference === "窄") expect(gain).toBeCloseTo(defaultGain, 1);
-        else if (width === 1920) expect(gain - defaultGain).toBeCloseTo(100, 1);
-        else assert.ok(gain > defaultGain && gain <= defaultGain + 100, "wide text uses the extra space available in a smaller window");
+        else if (preference === "窄"&&defaultGain!==undefined) expect(gain).toBeCloseTo(defaultGain, 1);
+        else if (preference==='宽'&&defaultGain!==undefined&&width === 1920) expect(gain - defaultGain).toBeCloseTo(100, 1);
+        else if(preference==='宽'&&defaultGain!==undefined)assert.ok(gain > defaultGain && gain <= defaultGain + 100, "wide text uses the extra space available in a smaller window");
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
         await expand.click();
         await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().x)).toBeCloseTo(expanded.x, 1);
@@ -179,4 +184,24 @@ for (const engine of [chromium, webkit]) test(`the desktop outline collapses wit
     await browser.close();
     await web.stop();
   }
+});
+
+test('opening a side outline at a desktop layout boundary never shrinks the chosen text width',async()=>{
+  const outline=[{id:'section',level:2,text:'A section'}],article=itemDetail({id:'outline-space',title:'Available reading space',outline,bodyHtml:'<h2 id="section">A section</h2><p>'+('Readable prose. '.repeat(200))+'</p>'});
+  const web=await startWebServer(outlineApi(article)),browser=await chromium.launch();
+  try{
+    const page=await browser.newPage({viewport:{width:1279,height:900}});await visit(page,web.origin+'/items/'+article.id);
+    const body=page.getByRole('region',{name:'文章正文',exact:true});
+    for(const preference of ['窄','默认','宽']){
+      await page.setViewportSize({width:1279,height:900});await page.getByLabel('阅读显示设置',{exact:true}).click();
+      await page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:preference,exact:true}).check();await page.keyboard.press('Escape');
+      let previous=0;
+      for(const width of [1279,1280,1320,1366,1400,1440,1828,1920]){
+        await page.setViewportSize({width,height:900});const current=await body.evaluate(el=>el.getBoundingClientRect().width);
+        assert.ok(current>=previous-1,`${preference} at ${width}: ${current} must not be less than ${previous}`);previous=current;
+        const side=page.getByRole('navigation',{name:'本文目录',exact:true});
+        if(!await side.isVisible())await expect(page.getByLabel('展开文章目录',{exact:true})).toBeVisible();
+      }
+    }
+  }finally{await browser.close();await web.stop();}
 });

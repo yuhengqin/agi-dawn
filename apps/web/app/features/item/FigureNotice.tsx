@@ -13,7 +13,7 @@ export function FigureNotice({issues,onDismiss}:{issues:BodyIssue[];onDismiss:()
   useEffect(()=>{
     if(!expanded||hidden||!hasDetails)return;
     const outside=(event:PointerEvent)=>{if(!details.current?.contains(event.target as Node))setExpanded(false);};
-    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape')setExpanded(false);};
+    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();setExpanded(false);}};
     document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);
     return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape);};
   },[expanded,hidden,hasDetails]);

@@ -219,6 +219,14 @@ DATABASE_URL=postgres://127.0.0.1:5432/reader_restore node scripts/verify-reader
 
 单纯回退程序可切回旧代码和web构建；若还需撤销上述持久内容修复，按“备份与恢复”将同组dump与资源恢复到新库、新目录并一起切换，不能仅回退代码或只恢复数据库。
 
+### 文章内容质量修复
+
+一起更新 API、worker 并重建 web；无需新增依赖或数据库迁移。对旧结构的展示清理只在读取展示层生效，不写回文章正文、译文或私人快照。
+
+Uber 来源启用新提取适配器时，通过现有来源管理合并 `config.detail.bodyAdapter='uber'`，保留其他配置；模板 seed 不会更新运行时来源配置。回退到旧代码前，先从运行配置移除此 adapter 值。
+
+新提取修复 OpenAI 语义标题 slug 误判和 Uber 标题内图片装饰。已丢失的文字仍需逐篇恢复；本节说明升级与回退方式，不表示本机维护已经执行。
+
 ### 正文组件管道与 Browser Use 适配
 
 2026-11-01。更新 API 和 worker；没有新增依赖、数据库迁移或前端代码变化。通用代码块、表格与图形转换从正文获取中分离，原有 `detail.preserve`、`detail.removeSelector` 规则保持原意。Browser Use 增加显式的 `detail.bodyAdapter: "browser-use"`，将已核实结构的作者区和三类图表转换为通用段落／表格；未能完整转换的图表仍提示不完整。

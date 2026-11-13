@@ -269,3 +269,33 @@ test('a forged KaTeX class cannot smuggle scripts external SVG resources or arbi
     assert.equal(body.quality,'partial');assert.ok(body.issues.some(issue=>issue.kind==='missing-formula'));
   }
 });
+
+test('OpenAI prose headings survive slug words that Readability mistakes for chrome or bylines',()=>{
+  const content='<h2 id="9-the-hidden-command-palette">9. The hidden command palette</h2><p>'+prose+'</p>'+
+    '<h2 id="weekend-how-two-characters-share-a-scene">Weekend: two characters share a scene</h2><p>'+prose+'</p>'+
+    '<h3 id="about-the-author-and-company">About the author and company</h3><p>'+prose+'</p>'+
+    '<h2 hidden id="hidden-control">PRIVATE_HEADING</h2>';
+  const body=readable(page(content).replace('<article>','<article id="mainContent">'),'https://developers.openai.com/blog/example',sourceRules('openai-developer-blog'))!;
+  const $=cheerio.load(body.html);
+  assert.ok($('h2').toArray().some(x=>$(x).text()==='9. The hidden command palette'));
+  assert.ok($('h2').toArray().some(x=>$(x).text().startsWith('Weekend:')));
+  assert.match($('h3').text(),/About the author/);assert.notEqual(body.author,'About the author and company');
+  assert.doesNotMatch(body.html,/PRIVATE_HEADING/);
+});
+
+test('Uber heading decorators keep images and captions outside the real section title',()=>{
+  for(const tag of ['h2','h3','h4'])for(const textTag of ['span','strong']){
+    const content=`<${tag} class="rich-heading" id="section"><div data-lexical-decorator="true"><div class="rich-float-clear"></div><div class="rich-image-wrapper"><img src="/diagram.png" alt="Architecture"><p class="rich-image-caption">Figure 1: Complete architecture.</p></div></div><${textTag} data-lexical-text="true">Actual section</${textTag}></${tag}><p>${prose}</p>`;
+    const body=readable(page(content),'https://www.uber.com/us/en/blog/example/',sourceRules('uber-ai'))!,$=cheerio.load(body.html);
+    assert.equal($(tag).text(),'Actual section');assert.equal($('figcaption').text(),'Figure 1: Complete architecture.');
+    assert.equal($('figure img').length,1);assert.ok(body.html.indexOf('<figure')<body.html.indexOf(`<${tag}`));
+  }
+});
+
+test('Uber author cards provide a real byline instead of a heading containing author',()=>{
+  const cards=['Sean Tout','Max Zhurovich'].map(name=>`<div><div data-baseweb="avatar" aria-label="${name}">ST</div><div><div data-baseweb="typo-labelmedium">${name}</div><p data-baseweb="typo-paragraphsmall">Engineer</p></div></div>`).join('');
+  const html=page('<h3 id="beyond-authorization">Beyond Authorization: Governing Agent Behavior</h3><p>'+prose+'</p>').replace('<body>','<body><main>'+cards).replace('</body>','</main></body>');
+  const body=readable(html,'https://www.uber.com/us/en/blog/example/',sourceRules('uber-ai'))!;
+  assert.equal(body.author,'Sean Tout, Max Zhurovich');
+  assert.match(body.html,/Beyond Authorization/);
+});

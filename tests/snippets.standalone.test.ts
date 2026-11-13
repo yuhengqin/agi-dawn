@@ -3,6 +3,7 @@ import {test} from 'node:test';
 import {cleanSummary,metadataAddsMarkup,plainMetadata} from '@agidawn/backend/content/snippets';
 import {articleIntro,estimateReadingMinutes,isTruncatedExcerpt} from '@agidawn/backend/content/reading';
 import {matchRanges,searchWords} from '@agidawn/contracts/search';
+import {toReaderItem,type ReaderRow} from '@agidawn/backend/publication/items';
 
 test('summary cleanup removes a matching RSS footer without hiding useful short text',()=>{
   const context={title:'A new offer',url:'https://blogs.microsoft.com/blog/offer/'};
@@ -18,6 +19,19 @@ test('known source noise is omitted without applying a length threshold',()=>{
   assert.equal(cleanSummary('An intact sentence. eMudhra title eMudhra title Now you&',{url:'https://ghuntley.com/patch/'}),'An intact sentence.');
   assert.equal(cleanSummary('AT&T',{url:'https://ghuntley.com/patch/'}),'AT&T');
   assert.equal(cleanSummary('A & B',{url:'https://ghuntley.com/patch/'}),'A & B');
+});
+
+test('a Ghost audio preview omits flattened player controls and list syntax',()=>{
+  const text='0:00 /11:14 1× An introduction. * First point. * Second point.';
+  assert.equal(cleanSummary(text,{url:'https://ghuntley.com/example/'}),'An introduction. First point. Second point.');
+  assert.equal(cleanSummary('Use * as a wildcard.',{url:'https://ghuntley.com/example/'}),'Use * as a wildcard.');
+  assert.equal(cleanSummary(text,{url:'https://other.example/'}),text);
+});
+
+test('snippet truncation uses cleaned wording while preserving the metadata translation identity',()=>{
+  const summary='0:00 /11:14 1× The opening explains the production system and its operational';
+  const row:ReaderRow={id:'audio',title:'An interview',summary,source_id:'ghuntley',source_name:'Geoffrey Huntley',author:null,url:'https://ghuntley.com/interview/',published_at:null,discovered_at:new Date(),sort_at:new Date(),category:null,tags:[],body_status:'ok',body_revision:1,site_fulltext:true,visibility:'public',manual_visibility:null,processing_state:'new',body_quality:'ready',body_issues:[],views:0,likes:0,reading_text:'The opening explains the production system and its operational constraints.'};
+  const item=toReaderItem(row);assert.equal(item.summary,summary);assert.equal(item.summaryTruncated,true);
 });
 
 test('legacy metadata wrappers are removed while original literal tags remain text',()=>{
@@ -40,6 +54,16 @@ test('detail intros suppress an identical or clearly truncated opening without c
   assert.equal(articleIntro('A useful independent summary.',`<p>${text}</p>`),'A useful independent summary.');
   assert.equal(articleIntro('Summary without full text.',null),'Summary without full text.');
   assert.equal(articleIntro('中文摘要采用另一种译法。','<p>中文正文开头的措辞不完全一样。</p>',{summary:text,html:`<p>${text}</p>`}),null,'independent translations cannot make an original opening excerpt into new information');
+});
+
+test('detail intros recognize opening excerpts spanning paragraphs and leading quotations',()=>{
+  const first='This opening explains the motivation behind the production system.';
+  const second='The next paragraph describes how the architecture works in practice.';
+  const excerpt=first+' '+second.slice(0,43);
+  assert.equal(articleIntro(excerpt,`<p>${first}</p><p>${second}</p><h2>Next section</h2>`),null);
+  assert.equal(articleIntro(first,`<blockquote><p>${first}</p></blockquote><p>Discussion follows.</p>`),null);
+  assert.equal(articleIntro('另一种译法的开头摘录。','<p>中文正文。</p>',{summary:excerpt,html:`<p>${first}</p><p>${second}</p>`}),null);
+  assert.equal(articleIntro('An independent summary with new information.',`<p>${first}</p><p>${second}</p>`),'An independent summary with new information.');
 });
 
 test('reading estimates support Chinese and English and search highlighting shares English edges',()=>{

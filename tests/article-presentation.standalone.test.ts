@@ -158,3 +158,89 @@ test('a historical Ghost card omits its icon when a cover exists and repairs lit
   const html='<figure data-reader-card="true"><a href="https://ghuntley.com/post"><img src="https://storage.ghost.io/content/images/icon/avatar.jpg"></a><a href="https://ghuntley.com/post"><img src="https://storage.ghost.io/content/images/thumbnail/cover.jpg"></a><p>It&amp;#39;s a linked preview.</p><p>Geoffrey HuntleyGeoffrey Huntley</p></figure><p>Literal &amp;#39; in author prose.</p>';
   const result=cleanArticlePresentation(html,{url:'https://ghuntley.com/article'}),$=cheerio.load(result);assert.equal($('img').length,1);assert.equal($('figure').text(),"It's a linked preview.Geoffrey Huntley");assert.match($('body >p').text(),/&#39;/);assert.equal(cleanArticlePresentation(result,{url:'https://ghuntley.com/article'}),result);
 });
+
+test('Claude caption labels have a word boundary without changing inline article wording',()=>{
+  const context={url:'https://claude.dev/blog/example/'};
+  const html='<figure><img src="/chart.png"><figcaption><b>图 2</b><span>Claude Code团队</span></figcaption></figure><p><b>图 2</b><span>正文原样</span></p>';
+  const result=cleanArticlePresentation(html,context),$=cheerio.load(result,null,false);
+  assert.equal($('figcaption').text(),'图 2 Claude Code团队');
+  assert.equal($('p').last().text(),'图 2正文原样');
+  assert.equal(cleanArticlePresentation(result,context),result);
+});
+
+test('legacy Claude code headers become metadata and never enter copied source',()=>{
+  const context={url:'https://claude.dev/blog/example/'};
+  const result=cleanArticlePresentation('<p><span>CODE<span>JavaScript</span></span></p><pre><code>const x = 1;\n</code></pre><p>CODEPython is an example name.</p><pre><code>keep()</code></pre>',context);
+  const $=cheerio.load(result,null,false);
+  assert.equal($('pre').first().attr('data-language'),'javascript');
+  assert.equal($('pre code').first().text(),'const x = 1;\n');
+  assert.equal($('p').length,1);assert.match($('p').text(),/CODEPython is/);
+  assert.equal(cleanArticlePresentation(result,context),result);
+});
+
+test('Ghost player clock controls are removed only as an adjacent pair after a video',()=>{
+  const context={url:'https://ghuntley.com/example/'};
+  const html='<figure><p><video src="/clip.mp4"></video></p><p><span>0:00</span></p><p>/<span>0:29</span></p><figcaption>Explanation</figcaption></figure><p>0:00</p><p>/0:29</p><p>Actual prose.</p>';
+  const result=cleanArticlePresentation(html,context),$=cheerio.load(result,null,false);
+  assert.equal($('figure p').length,1);assert.match($('figure').text(),/Explanation/);
+  assert.equal($.root().children('p').first().text(),'0:00');
+  assert.equal(cleanArticlePresentation(result,context),result);
+});
+
+test('text-only conversations are not declared lost drawings by hostname or an unrelated article issue',()=>{
+  const html='<figure><ol><li>Human: explain this.</li><li>Assistant: here is the answer.</li></ol><figcaption>A conversation</figcaption></figure><figure><p>Ordinary text.</p><figcaption>A textual example</figcaption></figure>';
+  const result=cleanArticlePresentation(html,{url:'https://claude.dev/blog/example/',issues:[{kind:'missing-figure',message:'Another figure was lost.'}]});
+  assert.doesNotMatch(result,/此图未保存|data-reader-figure-status/);
+  assert.match(result,/Human: explain this/);assert.match(result,/Ordinary text/);
+});
+
+test('an unsupported embed has one local fallback and does not acquire a second missing-image note',()=>{
+  const context={url:'https://ghuntley.com/example/'};
+  const html='<figure data-reader-figure-status="missing"><p><a href="https://ghuntley.com/example/">此图未保存，查看原文</a></p><p data-reader-embed="true"><a href="https://ghuntley.com/example/">互动内容请访问原文查看。</a></p><figcaption>Original explanation.</figcaption></figure>';
+  const result=cleanArticlePresentation(html,context);
+  assert.doesNotMatch(result,/此图未保存/);assert.match(result,/互动内容请访问原文查看/);assert.match(result,/Original explanation/);
+  assert.equal(cleanArticlePresentation(result,context),result);
+});
+
+test('legacy Ghost card metadata keeps a separator between publisher and author',()=>{
+  const context={url:'https://ghuntley.com/example/'};
+  const html='<figure data-reader-card="true"><p><a href="https://example.org">A linked article</a></p><p>A useful description.</p><p>The RegisterThomas Claburn</p></figure><p>The RegisterThomas Claburn appears in this example.</p>';
+  const result=cleanArticlePresentation(html,context),$=cheerio.load(result,null,false);
+  assert.equal($('figure > p').last().text(),'The Register · Thomas Claburn');
+  assert.equal($.root().children('p').text(),'The RegisterThomas Claburn appears in this example.');
+  assert.equal(cleanArticlePresentation(result,context),result);
+});
+
+test('valid mail links stay actionable and rejected empty anchors become ordinary wording',()=>{
+  const result=sanitizeBody('<p><a href="mailto:person@example.org">Email</a> <a href="javascript:alert(1)">Unsafe</a> <a>No destination</a></p>','https://example.org');
+  const $=cheerio.load(result,null,false);
+  assert.equal($('a').length,1);assert.equal($('a').attr('href'),'mailto:person@example.org');
+  assert.match($.root().text(),/Unsafe/);assert.match($.root().text(),/No destination/);
+});
+
+test('matching leading author and date chrome is omitted without deleting prose mentions',()=>{
+  const context={url:'https://ghuntley.com/example/',publishedAt:'2025-07-19T03:00:00Z'};
+  const result=cleanArticlePresentation('<p>作者 Geoffrey Huntley ， AI — 2025年7月19日</p><p>作者 Geoffrey Huntley 在这里讨论一个想法。</p>',context);
+  assert.equal(result,'<p>作者 Geoffrey Huntley 在这里讨论一个想法。</p>');
+  const date=cleanArticlePresentation('<p>2026年11月10日 音频</p><p>正文内容。</p>',{url:'https://developers.openai.com/blog/voice',publishedAt:'2026-11-10T03:00:00Z'});
+  assert.equal(date,'<p>正文内容。</p>');
+});
+
+test('a video poster is not repeated as a second image while its description remains available',()=>{
+  const context={url:'https://claude.dev/blog/claude-code-in-the-cloud/'};
+  const html='<figure><p><video src="/clip.mp4" poster="/poster.png" width="1762" height="716"></video></p><p><img src="/poster.png" width="1762" height="716" alt="Timeline of three sessions"></p><figcaption>A shared caption.</figcaption></figure><figure><video poster="/another.png"></video><p><img src="/diagram.png" alt="A separate diagram"></p></figure>';
+  const result=cleanArticlePresentation(html,context),$=cheerio.load(result,null,false);
+  assert.equal($('figure').first().find('img').length,0);assert.equal($('video').first().attr('aria-label'),'Timeline of three sessions');
+  assert.equal($('video').first().attr('src'),'/clip.mp4');assert.equal($('figcaption').text(),'A shared caption.');assert.equal($('img').length,1);
+  assert.equal(cleanArticlePresentation(result,context),result);
+});
+
+test('nested lost diagrams have one fallback without losing their nested explanations or headings',()=>{
+  const context={url:'https://openai.com/index/scaling-git-at-openai'};
+  const note='<p><a href="https://openai.com/index/scaling-git-at-openai">此图未保存，查看原文</a></p>';
+  const html='<figure data-reader-figure-status="missing">'+note+'<figure data-reader-figure-status="missing">'+note+'<figcaption><h2>Implementation</h2><p>Inner explanation.</p></figcaption></figure><figcaption>Outer explanation.</figcaption></figure>';
+  const result=cleanArticlePresentation(html,context),$=cheerio.load(result,null,false);
+  assert.equal($('a').length,1);assert.equal($('h2').text(),'Implementation');assert.equal($('figcaption').length,2);
+  assert.match($.root().text(),/Inner explanation/);assert.match($.root().text(),/Outer explanation/);
+  assert.equal(cleanArticlePresentation(result,context),result);
+});

@@ -19,6 +19,7 @@ const pages: Record<string, string> = {
   "/missing": feed(entry("") + entry('<link rel="alternate"/>')),
   "/dates": feed(entry('<link href="undated"/>') + entry('<link href="published"/><published>2020-02-15T00:00:00Z</published>') + entry('<link href="invalid"/><published>unknown</published>')),
   "/rss/feed.xml": `<rss version="2.0"><channel><title>Blog</title><item><title>Release notes</title><link>/blog/zh/posts/release/</link></item><item><title>Elsewhere</title><link>https://publisher.example/post</link></item></channel></rss>`,
+  "/rss/literal-title.xml": '<rss version="2.0"><channel><title>Blog</title><item><title>Mechanical squirrel of &lt;T&gt; &amp; examples</title><link>https://example.org/generics</link></item><item><title><![CDATA[Use <model> literally]]></title><link>https://example.org/literal</link></item></channel></rss>',
   "/fragments": feed(entry('<link href="notes#first"/>') + entry('<link href="notes#second"/>'), ' xml:base="https://publisher.example/"'),
 };
 const server = http.createServer((req, res) => {
@@ -60,6 +61,10 @@ test("relative Atom links use the final document URL after redirects", async () 
 
 test("relative RSS item links resolve against the final document URL; absolute ones are kept", async () => {
   assert.deepEqual((await read("/old/rss.xml")).map((item) => item.url), [root + "/blog/zh/posts/release/", "https://publisher.example/post"]);
+});
+
+test('RSS character-data titles retain literal type placeholders after XML decoding',async()=>{
+  assert.deepEqual((await read('/rss/literal-title.xml')).map(item=>item.title),['Mechanical squirrel of <T> & examples','Use <model> literally']);
 });
 
 test("absolute alternate links and the first-link fallback keep working", async () => {

@@ -1,6 +1,7 @@
 import { normalizeTechnicalMarkup } from "./technical-markup.ts";
 import { preserveWidgets, type ContentDocument as Doc, type ContentElement as El, type PreserveRule } from "./components.ts";
 import { bodyAdapters, type BodyAdapterName } from "./adapters/index.ts";
+import {protectOpenAIHeadings} from './adapters/openai.ts';
 
 export interface ContentRules {
   preserve?: PreserveRule[];
@@ -159,5 +160,6 @@ export function preparePageContent(document: Doc, url: string, rules: ContentRul
   describeFigureDrawings(document);
   const technical = normalizeTechnicalMarkup(document.body.innerHTML, url, true);
   document.body.innerHTML = technical.html;
+  if(rules.bodyAdapter==='openai')protectOpenAIHeadings(document);
   return technical;
 }

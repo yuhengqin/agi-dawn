@@ -65,7 +65,7 @@ export function ReaderToolbar({query,sources,datePickerTrigger}:Pick<ReaderPageD
         <PreservedFilters query={query} except={['sourceId']}/>
         <div className="reader-source-picker" data-active={query.sourceId?true:undefined}>
           <span aria-hidden="true">{sourceName}</span>
-          <select aria-label="来源" name="sourceId" defaultValue={query.sourceId??''} onChange={event=>void submit(event.currentTarget.form)}>
+          <select aria-label="来源" name="sourceId" defaultValue={query.sourceId??''} onChange={event=>void submit(event.currentTarget.form,{flushSync:true})}>
             <option value="">全部来源</option>{sources.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
           <IconChevronDown size={16}/>
         </div>

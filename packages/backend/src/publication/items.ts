@@ -30,8 +30,9 @@ export function readerBodyState(row:ReaderRow):ReaderBodyState{
     bodyRevision:permitted?row.body_revision:null,refreshPending:permitted&&row.body_revision!==null&&row.processing_state==="new",issues};
 }
 export function toReaderItem(row:ReaderRow):ReaderItemSummary{
+  const excerpt=cleanSummary(row.summary,{title:row.title,url:row.url});
   return {id:row.id,title:row.title,summary:row.summary,source:{id:row.source_id,name:publicSourceName(row.source_name)},author:row.author,links:{original:row.url},
-    publishedAt:row.published_at?.toISOString()??null,discoveredAt:row.discovered_at.toISOString(),timelineAt:row.sort_at.toISOString(),category:row.category,tags:displayTags(row.tags),bodyState:readerBodyState(row),engagement:{views:row.views,likes:row.likes},readingMinutes:row.body_status==='ok'?estimateReadingMinutes(row.translated_body??row.reading_text??''):null,summaryTruncated:isTruncatedExcerpt(row.summary,row.reading_text??null)};
+    publishedAt:row.published_at?.toISOString()??null,discoveredAt:row.discovered_at.toISOString(),timelineAt:row.sort_at.toISOString(),category:row.category,tags:displayTags(row.tags),bodyState:readerBodyState(row),engagement:{views:row.views,likes:row.likes},readingMinutes:row.body_status==='ok'?estimateReadingMinutes(row.translated_body??row.reading_text??''):null,summaryTruncated:isTruncatedExcerpt(excerpt,row.reading_text??null)};
 }
 export async function withReaderMetadata(items:ReaderItemSummary[],known?:Map<string,import('@agidawn/contracts/site').ReaderMetadataTranslation>){
   if(!items.length)return items;

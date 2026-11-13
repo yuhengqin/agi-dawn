@@ -38,7 +38,7 @@
     },
     {
       "id": "uber-ai", "name": "Uber Engineering · AI / ML", "kind": "web_list",
-      "config": {"url": "https://www.uber.com/us/en/blog/engineering/uber-ai/", "parseMode": "html", "itemSelector": "[data-testid='newsroom-article-feed-card']:has(span[title='AI / ML'])", "linkSelector": "a:not([aria-hidden])", "titleSelector": "a:not([aria-hidden])", "publishedAtSelector": "[data-baseweb='block'] > div:last-child", "allowUrlPrefixes": ["https://www.uber.com/us/en/blog/"], "publishedAtUtcOffset": "+00:00", "acceptLanguage": "en-US,en;q=0.9", "detail": {"maxFetches": 30, "summarySelector": "meta[name='description']"}, "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
+      "config": {"url": "https://www.uber.com/us/en/blog/engineering/uber-ai/", "parseMode": "html", "itemSelector": "[data-testid='newsroom-article-feed-card']:has(span[title='AI / ML'])", "linkSelector": "a:not([aria-hidden])", "titleSelector": "a:not([aria-hidden])", "publishedAtSelector": "[data-baseweb='block'] > div:last-child", "allowUrlPrefixes": ["https://www.uber.com/us/en/blog/"], "publishedAtUtcOffset": "+00:00", "acceptLanguage": "en-US,en;q=0.9", "detail": {"maxFetches": 30, "bodyAdapter": "uber", "summarySelector": "meta[name='description']"}, "_agidawn": {"initialBackfillLimit": 30, "initialBackfillMonths": 12}},
       "tier": "T1", "participation_mode": "editorial", "interval_minutes": 720, "tags": [], "site_fulltext": false
     },
     {

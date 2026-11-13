@@ -175,7 +175,7 @@ export function readableDocument(document: Doc, url: string, rules: PageRules = 
   const keptIssues=new Set([...article.content.matchAll(/data-reader-issues="([\d,]+)"/g)].flatMap(match=>match[1]!.split(',').map(Number)));
   const issues=technical.issues.filter((_,index)=>keptIssues.has(index));
   if(article.content.includes('data-reader-figure-loss="true"'))issues.push({kind:"missing-figure",message:"图表依赖原站样式，保留了文字说明，请对照原文。"});
-  const clean = trimTrailingChrome(cleanArticlePresentation(sanitizeBody(formulas.restore(article.content), url),{url,publishedAt:date.publishedAt?.toISOString(),issues}));
+  const clean = trimTrailingChrome(cleanArticlePresentation(sanitizeBody(formulas.restore(article.content), url),{url,publishedAt:date.publishedAt?.toISOString(),issues,author:article.byline}));
   for(const issue of figurePresentationIssues(clean))if(!issues.some(existing=>existing.kind===issue.kind&&existing.message===issue.message))issues.push(issue);
   const text = stripTags(clean);
   if (text.length < MIN_BODY_CHARS) return null;

@@ -56,7 +56,7 @@ export function sanitizeBody(html: string, baseUrl?: string): string {
       figure: ['data-reader-card','data-reader-figure-status','data-reader-figure-loss'],
       p: ['data-reader-embed'],
       img: ["src", "alt", "width", "height", "title", "data-reader-inline",'data-reader-image-surface'],
-      video: ["src", "poster", "width", "height", "controls", "playsinline", "preload"],
+      video: ["src", "poster", "width", "height", "controls", "playsinline", "preload", "aria-label"],
       source: ["src", "type"],
       code: ["class"],
       pre: ["class", "data-language", "data-code-kind"],
@@ -68,7 +68,7 @@ export function sanitizeBody(html: string, baseUrl?: string): string {
     allowedClasses: { code: [/^language-[\w-]+$/], pre: [/^language-[\w-]+$/] },
     allowedSchemes: ["http", "https"],
     allowedSchemesAppliedToAttributes: ["href", "src", "poster"],
-    allowedSchemesByTag: { img: ["http", "https", "data"] },
+    allowedSchemesByTag: { a: ["http", "https", "mailto"], img: ["http", "https", "data"] },
     allowProtocolRelative: true,
     transformTags: {
       '*':(tagName,attribs)=>{if(attribs.id&&!FOOTNOTE_ID.test(attribs.id))delete attribs.id;if(attribs['data-reader-image-surface']!=='dark')delete attribs['data-reader-image-surface'];return {tagName,attribs};},
@@ -122,6 +122,7 @@ export function normalizeBlocks(html: string): string {
       if (!node.text().trim() && !node.find("img, video, picture").length) node.remove();
     });
   }
+  $('a').filter((_,el)=>!$(el).attr('href')&&!$(el).attr('id')).each((_,el)=>{$(el).replaceWith($(el).contents());});
   // The frame around a linked picture (<a><div><picture>) became a paragraph, which Markdown cannot
   // hold inside a link; paragraphs of text in a link stay.
   $("a p").each((_, el) => {

@@ -12,7 +12,7 @@ export function readerLink(query:Record<string,string>,changes:Record<string,str
 }
 
 /** Native disclosure remains usable without JS; the panel overlays the list. */
-export function ReaderPopover({label,triggerLabel,triggerRef,children,className='',panelClassName='',active=false,onOpen,fitHeight=false}:{label:ReactNode;triggerLabel?:string;triggerRef?:Ref<HTMLElement>;children:ReactNode|((close:()=>void)=>ReactNode);className?:string;panelClassName?:string;active?:boolean;onOpen?:()=>void;fitHeight?:boolean}){
+export function ReaderPopover({label,triggerLabel,triggerRef,children,className='',panelClassName='',active=false,onOpen,fitHeight=false,closeOnPageScroll=false}:{label:ReactNode;triggerLabel?:string;triggerRef?:Ref<HTMLElement>;children:ReactNode|((close:()=>void)=>ReactNode);className?:string;panelClassName?:string;active?:boolean;onOpen?:()=>void;fitHeight?:boolean;closeOnPageScroll?:boolean}){
   const ref=useRef<HTMLDetailsElement>(null),location=useLocation();
   const close=()=>{if(ref.current){ref.current.open=false;ref.current.querySelector('summary')?.focus();}};
   const fitPanel=()=>{
@@ -37,11 +37,15 @@ export function ReaderPopover({label,triggerLabel,triggerRef,children,className=
     const details=ref.current!;
     const outside=(event:PointerEvent)=>{if(!details.contains(event.target as Node))details.open=false;};
     const escape=(event:KeyboardEvent)=>{
-      if(event.key==='Escape'&&details.open){details.open=false;details.querySelector('summary')?.focus();}
+      if(event.key==='Escape'&&details.open){event.preventDefault();event.stopPropagation();details.open=false;details.querySelector('summary')?.focus();}
     };
+    const dismiss=()=>{if(details.open){const restore=details.contains(document.activeElement);details.open=false;if(restore)details.querySelector('summary')?.focus({preventScroll:true});}};
+    const scroll=()=>{if(!details.querySelector('.reader-popover-panel')?.contains(document.activeElement))dismiss();};
+    const wheel=(event:WheelEvent)=>{if(!details.contains(event.target as Node))dismiss();};
     document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);window.addEventListener('resize',fitPanel);
-    return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape);window.removeEventListener('resize',fitPanel);};
-  },[fitHeight]);
+    if(closeOnPageScroll){window.addEventListener('scroll',scroll,{passive:true});window.addEventListener('wheel',wheel,{passive:true});}
+    return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape);window.removeEventListener('resize',fitPanel);window.removeEventListener('scroll',scroll);window.removeEventListener('wheel',wheel);};
+  },[fitHeight,closeOnPageScroll]);
   return <details ref={ref} name="reader-picker" className={`reader-popover ${className}`}
     onBlur={event=>{if(event.relatedTarget&&!event.currentTarget.contains(event.relatedTarget as Node))event.currentTarget.open=false;}}>
     <summary ref={triggerRef} aria-label={triggerLabel} title={triggerLabel} className={`flex min-h-11 cursor-pointer items-center justify-between gap-2 text-[13px] ${active?'text-accent':'text-ink-3'} hover:text-accent`} onClick={event=>{

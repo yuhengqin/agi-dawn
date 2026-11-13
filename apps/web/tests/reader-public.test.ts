@@ -4,6 +4,52 @@ import { chromium, webkit, expect } from "./browser.ts";
 import { fakeApi, feedItem, itemDetail, readerPage, startWebServer, visit, type WebServer } from "./web-server.ts";
 import type { Page } from "@playwright/test";
 
+test('article Escape closes settings before focus mode and page scrolling dismisses reading settings',async()=>{
+  const article=itemDetail({id:'reading-dismiss',title:'Reading keyboard controls',bodyHtml:('<p>'+('Saved article text. '.repeat(100))+'</p>').repeat(20)});
+  const web=await startWebServer(fakeApi(url=>{
+    if(url.pathname==='/api/site/items/'+article.id)return article;
+    if(url.pathname==='/api/site/engagement')return {items:[{id:article.id,views:0,likes:0,liked:false}]};
+    if(url.pathname.endsWith('/view'))return {id:article.id,views:1,likes:0,liked:false};
+  })),browser=await chromium.launch();
+  try{
+    const page=await browser.newPage({viewport:{width:1440,height:900}});await visit(page,web.origin+'/items/'+article.id);
+    await page.getByRole('button',{name:'开启专注模式',exact:true}).click();
+    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.keyboard.press('Escape');
+    await expect(page.getByRole('group',{name:'正文字号',exact:true})).toBeHidden();
+    await expect(page.getByRole('button',{name:'退出专注模式',exact:true})).toBeVisible();
+    await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'开启专注模式',exact:true})).toBeFocused();
+    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.mouse.move(700,500);await page.mouse.wheel(0,400);
+    await expect(page.getByRole('group',{name:'正文字号',exact:true})).toBeHidden();
+  }finally{await browser.close();await web.stop();}
+});
+
+test('an empty pending article does not invite readers to a missing summary',async()=>{
+  const article=itemDetail({id:'empty-pending',title:'No content yet',summary:null,intro:null,bodyHtml:null,bodyState:{status:'pending',bodyRevision:null,refreshPending:false,issues:[]}});
+  const web=await startWebServer(fakeApi(url=>url.pathname==='/api/site/items/'+article.id?article:undefined)),browser=await chromium.launch();
+  try{
+    const page=await browser.newPage({viewport:{width:1440,height:900}});await visit(page,web.origin+'/items/'+article.id);
+    await expect(page.getByRole('status').filter({hasText:'全文暂未就绪'})).toContainText('访问原文');
+    await expect(page.getByRole('status').filter({hasText:'全文暂未就绪'})).not.toContainText('阅读摘要');
+  }finally{await browser.close();await web.stop();}
+});
+
+test('code wrapping is controllable and preserves the original copied source',async()=>{
+  const source='  preserve this indentation and every character. '.repeat(50)+'\n';
+  const article=itemDetail({id:'code-wrapping',title:'Readable long prompts',bodyHtml:'<pre data-code-kind="prompt"><code>'+source+'</code></pre>'});
+  const web=await startWebServer(fakeApi(url=>url.pathname==='/api/site/items/'+article.id?article:undefined)),browser=await chromium.launch();
+  try{
+    const page=await browser.newPage({viewport:{width:1440,height:900}});await visit(page,web.origin+'/items/'+article.id);
+    const wrap=page.getByRole('button',{name:'代码自动换行',exact:true}),pre=page.getByRole('region',{name:'文章正文',exact:true}).locator('pre');
+    await expect(wrap).toHaveAttribute('aria-pressed','true');
+    assert.ok(await pre.evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+    await wrap.click();await expect(wrap).toHaveAttribute('aria-pressed','false');
+    assert.ok(await pre.evaluate(el=>el.scrollWidth>el.clientWidth));
+    await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(text:string)=>{(window as Window&{copiedCode?:string}).copiedCode=text;}}}));
+    await page.getByRole('button',{name:'复制代码',exact:true}).click();
+    await expect.poll(()=>page.evaluate(()=>(window as Window&{copiedCode?:string}).copiedCode)).toBe(source);
+  }finally{await browser.close();await web.stop();}
+});
+
 // Observe what is actually drawn, including an animation's temporary image, without depending on its implementation.
 async function sampleViewerMotion(page:Page,selector:string){
   return page.evaluate(async selector=>{
@@ -304,6 +350,7 @@ for(const engine of [chromium,webkit])test(`search location reveals a match at t
   try{
     web=await startWebServer(fakeApi(url=>{if(url.pathname==='/api/site/items/'+article.id)return article;if(url.pathname==='/api/site/engagement')return {items:[]};}));
     const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});await visit(page,web.origin+'/items/wide-search?q=needle&match=body%3Aoriginal');
+    const wrap=page.getByRole('button',{name:'代码自动换行',exact:true});await expect(wrap).toHaveAttribute('aria-pressed','true');await wrap.click();
     const pre=page.locator('pre');assert.equal(await pre.evaluate(el=>el.scrollLeft),0);await page.getByRole('button',{name:'定位到首处匹配',exact:true}).click();
     await expect.poll(()=>pre.evaluate(el=>el.scrollLeft)).toBeGreaterThan(0);
     const visible=await page.evaluate(()=>{const match=Array.from(CSS.highlights.get('article-search')??[])[0];if(!(match instanceof Range))return false;const r=match.getBoundingClientRect(),p=document.querySelector('pre')!.getBoundingClientRect();return r.left>=p.left&&r.right<=p.right;});assert(visible,'the complete matched word is inside the horizontal viewport');
@@ -333,6 +380,7 @@ test('desktop floating reading tools leave the outline and pagination clickable'
       if(await nav.isVisible()){const navBox=await nav.boundingBox();assert(navBox&&toolBox&&navBox.x+navBox.width+8<=toolBox.x,'outline leaves a separate column for floating tools');await nav.getByRole('link',{name:'Section 20',exact:true}).click({trial:true,timeout:1500});}
     }
     await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true}).check();await page.keyboard.press('Escape');
+    await page.setViewportSize({width:1920,height:900});
     await page.getByRole('navigation',{name:'本文目录',exact:true}).getByRole('link',{name:'Section 20',exact:true}).click({trial:true,timeout:1500});
     await page.setViewportSize({width:1280,height:900});await visit(page,web.origin+'/');await page.evaluate(()=>scrollTo(0,1400));
     const search=page.getByRole('searchbox'),searchBox=await search.boundingBox();
@@ -789,7 +837,7 @@ for(const engine of [chromium,webkit])test(`reader filters compose pending searc
   }finally{release();await browser.close();await web?.stop();}
 });
 
-for(const engine of [chromium,webkit])test(`reader search preserves text entered while a source request is finishing (${engine.name()})`,async()=>{
+for(const engine of [chromium,webkit])for(const immediate of [false,true])test(`reader search preserves text entered while a source request is finishing (${engine.name()}${immediate?', immediate input':''})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined,release=()=>{},begun=()=>{},held=false;
   const pending=new Promise<void>(resolve=>release=resolve),started=new Promise<void>(resolve=>begun=resolve);
   try{
@@ -803,10 +851,22 @@ for(const engine of [chromium,webkit])test(`reader search preserves text entered
       if(url.pathname==='/api/site/topics')return {topics:[]};
     }));
     const page=await browser.newPage({viewport:{width:1280,height:800}});await visit(page,web.origin+'/?q=old&limit=50');
-    await page.getByRole('combobox',{name:'来源',exact:true}).selectOption('source');await started;
     const input=page.getByRole('searchbox');
     // Hold the debounce while the earlier response commits; composition must not be overwritten either.
-    await input.dispatchEvent('compositionstart');await input.fill('新输入');release();
+    if(immediate){
+      // Keep the actions in one task so a deferred navigation cannot render between them.
+      await page.evaluate(()=>{
+        const source=document.querySelector<HTMLSelectElement>('select[aria-label="来源"]')!,input=document.querySelector<HTMLInputElement>('input[aria-label="搜索文章"]')!;
+        source.value='source';source.dispatchEvent(new Event('change',{bubbles:true}));
+        input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true,data:''}));
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,'新输入');
+        input.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertCompositionText',data:'新输入',isComposing:true}));
+      });await started;
+    }else{
+      await page.getByRole('combobox',{name:'来源',exact:true}).selectOption('source');await started;
+      await input.dispatchEvent('compositionstart');await input.fill('新输入');
+    }
+    await expect(input).toHaveValue('新输入');release();
     await expect(page).toHaveURL(/sourceId=source/);await expect(page.getByRole('status',{name:'文章分页信息',exact:true})).toContainText('共 1 篇');
     await expect(input).toHaveValue('新输入');
     await input.dispatchEvent('compositionend');

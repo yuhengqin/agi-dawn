@@ -48,3 +48,27 @@ test('table wording is translated within each cell while row and column structur
   const result=await translateHtml(html,async parts=>{assert(parts.every(part=>!/<(?:thead|tbody|tr|td|th)[ >]/.test(part)));return {t:parts.map(part=>part.replace('Method','方法').replace('Cost','成本').replace('Full harness','完整框架')),receiptId:1};});
   const $=cheerio.load(result.html);assert.equal(result.complete,true);assert.equal($('tr').length,2);assert.equal($('th').eq(0).text(),'方法');assert.equal($('td').eq(0).text(),'完整框架');assert.equal($('td').eq(1).text(),'$200');
 });
+
+test('ordinary short English headings cannot be returned unchanged as complete translations',async()=>{
+  let calls=0;
+  const result=await translateHtml('<h2>Introduction</h2><h3>What Are Export Workloads?</h3>',async parts=>({t:parts,receiptId:++calls}));
+  assert.equal(result.complete,false);assert.equal(calls,2);
+  assert.match(result.html,/Introduction/);
+});
+
+test('adding a few Chinese characters does not translate a copied English paragraph',async()=>{
+  const text='This paragraph describes the complete architecture and several important implementation details for distributed systems.';
+  const result=await translateHtml('<p>'+text+'</p>',async parts=>({t:parts.map(part=>'中文'+part),receiptId:1}));
+  assert.equal(result.complete,false);assert.match(result.html,/This paragraph describes/);
+});
+
+test('product labels and genuine translations retaining technical terms are accepted',async()=>{
+  const result=await translateHtml('<h2>Claude Code</h2><h3>Introduction</h3><p>Use the PostgreSQL query planner to optimize production queries.</p>',async parts=>({t:parts.map(part=>part==='Introduction'?'引言':part.startsWith('Use the')?'使用 PostgreSQL 查询规划器优化生产查询。':part),receiptId:1}));
+  assert.equal(result.complete,true);assert.match(result.html,/Claude Code/);assert.match(result.html,/使用 PostgreSQL/);
+});
+
+test('publisher names, people and project names are not rejected as untranslated prose',async()=>{
+  const html='<p>The Register · Thomas Claburn</p><h2>underclass</h2><h2>preflight</h2>';
+  const result=await translateHtml(html,async parts=>({t:parts,receiptId:1}));
+  assert.equal(result.complete,true);assert.match(result.html,/The Register/);
+});

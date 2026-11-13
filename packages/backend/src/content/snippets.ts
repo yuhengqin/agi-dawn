@@ -22,6 +22,9 @@ export function cleanSummary(input:string|null,context:SummaryContext={}):string
   let text=collapseWhitespace(input),host='';
   try{host=new URL(context.url??'').hostname.replace(/^www\./,'');}catch{}
   if(host==='uber.com'&&/^uber[.!。]?$/i.test(text))return null;
+  if(host==='ghuntley.com'&&/^0:00\s*\/\s*\d{1,2}:\d{2}(?::\d{2})?\s+1[×x]\s+/.test(text)){
+    text=text.replace(/^0:00\s*\/\s*\d{1,2}:\d{2}(?::\d{2})?\s+1[×x]\s+/,'').replace(/\s+\*\s+/g,' ');
+  }
   if(context.title){
     const title=context.title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     text=text.replace(new RegExp(`\\s+The post ${title} appeared first on [^\\n]+?[.]?\\s*$`,'i'),'').trim();

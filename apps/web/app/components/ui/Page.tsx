@@ -25,7 +25,7 @@ export function ReadingLayout({ children, aside }: { children: ReactNode; aside?
 export function ArticleLayout({ children, left, right, readingDisplay=false }: { children: ReactNode; left?: ReactNode; right?: ReactNode; readingDisplay?:boolean }) {
   const [leftRail, leftOverscroll] = useContainedScroll<HTMLDivElement>(!!left);
   const [rightRail, rightOverscroll] = useContainedScroll<HTMLDivElement>(!!right);
-  return (
+  const content=(
     <div className={readingDisplay?`article-reading-layout${right?' has-outline':''}`:`mx-auto grid max-w-[var(--page-max-reading)] grid-cols-[minmax(0,1fr)] ${right?'lg:grid-cols-[minmax(0,1fr)_240px] lg:gap-x-12':''} ${left?'2xl:grid-cols-[minmax(200px,1fr)_minmax(0,760px)_minmax(200px,1fr)] 2xl:gap-x-12':''}`}>
       {left&&<aside className="hidden 2xl:block">
         <div ref={leftRail} className={`scrollbar-thin sticky top-6 flex max-h-[calc(100vh-3rem)] max-w-[260px] flex-col space-y-8 overflow-y-auto ${leftOverscroll}`}>{left}</div>
@@ -38,6 +38,7 @@ export function ArticleLayout({ children, left, right, readingDisplay=false }: {
       </aside>}
     </div>
   );
+  return readingDisplay?<div className="article-reading-container">{content}</div>:content;
 }
 
 /**

@@ -26,7 +26,7 @@
   display: block;
   width: 116px;
   height: 116px;
-  border-radius: 50%;
+  border-radius: 9999px;
   background: var(--accent);
   font-size: 94px;
   font-weight: 750;
@@ -43,7 +43,7 @@
   inset-block: 0;
   right: -6px;
   width: 8px;
-  border-radius: 50%;
+  border-radius: 9999px;
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 25%, transparent), transparent);
   pointer-events: none;
 }
@@ -54,6 +54,7 @@
 
 .not-found-search {
   display: flex;
+  overflow: hidden;
   width: 100%;
   max-width: 460px;
   margin: 28px auto 0;
@@ -70,7 +71,6 @@
   place-items: center;
   width: 60px;
   min-height: 48px;
-  border-radius: 0 calc(var(--radius-control) - 1px) calc(var(--radius-control) - 1px) 0;
   background: var(--accent);
   color: var(--accent-contrast);
   transition: background-color 150ms;

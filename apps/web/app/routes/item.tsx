@@ -1,5 +1,5 @@
 import {data,Link,useLoaderData} from "react-router";
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import type {Route} from "./+types/item";
 import type {ReaderItemDetail} from "@agidawn/contracts/site";
 import {ARTICLE_FOOTER} from "@agidawn/site";
@@ -31,6 +31,16 @@ export default function Item(){const item=useLoaderData<typeof loader>();return 
 function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useState(false),[outlineCollapsed,setOutlineCollapsed]=useState(false);
   const translated=item.body?.language==='translation'?item.body:null,metadata=item.metadataTranslation,outline=item.body?.outline??[],html=item.body?.html??null;
   const reading=useArticleReading(outline,html,focus,outlineCollapsed),outlineProps={outline,current:reading.current,navigate:reading.navigate,progress:reading.progress};
+  useEffect(()=>{
+    if(!focus)return;
+    const escape=(event:KeyboardEvent)=>{
+      if(event.key!=='Escape'||event.defaultPrevented||document.querySelector('[aria-modal="true"],[role="menu"]')||reading.scope.current?.querySelector('details[open],[role="tooltip"]'))return;
+      if(event.target instanceof Element&&event.target.closest('input,textarea,[contenteditable="true"]'))return;
+      event.preventDefault();reading.preserve();transitionAppearance(()=>setFocus(false));
+      reading.scope.current?.querySelector<HTMLButtonElement>('.floating-tool-button[aria-pressed]')?.focus({preventScroll:true});
+    };
+    window.addEventListener('keydown',escape);return()=>window.removeEventListener('keydown',escape);
+  },[focus,reading.preserve]);
   const figureIssues=item.bodyState.issues.filter(issue=>issue.kind==='missing-figure'),otherIssues=item.bodyState.issues.filter(issue=>issue.kind!=='missing-figure');
   return <EngagementProvider items={[item]} trackView={item.id}><div ref={reading.scope} className="public-article-reading" data-reading-focus={focus} data-outline-collapsed={outlineCollapsed}>
   <PhoneBar title="文章"/>
@@ -42,9 +52,10 @@ function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useS
           <Link className="article-source" data-search-content to={`/?${new URLSearchParams({sourceId:item.source.id})}`}><IconDoc size={15}/>{item.source.name}</Link>
           {item.author&&<span className="article-author"><IconUser size={15}/><span><span className="sr-only">作者：</span>{item.author}</span></span>}
           <time dateTime={item.publishedAt??item.discoveredAt}><IconCalendar size={15}/><span><span className={item.publishedAt?"sr-only":undefined}>{item.publishedAt?"发布时间：":"收录时间："}</span>{readerDate(item.publishedAt??item.discoveredAt)}</span></time>
-          <ArticleEngagementBar item={item} compact/>
+          <div className="article-reading-meta"><ArticleEngagementBar item={item} compact/>
           {item.readingMinutes&&<span className="reader-meta-item whitespace-nowrap"><IconClock size={15}/><span>约 {item.readingMinutes} 分钟</span></span>}
           {translated&&<span className="article-language">中文译文</span>}
+          </div>
         </div>
           <a href={item.links.original} target="_blank" rel="noreferrer" className="article-tool-link article-original-link text-accent">打开原文<IconExternal size={16}/></a>
           {item.topics.length>0&&<nav aria-label="所属主题" className="article-topics">{item.topics.map(topic=><Link key={topic.slug} data-search-content to={`/?${new URLSearchParams({topic:topic.slug})}`}>{topic.name}</Link>)}</nav>}
@@ -53,7 +64,7 @@ function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useS
       </header>
       <ArticleSearch item={item} onNavigate={reading.stop}/>
       {html&&outline.length>0&&<div ref={reading.toolbar} className="article-reading-toolbar" data-reading-controls><MobileArticleOutline {...outlineProps}/></div>}
-      {notices[item.bodyState.status]&&(item.bodyState.status!=='partial'||otherIssues.length>0||!figureIssues.length)&&<p className="article-status" role="status">{notices[item.bodyState.status]}</p>}
+      {notices[item.bodyState.status]&&(item.bodyState.status!=='partial'||otherIssues.length>0||!figureIssues.length)&&<p className="article-status" role="status">{item.bodyState.status==='pending'&&!item.intro?'全文暂未就绪，请访问原文。':notices[item.bodyState.status]}</p>}
       {item.bodyState.refreshPending&&<p className="article-status">正文正在更新，当前显示已保存版本。</p>}
       <FigureNotice issues={figureIssues} onDismiss={()=>reading.scope.current?.querySelector<HTMLElement>('.floating-tools summary')?.focus({preventScroll:true})}/>
       {otherIssues.length>0&&<ul className="article-status list-disc pl-5">{otherIssues.map((issue,i)=><li key={i}>{issue.message}</li>)}</ul>}
@@ -67,5 +78,5 @@ function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useS
       {webModules().map(module=>module.articleTools?<module.articleTools key={module.name} articleId={item.id}/>:null)}
     </article>
   </ArticleLayout>
-  <ArticleTools focus={focus} onFocus={()=>transitionAppearance(()=>{reading.preserve();setFocus(value=>!value);})} onBackToTop={reading.stop}/>
+  <ArticleTools focus={focus} onFocus={()=>{reading.preserve();transitionAppearance(()=>setFocus(value=>!value));}} onBackToTop={reading.stop}/>
   </div></EngagementProvider>;}

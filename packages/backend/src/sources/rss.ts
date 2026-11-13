@@ -192,7 +192,8 @@ export async function fetchRss(source: SourceRow, opts: { force?: boolean } = {}
       // which a browser plays. Its identity stays the one its guid gives, and it has no page to read a body from.
       const mediaFile = !page && guid ? enclosures.find((e) => /^(audio|video)\//.test(e?.["@type"] ?? ""))?.["@url"] ?? "" : "";
       const link = page || mediaFile || guid;
-      const title = collapseWhitespace(stripTags(text(it.title)));
+      // RSS titles are character data, already XML-decoded; <T> is literal text, not an HTML tag.
+      const title = collapseWhitespace(text(it.title));
       if (!link || !title) continue;
       const contentEncoded = text(it["content:encoded"]);
       const description = text(it.description);
