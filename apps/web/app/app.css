@@ -603,7 +603,7 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 }
 .reader-feed-entry mark { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--ink); border-radius: var(--radius-mark); }
 .reader-feed-title { font-size: 20px; font-weight: 650; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
-.reader-feed-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 8px; font-size: 15px; line-height: 1.75; color: var(--ink-2); }
+.reader-feed-summary { max-inline-size: 54rem; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 8px; font-size: 15px; line-height: 1.75; color: var(--ink-2); }
 .reader-feed-meta { margin-top: 12px; font-size: 12px; }
 .reader-meta-item { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .reader-meta-item > svg { flex-shrink: 0; color: var(--ink-4); }

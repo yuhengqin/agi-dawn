@@ -20,7 +20,10 @@ export function ReaderListSummary({page}:Pick<ReaderPageData,'page'>){
     return()=>clearTimeout(timer);
   },[busy]);
   const start=(page.page-1)*page.limit+1,end=start+page.items.length-1;
-  return <p role="status" aria-label="文章分页信息" aria-atomic="true" className="py-3 text-xs text-ink-3">{busy&&showSearching?'正在搜索…':<>共 {page.total} 篇{page.total>0&&<span className="ml-3">第 {start}–{end} 篇</span>}</>}</p>;
+  return <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 text-xs text-ink-3">
+    <p role="status" aria-label="文章分页信息" aria-atomic="true">{busy&&showSearching?'正在搜索…':<>共 {page.total} 篇{page.total>0&&<> · 当前显示 {start}–{end} 篇</>}</>}</p>
+    <span title="缺少发布时间的文章按收录时间排列">按发布时间倒序</span>
+  </div>;
 }
 
 export function ReaderPagination({page,query}:PaginationProps){
