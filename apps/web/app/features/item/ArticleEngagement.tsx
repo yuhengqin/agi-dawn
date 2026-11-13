@@ -57,7 +57,7 @@ export function ArticleEngagementBar({item,compact=false,labelPrefix='',showView
   return <div className={`flex flex-wrap items-center gap-x-4 text-ink-3 tabular-nums ${compact?'text-xs':'text-[13px]'}`}>
     {showViews&&counts.views>0&&<span className="reader-meta-item" title="本站详情打开次数，同一浏览器30分钟内去重"><IconEye size={15}/><span><span className="sr-only">阅读 </span>{counts.views.toLocaleString('zh-CN')}</span></span>}
     <button type="button" aria-label={labelPrefix+(current?.liked?'取消点赞':'点赞')} aria-pressed={current?.liked??false} disabled={!state?.ready||!current||pending} onClick={()=>void toggle()}
-      className={`inline-flex items-center gap-1.5 hover:text-accent aria-pressed:text-accent disabled:cursor-wait ${compact?'min-h-7 [@media(pointer:coarse)]:min-h-11':'min-h-11'}`} title="同一浏览器可点赞一次，再点取消">
+      className={`inline-flex items-center gap-1.5 hover:text-accent aria-pressed:text-accent disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${compact?'min-h-9 min-w-9 justify-center rounded-mark px-2 hover:bg-accent/10 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11':'min-h-11'}`} title="同一浏览器可点赞一次，再点取消">
       <IconHeart size={15} fill={current?.liked?'currentColor':'none'}/>{counts.likes>0&&<span>{counts.likes.toLocaleString('zh-CN')}</span>}
     </button>
     {error&&<span role="status" className="basis-full text-sm">{error}</span>}

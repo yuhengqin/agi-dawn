@@ -25,6 +25,9 @@ export interface ReaderArticleBody {html:string;outline:OutlineEntry[];language:
 export interface ReaderItemDetail extends ReaderItemSummary {body:ReaderArticleBody|null;intro:string|null;topics:TopicLink[];related:ReaderItemSummary[]}
 export const READER_PAGE_SIZES=[25,50,100] as const;
 export interface ReaderListQuery {sourceId?:string;category?:string;topic?:string;from?:string;to?:string;q?:string;page?:number;limit?:number}
+// Topic alternatives apply the other article filters, independently of the selected topic and page.
+export const READER_TOPIC_FILTERS=['sourceId','category','from','to','q'] as const;
+export type ReaderTopicQuery=Pick<ReaderListQuery,(typeof READER_TOPIC_FILTERS)[number]>;
 export interface ReaderListPage {items:ReaderItemSummary[];total:number;page:number;limit:number;pageCount:number}
 export interface SiteMeta {changelogVersion:string}
 export interface ChangelogRelease {date:string;time:string;kind:"更新"|"优化"|"公告"|"下线";title:string;body:string[];urgent?:true;feature?:unknown}

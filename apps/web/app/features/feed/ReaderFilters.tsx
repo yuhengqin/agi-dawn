@@ -86,7 +86,7 @@ export function ReaderFilters({query,sources,topics,categories}:Pick<ReaderPageD
     {key:'date',value:(query.from||query.to)&&dateRangeLabel(query.from,query.to),label:'日期',changes:{from:null,to:null}},
   ];
   const filters=choices.filter(filter=>filter.value);
-  if(filters.length<2)return null;
+  if(!filters.length)return null;
   return <div aria-label="当前筛选" className="flex min-w-0 flex-wrap items-center gap-x-3 border-b border-line py-2 text-xs text-ink-3">
       <span>已选条件</span>{filters.map(({key,value,label,changes})=><Link key={key} to={readerLink(target,changes)} aria-label={`移除${label}：${value}`} className="inline-flex min-h-9 items-center gap-1 text-accent hover:underline">{value}<span aria-hidden="true">×</span></Link>)}
       <Link to={readerLink(target.limit?{limit:target.limit}:{},{})} className="inline-flex min-h-9 items-center underline underline-offset-4">清除全部筛选</Link>

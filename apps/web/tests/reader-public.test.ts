@@ -653,7 +653,7 @@ for(const engine of [chromium,webkit])test(`reader search debounces, respects co
     await input.dispatchEvent('compositionend');await expect(page).toHaveURL(/q=%E6%99%BA%E8%83%BD/);
     await page.getByRole('button',{name:'清除搜索',exact:true}).click();await expect(page).not.toHaveURL(/q=/);await expect(input).toHaveValue('');
     assert.equal(new URL(page.url()).searchParams.get('category'),'coding');assert(searches.includes('智能'));
-    await expect(page.getByLabel('当前筛选',{exact:true})).toHaveCount(0);
+    await expect(page.getByLabel('当前筛选',{exact:true}).getByRole('link',{name:'移除类别：AI 编程',exact:true})).toBeVisible();
     slow=true;
     // Dispatch both actions in one turn so a loaded test host cannot consume the debounce window before the click.
     await page.evaluate(({input,link})=>{
@@ -1340,7 +1340,9 @@ for(const engine of [chromium,webkit])test(`anonymous likes persist with failure
     }));
     const page=await browser.newPage();await visit(page,web.origin+'/');
     await expect(page.getByRole('button',{name:'点赞',exact:true})).toBeEnabled();assert.equal(views,0);
-    await page.getByRole('button',{name:'点赞',exact:true}).click();await expect(page.getByRole('button',{name:'取消点赞',exact:true})).toHaveText('1');
+    const heart=(await page.getByRole('button',{name:'点赞',exact:true}).locator('svg').boundingBox())!;
+    await page.mouse.click(heart.x-6,heart.y+heart.height/2);
+    await expect(page).toHaveURL(web.origin+'/');await expect(page.getByRole('button',{name:'取消点赞',exact:true})).toHaveText('1');
     await page.reload();await expect(page.getByRole('button',{name:'取消点赞',exact:true})).toHaveAttribute('aria-pressed','true');assert.equal(views,0);
     failLike=true;await page.getByRole('button',{name:'取消点赞',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'点赞未能保存'})).toBeVisible();await expect(page.getByRole('button',{name:'取消点赞',exact:true})).toHaveText('1');
     failLike=false;await page.getByRole('button',{name:'取消点赞',exact:true}).click();await expect(page.getByRole('button',{name:'点赞',exact:true})).toHaveText('');
@@ -1789,6 +1791,51 @@ for(const engine of [chromium,webkit])test(`article rows show available localize
     await expect(page.getByText('中文摘要',{exact:true})).toBeVisible();
     await expect(page.getByText('固定摘要',{exact:true})).toHaveCount(2);
     await expect(page.getByLabel('收藏暂未开放')).toHaveCount(0);
+  }finally{await browser.close();await web?.stop();}
+});
+
+test('single reader filters stay visible and removable after collapsing the sidebar',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/articles')return readerPage(Array.from({length:51},(_,i)=>feedItem({id:'filter-'+i,title:'Article '+i})),url);
+      if(url.pathname==='/api/site/categories')return {items:[{id:'coding',name:'AI Coding'}]};
+      if(url.pathname==='/api/site/sources')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1280,height:800}});
+    const path='/?category=coding&limit=50&page=2';await visit(page,web.origin+path);
+    await page.getByRole('button',{name:'收起侧栏',exact:true}).click();
+    const filters=page.getByLabel('当前筛选',{exact:true}),remove=filters.getByRole('link',{name:'移除类别：AI Coding',exact:true});
+    await expect(remove).toBeVisible();await expect(filters.getByRole('link',{name:'清除全部筛选',exact:true})).toBeVisible();
+    await remove.focus();await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(web.origin+'/?limit=50');await expect(filters).toHaveCount(0);
+    await page.goBack();await expect(page).toHaveURL(web.origin+path);await expect(remove).toBeVisible();
+    await expect(page.getByRole('button',{name:'展开侧栏',exact:true})).toBeVisible();
+  }finally{await browser.close();await web?.stop();}
+});
+
+test('reader topic counts follow the other filters without the selected topic or pagination',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;const topicQueries:Record<string,string>[]=[];
+  const topics=Array.from({length:8},(_,i)=>({slug:'topic-'+i,name:'技术主题 '+i,group:'field',definition:'Topic',brand:null,total:11,recent:0,indexable:true,latest:null}));
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/articles')return readerPage(Array.from({length:51},(_,i)=>feedItem({id:'facet-'+i,title:'Article '+i})),url);
+      if(url.pathname==='/api/site/sources')return {items:[{id:'source',name:'Source'}]};
+      if(url.pathname==='/api/site/categories')return {items:[{id:'coding',name:'AI Coding'}]};
+      if(url.pathname==='/api/site/topics'){
+        topicQueries.push(Object.fromEntries(url.searchParams));
+        return {topics:topics.map(topic=>({...topic,total:url.searchParams.has('sourceId')?0:11}))};
+      }
+    }));
+    const page=await browser.newPage({viewport:{width:1280,height:800}});
+    await visit(page,web.origin+'/?sourceId=source&category=coding&q=tools&from=2026-11-01&to=2026-11-13&topic=topic-7&page=2&limit=50');
+    assert.deepEqual(topicQueries.at(-1),{sourceId:'source',category:'coding',q:'tools',from:'2026-11-01',to:'2026-11-13'});
+    const trigger=page.locator('summary').filter({hasText:/技术主题 7/}),topic=page.getByRole('navigation',{name:'全部技术主题'}).getByRole('link',{name:'技术主题 7',exact:true});
+    await trigger.click();await expect(topic).toContainText('0');await expect(topic).toHaveAttribute('aria-description','共0篇文章');await page.keyboard.press('Escape');
+    await page.getByLabel('当前筛选',{exact:true}).getByRole('link',{name:'移除来源：Source',exact:true}).click();
+    await expect(page).not.toHaveURL(/sourceId=/);await trigger.click();await expect(topic).toContainText('11');
+    assert.deepEqual(topicQueries.at(-1),{category:'coding',q:'tools',from:'2026-11-01',to:'2026-11-13'});
   }finally{await browser.close();await web?.stop();}
 });
 

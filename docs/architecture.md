@@ -29,6 +29,8 @@ flowchart LR
 
 主题目录保存在 `article_topics`，初始项由显式seed从行业模板导入，重复执行不覆盖管理员编辑。运行时通过publication读取数据库，不缓存主题项。名称与说明可在后台修改，slug和匹配标签保持稳定；编辑元数据不重写文章或发布投影。私人管理篇数沿用书库范围，公开主题统计仍经过统一可见性规则。
 
+`/api/site/topics` 接受 `sourceId/category/from/to/q`，返回这些条件下各主题的篇数、近30天篇数和最新文章；不接受 `topic/page/limit`，避免用当前主题或页码限制其他备选主题。文章页传入当前其他筛选条件，零匹配主题保留为0；探索页和站点地图不传条件，继续使用全站统计。主题统计与文章列表复用 `publication/query.ts` 的可见性、日期、搜索及有效译文规则，关键词统计共用搜索容量限制；同次统计在一条SQL内读取，不缓存已结束请求的结果。
+
 付费的全文翻译、Jina、SocialData、Dajiala 继续经过 `providers/receipts.ts` 的回执、费用历史和预算。`MODEL_CALLS_ENABLED`、`COLLECT_ENABLED`、`FEISHU_INTERNAL_ENABLED`、`INDEXNOW_SUBMIT_ENABLED` 只认字符串 `true`，默认关闭。页面打开不触发付费请求。
 
 正文获取与存储由 `content/extract.ts` 负责；`content/pipeline.ts` 固定流式内容整理、控件移除、可见性、来源适配、组件转换及图形处理的先后顺序。`content/components.ts` 以函数注册表实现通用代码块与表格转换；`content/adapters/` 由来源显式选择，负责识别特殊结构并复用安全文本／表格输出，不在清洗器中堆叠站点规则。所有结果继续通过既有 Readability、HTML 白名单及正文质量检查，没有独立内容 AST 或新的存储格式。

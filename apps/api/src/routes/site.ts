@@ -1,6 +1,6 @@
 // Anonymous site reads use publication; owner data has separate guarded routes.
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { ReaderListQuery } from "@agidawn/contracts/site";
+import { READER_TOPIC_FILTERS,type ReaderListQuery,type ReaderTopicQuery } from "@agidawn/contracts/site";
 import { loadItemDetail } from "@agidawn/backend/publication/detail";
 import { loadReaderList, ReaderQueryError, SearchBusyError } from "@agidawn/backend/publication/pool";
 import { loadPublicSources } from "@agidawn/backend/publication/sources";
@@ -33,10 +33,16 @@ export function siteHandler(fn:Handler):Handler {
 
 function listQuery(req:FastifyRequest):ReaderListQuery {
   const q=looseQuery(req);
-  const allowed=new Set(["sourceId","category","topic","from","to","q","page","limit"]);
+  const allowed=new Set([...READER_TOPIC_FILTERS,"topic","page","limit"]);
   if(Object.keys(q).some(key=>!allowed.has(key))) throw new ReaderQueryError("unknown article filter");
   for(const key of ['page','limit'])if(q[key]!==undefined&&!/^[1-9]\d*$/.test(q[key]!))throw new ReaderQueryError("invalid article pagination");
   return {...q,...(q.limit===undefined?{}:{limit:Number(q.limit)}),...(q.page===undefined?{}:{page:Number(q.page)})} as ReaderListQuery;
+}
+
+function topicQuery(req:FastifyRequest):ReaderTopicQuery {
+  const query=looseQuery(req),allowed=new Set<string>(READER_TOPIC_FILTERS);
+  if(Object.keys(query).some(key=>!allowed.has(key)))throw new ReaderQueryError('unknown topic filter');
+  return query;
 }
 
 export function registerSite(app:FastifyInstance) {
@@ -50,7 +56,7 @@ export function registerSite(app:FastifyInstance) {
     if(result.kind==="not_found") return sendProblem(req,reply,{status:404,code:"not_found",detail:"article not found"});
     return result.item;
   }));
-  app.get("/api/site/topics",siteHandler(async()=>listTopicSummaries()));
+  app.get("/api/site/topics",siteHandler(async req=>listTopicSummaries(topicQuery(req))));
   app.get("/api/site/search/suggestions",siteHandler(async()=>({topics:await topicBrowseLinks()})));
   app.get("/api/site/contact",siteHandler(loadContact));
   app.get("/api/site/changelog",siteHandler(async()=>loadChangelog()));

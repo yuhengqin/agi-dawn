@@ -1,5 +1,5 @@
 import { data,redirect } from "react-router";
-import { READER_PAGE_SIZES, type ReaderListPage, type TopicSummary } from "@agidawn/contracts/site";
+import { READER_PAGE_SIZES, READER_TOPIC_FILTERS, type ReaderListPage, type TopicSummary } from "@agidawn/contracts/site";
 import { beijingDate } from "@agidawn/contracts/time";
 import { apiGet,loadOr404 } from "../../lib/api.server";
 
@@ -20,10 +20,11 @@ export async function loadReaderPage(request:Request) {
   if(rawLimit!==null&&(!Number.isSafeInteger(limitNumber)||!READER_PAGE_SIZES.includes(limitNumber as (typeof READER_PAGE_SIZES)[number]))){
     params.delete('limit');throw redirect(params.size?`/?${params}`:'/');
   }
+  const topicParams=new URLSearchParams([...params].filter(([key])=>READER_TOPIC_FILTERS.some(filter=>filter===key)));
   const [page,sources,topics,categories]=await Promise.all([
     loadOr404<ReaderListPage>(`/api/site/articles?${params}`,{signal:request.signal}),
     loadOr404<{items:ReaderSource[]}>("/api/site/sources",{signal:request.signal}),
-    loadOr404<{topics:ReaderTopic[]}>("/api/site/topics",{signal:request.signal}),
+    loadOr404<{topics:ReaderTopic[]}>(`/api/site/topics${topicParams.size?'?'+topicParams:''}`,{signal:request.signal}),
     loadOr404<{items:Array<{id:string;name:string}>}>("/api/site/categories",{signal:request.signal}),
   ]);
   if(Number(params.get('page')??1)!==page.page){
