@@ -2,10 +2,15 @@ import * as cheerio from "cheerio";
 import { marked } from "marked";
 import TurndownService from "turndown";
 import { sanitizeBody, trimTrailingChrome } from "./sanitize.ts";
+import {FOOTNOTE_ID} from './footnotes.ts';
 
 const turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-" });
 // Markdown has no equivalent for these structures; the HTML has already been sanitised.
 turndown.keep(["sup", "sub", "u", "mark", "dl", "video"]);
+turndown.addRule('katex',{filter:node=>(node as unknown as {getAttribute:(name:string)=>string|null}).getAttribute('data-reader-math')==='katex',replacement:(_content,node)=>(node as unknown as {outerHTML:string}).outerHTML});
+turndown.addRule('footnote',{filter:node=>FOOTNOTE_ID.test((node as unknown as {getAttribute:(name:string)=>string|null}).getAttribute('id')??''),replacement:(_content,node)=>{
+  const element=node as unknown as {outerHTML:string;nodeName:string};return element.nodeName.toLowerCase()==='p'?`\n\n${element.outerHTML}\n\n`:element.outerHTML;
+}});
 turndown.addRule("strikethrough", { filter: ["del", "s"], replacement: (content) => `~~${content}~~` });
 turndown.addRule("table", {
   filter: "table",

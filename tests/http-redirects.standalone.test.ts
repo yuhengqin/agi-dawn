@@ -9,7 +9,7 @@ import path from "node:path";
 import { MockAgent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { DEPLOYMENT } from "@agidawn/site";
 import { config } from "@agidawn/backend/config";
-import { guardedFetch } from "@agidawn/backend/lib/http-fetch";
+import { guardedFetch,guardedStreamFetch } from "@agidawn/backend/lib/http-fetch";
 import { fetchJsonList } from "@agidawn/backend/sources/json-list";
 import type { SourceRow } from "@agidawn/backend/sources/types";
 
@@ -233,4 +233,20 @@ test("curl keeps body limits, network cancellation and private redirect guards",
     finally { config.allowPrivateNetworkFetch = true; }
     assert.equal(b.hits.length, before);
   });
+});
+
+test('a stream never grants a large buffering budget to the browser-profile bridge',async()=>{
+  await withCurl(async()=>{const before=a.hits.length;await assert.rejects(guardedStreamFetch(a.url+'/must-not-buffer',{maxBytes:512*1024*1024}),/Streaming is not supported/);assert.equal(a.hits.length,before);});
+});
+test('destroying a stream cancels an upstream paused after its headers',async()=>{
+  let stopped!:()=>void;const closed=new Promise<void>(resolve=>{stopped=resolve;});
+  a.routes.set('/stream-paused',(_hit,res)=>{res.writeHead(200,{'content-type':'video/mp4'});res.flushHeaders();res.once('close',stopped);});
+  const response=await guardedStreamFetch(a.url+'/stream-paused',{timeoutMs:10_000});response.body.destroy();
+  await new Promise<void>((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('upstream connection was not cancelled')),2000);closed.then(()=>{clearTimeout(timer);resolve();});});
+});
+test('stream consumers retain byte and time limits while the response stays open',async()=>{
+  a.routes.set('/stream-large',(_hit,res)=>{res.writeHead(200);res.end('x'.repeat(100));});
+  const large=await guardedStreamFetch(a.url+'/stream-large',{maxBytes:16});await assert.rejects(async()=>{for await(const chunk of large.body){void chunk;}},/too large/i);
+  a.routes.set('/stream-deadline',(_hit,res)=>{res.writeHead(200);res.write('x');});
+  const slow=await guardedStreamFetch(a.url+'/stream-deadline',{timeoutMs:100});await assert.rejects(async()=>{for await(const chunk of slow.body){void chunk;}});
 });

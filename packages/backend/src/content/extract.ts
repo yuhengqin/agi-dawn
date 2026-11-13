@@ -22,6 +22,7 @@ import type { ContentDocument as Doc } from "./components.ts";
 import type { BodyIssue } from "@agidawn/contracts/site";
 import {postBodyHtml} from "./posts.ts";
 import {credential} from "../config.ts";
+import {protectKatex} from './math.ts';
 
 export type { PreserveRule } from "./components.ts";
 
@@ -156,6 +157,9 @@ export function readable(html: string, url: string, rules: PageRules = {}): Extr
 /** readable() on a page already parsed and checked (contentDocument). Readability changes the document. */
 export function readableDocument(document: Doc, url: string, rules: PageRules = {}): ExtractedBody | null {
   if (isVideoPageUrl(url)) return null;
+  const page=new URL(url);
+  if(page.hostname==='latentpatterns.com'&&page.pathname.startsWith('/newsletter/')
+    &&document.querySelector('main .signup-cta')&&!document.querySelector('main article'))return null;
   const date = pagePublicationDate(document, rules.utcOffset);
   try {
     const base = document.createElement("base");
@@ -165,12 +169,13 @@ export function readableDocument(document: Doc, url: string, rules: PageRules = 
     // no head
   }
   const technical = preparePageContent(document, url, rules);
+  const formulas=protectKatex(document.body.innerHTML);document.body.innerHTML=formulas.html;
   const article = new Readability(document as unknown as ConstructorParameters<typeof Readability>[0], { charThreshold: MIN_BODY_CHARS, keepClasses: false }).parse();
   if (!article?.content) return null;
   const keptIssues=new Set([...article.content.matchAll(/data-reader-issues="([\d,]+)"/g)].flatMap(match=>match[1]!.split(',').map(Number)));
   const issues=technical.issues.filter((_,index)=>keptIssues.has(index));
   if(article.content.includes('data-reader-figure-loss="true"'))issues.push({kind:"missing-figure",message:"图表依赖原站样式，保留了文字说明，请对照原文。"});
-  const clean = trimTrailingChrome(cleanArticlePresentation(sanitizeBody(article.content, url),{url,publishedAt:date.publishedAt?.toISOString(),issues}));
+  const clean = trimTrailingChrome(cleanArticlePresentation(sanitizeBody(formulas.restore(article.content), url),{url,publishedAt:date.publishedAt?.toISOString(),issues}));
   for(const issue of figurePresentationIssues(clean))if(!issues.some(existing=>existing.kind===issue.kind&&existing.message===issue.message))issues.push(issue);
   const text = stripTags(clean);
   if (text.length < MIN_BODY_CHARS) return null;

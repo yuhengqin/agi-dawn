@@ -80,3 +80,19 @@ test("translation, Markdown and public image outputs retain cleaned video candid
   assert.equal(restored("video").first().attr("poster"), "https://publisher.example/cover.jpg?token=poster&frame=1");
   assert.deepEqual(sources(restored), expectedSources);
 });
+
+test('valid video fallback stays inside the video when layout containers become paragraphs',()=>{
+  const html=sanitizeBody('<div><video><source src="/clip.mp4" type="video/mp4"><p>Sorry, your browser does not support this video.</p></video></div><p>Actual article explanation.</p>',base),$=cheerio.load(html,null,false);
+  assert.equal($('video').length,1);assert.match($('video').text(),/Sorry/);
+  const outside=$.root().clone();outside.find('video').remove();assert.doesNotMatch(outside.text(),/Sorry/);
+  assert.match($.root().text(),/Actual article explanation/);assert.equal(sanitizeBody(html,base),html);
+});
+
+test('a Ghost placeholder poster uses the real background cover already supplied by the source',()=>{
+  const html=sanitizeBody('<video src="/clip.mp4" poster="https://img.spacergif.org/v1/848x480/0a/spacer.png" style="background:transparent url(\'/real-cover.jpg\') 50% 50% / cover no-repeat"></video>',base),$=cheerio.load(html,null,false);
+  assert.equal($('video').attr('poster'),'https://publisher.example/real-cover.jpg');assert.doesNotMatch(html,/style=|spacergif/);
+  const valid=cheerio.load(sanitizeBody('<video src="/clip.mp4" poster="/preferred.jpg" style="background-image:url(/other.jpg)"></video>',base));
+  assert.equal(valid('video').attr('poster'),'https://publisher.example/preferred.jpg');
+  const unsafe=sanitizeBody('<video src="/clip.mp4" style="background-image:url(javascript:alert)"></video>',base);assert.doesNotMatch(unsafe,/javascript:|poster=/);
+  assert.doesNotMatch(sanitizeBody('<video src="/clip.mp4" poster="https://img.spacergif.org/v1/3000x2000/0a/spacer.png"></video>',base),/poster=/);
+});

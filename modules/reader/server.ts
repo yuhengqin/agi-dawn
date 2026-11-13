@@ -19,6 +19,7 @@ import {withOutline} from '@agidawn/backend/content/outline';
 import {registerTranslation,captureTranslation,publicationTranslation,translatePending} from './translation/index.ts';
 import {publicationMetadata,translateMetadataPending} from './translation/metadata.ts';
 import {publicationSearch} from './public-search.ts';
+import {mediaCandidates,fetchMedia,streamMedia,MediaRangeError,MediaStreamRequired} from './archive/media.ts';
 
 async function privateSnapshot(id:string){
   const snapshot=await readSnapshot(id);if(!snapshot)throw missing();
@@ -89,6 +90,31 @@ export default defineServerModule({ name: "reader",on:{articleCreated:registerTr
     if(!snapshot||!await canReadArticleBody(articleId)||!await currentSnapshotMatches(articleId,snapshot))return reply.code(404).send({error:"not_found"});
     return sendAsset(req,reply);
   });
+  const sendMedia=async(req:import('fastify').FastifyRequest,reply:import('fastify').FastifyReply,privateRead=false)=>{
+    reply.header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff');
+    const {articleId,snapshotId,mediaKey}=req.params as {articleId?:string;snapshotId:string;mediaKey:string};
+    const snapshot=await readSnapshot(snapshotId);
+    const allowed=async()=>!!snapshot&&(privateRead||!!articleId&&await canReadArticleBody(articleId)&&await currentSnapshotMatches(articleId,snapshot));
+    if(!await allowed())return reply.code(404).send({error:'not_found'});
+    const item=mediaCandidates(snapshot!.bodyHtml).get(mediaKey);
+    if(!item)return reply.code(404).send({error:'not_found'});
+    try{
+      const full=async()=>{
+        const media=await streamMedia(item,allowed);
+        if(!await allowed()){media.body.destroy();return reply.code(404).send({error:'not_found'});}
+        if(media.total!==null)reply.header('Content-Length',media.total);
+        return reply.header('Accept-Ranges',media.ranges?'bytes':'none').type(media.mime).send(media.body);
+      };
+      if(item.kind==='video'&&!req.headers.range)return await full();
+      let media;try{media=await fetchMedia(item,req.headers.range);}catch(error){if(error instanceof MediaStreamRequired)return await full();throw error;}
+      if(!await allowed())return reply.code(404).send({error:'not_found'});
+      if(media.contentRange)reply.header('Content-Range',media.contentRange);
+      if(item.kind==='video')reply.header('Accept-Ranges',media.status===206?'bytes':'none');
+      return reply.code(media.status).type(media.mime).send(media.body);
+    }catch(error){return reply.code(error instanceof MediaRangeError?416:502).send({error:error instanceof MediaRangeError?'invalid_range':'media_unavailable'});}
+  };
+  app.get('/api/reader/articles/:articleId/media/:snapshotId/:mediaKey',async(req,reply)=>sendMedia(req,reply));
+  app.get('/api/admin/reader/snapshots/:snapshotId/media/:mediaKey',adminHandler(async(req,reply)=>sendMedia(req,reply,true)));
   app.post("/api/admin/reader/snapshots/:snapshotId/retry",adminHandler(async req=>{
     const snapshotId=(req.params as {snapshotId:string}).snapshotId;
     const snapshot=await readSnapshot(snapshotId);if(!snapshot)throw missing();

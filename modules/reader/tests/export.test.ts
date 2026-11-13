@@ -22,7 +22,18 @@ import {assetFile} from "../archive/assets.ts";
 import {exportSnapshot} from "../archive/export.ts";
 import {marked} from "marked";
 import * as cheerio from "cheerio";
+import katex from 'katex';
+import {sanitizeBody} from '@agidawn/backend/content/sanitize';
 installModules([reader]);
+test('offline mathematical layout ships its local stylesheet and fonts with no publisher resources',async()=>{
+  await sql`INSERT INTO sources(id,name,kind) VALUES ('export-math','Math','rss')`;
+  const html=sanitizeBody(katex.renderToString('\\frac{a}{b}+\\sqrt{x}',{output:'html',displayMode:true}));
+  const {articleId}=await upsertMaterial({sourceId:'export-math',url:'https://example.com/math',title:'Formula',bodyHtml:html,bodyText:'Formula',bodyStatus:'ok',via:'fetch'});
+  const [snapshot]=await sql`SELECT id FROM reader_snapshots WHERE article_id=${articleId}`;
+  const bundle=await exportSnapshot(snapshot!.id),chunks:Buffer[]=[];for await(const chunk of bundle.stream)chunks.push(Buffer.from(chunk));const files=unzipSync(Buffer.concat(chunks));
+  const body=Buffer.from(files['article.html']!).toString();assert.match(body,/data-reader-math="katex"/);assert.match(body,/math\/katex.min.css/);assert.match(body,/style="[^"]*(?:height|top):/);
+  assert(files['math/katex.min.css']);assert(files['math/LICENSE']);assert(Object.keys(files).some(name=>name.startsWith('math/fonts/')&&name.endsWith('.woff2')));assert.match(Buffer.from(files['article.md']!).toString(),/data-reader-math="katex"/);
+});
 const app=await buildApp();
 after(async()=>{await app.close();await stopBoss();await closeDb();});
 test("a specified snapshot exports frozen offline files without private notes or automatic network access",async()=>{

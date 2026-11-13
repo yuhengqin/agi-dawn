@@ -177,7 +177,7 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
           onPointerMove={event=>{const held=pan.current;if(!held)return;const dx=event.clientX-held.x,dy=event.clientY-held.y;if(Math.hypot(dx,dy)>3)suppressTap.current=true;event.currentTarget.scrollLeft=held.left-dx;event.currentTarget.scrollTop=held.top-dy;}}
           onPointerUp={event=>{pan.current=null;if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);}}
           onPointerCancel={()=>{pan.current=null;}}>
-          {current&&<img ref={img} key={current.src} src={current.src} decoding="async" alt={current.alt??''} draggable={false}
+          {current&&<img ref={img} key={current.src} src={current.src} decoding="async" alt={current.alt??''} draggable={false} data-reader-image-surface={current.source.dataset.readerImageSurface}
             onLoad={event=>setDimensions({width:event.currentTarget.naturalWidth,height:event.currentTarget.naturalHeight})}
             style={scale?{width:dimensions.width*scale,height:dimensions.height*scale,maxWidth:'none',maxHeight:'none'}:undefined}
             className="lightbox-img rounded-control object-contain shadow-2xl"/>}

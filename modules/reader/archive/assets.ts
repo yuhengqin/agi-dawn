@@ -13,6 +13,7 @@ import {materialRepresentationHash,type PublishedBodyInput} from "@agidawn/backe
 import {ARCHIVE_LIMITS as limits} from "../config.ts";
 import {readSnapshot} from "./snapshots.ts";
 import type {ArchiveSnapshot} from "../contracts.ts";
+import {mediaCandidates,rewriteMedia} from './media.ts';
 
 export const assetRoot=()=>path.join(config.dataDir,"reader-archives/assets");
 export function assetFile(relative:string,dataDir=config.dataDir) {
@@ -33,13 +34,18 @@ async function download(url:string) {
     bytes=response.body;
   }
   if(!bytes.length||bytes.length>limits.maxAssetBytes) throw new Error("image exceeds archive size limit");
-  let meta=await sharp(bytes,{limitInputPixels:16_000_000}).metadata();
+  // Large static diagrams remain readable after bounded downsampling instead of disappearing.
+  let meta=await sharp(bytes,{limitInputPixels:64_000_000}).metadata();
   if(meta.format==="svg") {
     const normalized=normalizeTechnicalMarkup(bytes.toString("utf8"),url);
     if(normalized.issues.length) throw new Error("SVG requires unsupported content or styles");
     const src=cheerio.load(normalized.html)("img").first().attr("src");
     if(!src?.startsWith("data:image/svg+xml;base64,")) throw new Error("SVG cannot be saved safely");
     bytes=await sharp(Buffer.from(src.split(",")[1]!,"base64"),{limitInputPixels:16_000_000}).png().toBuffer();
+    meta=await sharp(bytes,{limitInputPixels:16_000_000}).metadata();
+  }
+  if(meta.width&&meta.height&&meta.width*meta.height>16_000_000&&['png','jpeg','webp'].includes(meta.format??'')&&!(meta.pages&&meta.pages>1)){
+    bytes=await sharp(bytes,{limitInputPixels:64_000_000}).rotate().resize({width:4000,height:4000,fit:'inside',withoutEnlargement:true}).toBuffer();
     meta=await sharp(bytes,{limitInputPixels:16_000_000}).metadata();
   }
   const type=meta.format?types[meta.format]:undefined;
@@ -105,12 +111,18 @@ export async function snapshotBody(snapshot:ArchiveSnapshot,privateRead=false):P
   $("img").each((_,node)=>{
     const image=$(node),asset=keys.get(image.attr("src"));image.removeAttr("srcset");
     if(!asset||asset.status!=="ready"){
+      // A failed optional bookmark thumbnail must not masquerade as a missing article diagram.
+      const card=image.closest('figure[data-reader-card="true"]');
+      if(asset?.status==='failed'&&card.length&&!image.attr('alt')?.trim()&&card.find('p a[href]').length){
+        const link=image.parent('a');if(link.length&&!link.text().trim()&&link.children().length===1)link.remove();else image.remove();return;
+      }
       const message=asset?.status==="failed"?"图片未能保存，请查看原文。":"图片正在保存，请稍后重载或查看原文。";
       image.replaceWith($("<span>").attr("role","note").text([image.attr("alt"),message].filter(Boolean).join("：")));return;
     }
     image.attr("src",privateRead?`/api/admin/reader/snapshots/${snapshot.id}/assets/${asset.asset_key}`:`/api/reader/articles/${snapshot.articleId}/assets/${snapshot.id}/${asset.asset_key}`);
   });
-  return $.html();
+  const original=await readSnapshot(snapshot.id);
+  return rewriteMedia($.html(),mediaCandidates(original?.bodyHtml??''),key=>privateRead?`/api/admin/reader/snapshots/${snapshot.id}/media/${key}`:`/api/reader/articles/${snapshot.articleId}/media/${snapshot.id}/${key}`);
 }
 export async function publicationBody(input:PublishedBodyInput):Promise<string> {
   const [row]=await sql`SELECT id FROM reader_snapshots WHERE article_id=${input.articleId} AND body_revision=${input.bodyRevision} AND representation_hash=${input.representationHash}`;

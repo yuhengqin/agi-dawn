@@ -25,6 +25,13 @@ const judgeSvg = (second = "71.2") => `<svg class="chart" viewBox="0 0 860 382" 
 const judges = (second = "71.2") => `<div role="img" aria-label="Mean score on the same attempts, two judges."><div class="hidden sm:block">${judgeSvg()}</div><div class="sm:hidden">${judgeSvg(second)}</div></div>`;
 const legend = '<span><span><svg class="legend" width="9" height="9"><circle r="4"/></svg>Odysseys judge</span><span><svg class="legend" width="9" height="9"><circle r="4"/></svg>Odysseys2 judge</span></span>';
 
+test('explicit desktop and light image variants are selected once without deleting unrelated pictures',()=>{
+  const body=extract('<div class="not-prose"><img class="hidden h-auto w-full sm:block" src="/wide.png" alt="Flow"><img class="block h-auto w-full sm:hidden" src="/tall.png" alt="Flow"></div><div class="mdx"><img class="dark:hidden" src="/light.png" alt="Score"><img class="hidden dark:block" src="/dark.png" alt="Score"></div><p><img src="/ordinary.png" alt="Another diagram"></p>');
+  assert.deepEqual(cheerio.load(body.html)('img').map((_,img)=>cheerio.load(img)('img').attr('src')).get(),['https://browser-use.com/wide.png','https://browser-use.com/light.png','https://browser-use.com/ordinary.png']);
+  const different=extract('<figure><img class="hidden sm:block" src="/one.png" alt="First"><img class="sm:hidden" src="/two.png" alt="Different"></figure>');
+  assert.equal(cheerio.load(different.html)('img').length,2);
+});
+
 test("Browser Use authors stay compact and retain every affiliation", () => {
   const body = extract('<div><ul aria-label="Authors"><li>Lawrence Jang <span>(CMU)</span></li><li>Alexander Yue <span>(Browser Use)</span></li></ul><p><time>Oct 27th, 2026</time><span aria-hidden="true">·</span><span>Research</span></p></div>');
   const $ = cheerio.load(body.html);

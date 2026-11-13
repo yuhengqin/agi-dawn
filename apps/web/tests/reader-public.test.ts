@@ -120,6 +120,7 @@ test('search details retain the query, locate visible matches across markup and 
     web=await startWebServer(fakeApi(url=>{
       if(url.pathname==='/api/site/articles')return readerPage(articles,url);
       const article=articles.find(item=>url.pathname==='/api/site/items/'+item.id);if(article)return article;
+      const viewed=articles.find(item=>url.pathname==='/api/site/items/'+item.id+'/view');if(viewed)return {id:viewed.id,views:1,likes:0,liked:false};
       if(url.pathname==='/api/site/engagement'||url.pathname==='/api/site/categories'||url.pathname==='/api/site/sources')return {items:[]};
       if(url.pathname==='/api/site/topics')return {topics:[]};
     }));

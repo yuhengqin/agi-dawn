@@ -18,7 +18,8 @@ export async function loadItemDetail(id:string):Promise<{kind:"found";item:Reade
       publishedAt:row.raw_published_at?.toISOString()??null,discoveredAt:row.discovered_at.toISOString(),sourceId:row.source_id,sourceName:row.source_name,quality:row.body_quality==="partial"?"partial":"ready",issues:row.body_issues};
     const rewrite=serverModules().find(module=>module.publicationBody)?.publicationBody;
     const input={articleId:id,bodyRevision:row.body_revision,representationHash:materialRepresentationHash(capture),html:row.body_html};
-    const render=async(html:string)=>cleanArticlePresentation(rewrite?await rewrite({...input,html}):html.replace(/<img\b[^>]*>/gi,''),{url:row.raw_url,publishedAt:row.raw_published_at?.toISOString(),issues:row.body_issues});
+    const clean=(html:string)=>cleanArticlePresentation(html,{url:row.raw_url,publishedAt:row.raw_published_at?.toISOString(),issues:row.body_issues});
+    const render=async(html:string)=>clean(rewrite?await rewrite({...input,html:clean(html)}):html.replace(/<img\b[^>]*>/gi,''));
     const translated=await serverModules().find(module=>module.publicationTranslation)?.publicationTranslation?.(input);
     const outlined=withOutline(await render(translated?.html??input.html),{excludeFigures:true});
     body={...outlined,language:translated?'translation':'original',complete:translated?.complete??true,readingMinutes:estimateReadingMinutes(stripTagMarkup(outlined.html,' '))};

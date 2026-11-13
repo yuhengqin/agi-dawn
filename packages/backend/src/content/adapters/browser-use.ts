@@ -73,6 +73,13 @@ const chartStrategies = [
 
 /** Explicit source adapter: it recognises Browser Use structure, never computes page CSS. */
 export function adaptBrowserUse(document: ContentDocument): void {
+  for(const first of document.querySelectorAll('img')){
+    const second=first.nextElementSibling;
+    if(!first.parentElement||second?.localName!=='img'||!first.getAttribute('alt')||first.getAttribute('alt')!==second.getAttribute('alt'))continue;
+    const a=new Set((first.getAttribute('class')??'').split(/\s+/)),b=new Set((second.getAttribute('class')??'').split(/\s+/));
+    if(a.has('hidden')&&a.has('sm:block')&&b.has('sm:hidden')||a.has('dark:hidden')&&b.has('hidden')&&b.has('dark:block'))second.remove();
+    else if(b.has('hidden')&&b.has('sm:block')&&a.has('sm:hidden')||b.has('dark:hidden')&&a.has('hidden')&&a.has('dark:block'))first.remove();
+  }
   for (const authors of document.querySelectorAll('ul[aria-label="Authors"]')) {
     const names = children(authors, "li").filter(author => !componentHidden(author)).map(componentText);
     if (!names.length || names.some(name => !name)) continue;

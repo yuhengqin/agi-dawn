@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import {beijingDate} from '@agidawn/contracts/time';
 import {collapseWhitespace} from '../lib/text.ts';
 import type {BodyIssue} from '@agidawn/contracts/site';
+import {restoreFootnotes} from './footnotes.ts';
 
 export function figurePresentationIssues(html:string):BodyIssue[]{
   return html.includes('data-reader-figure-status="missing"')?[{kind:'missing-figure',message:'部分图表未保存，请通过图示旁的链接查看原文。'}]:[];
@@ -19,7 +20,7 @@ function dateOnly(value:string):string|null {
 /** Deterministic display cleanup for confirmed publisher chrome, including already saved bodies. */
 export function cleanArticlePresentation(html:string,context:{url:string;publishedAt?:string|null;issues?:readonly BodyIssue[]}):string {
   let page:URL;try{page=new URL(context.url);}catch{return html;}
-  const host=page.hostname.replace(/^www\./,''),$=cheerio.load(html,null,false);let changed=false;
+  const linked=restoreFootnotes(html,context.url),host=page.hostname.replace(/^www\./,''),$=cheerio.load(linked,null,false);let changed=linked!==html;
   const day=context.publishedAt?beijingDate(context.publishedAt):null;
   if(host==='openai.com'||host==='developers.openai.com'){
     $('a span').each((_,node)=>{
@@ -47,6 +48,12 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
     link.replaceWith(thumbnails.flatMap(image=>image.toArray()).concat(head.toArray(),description.flatMap(text=>$('<p>').text(text).toArray())));
     card.find('figcaption').remove();changed=true;
   });
+  if(host==='ghuntley.com')$('figure[data-reader-card="true"]').each((_,node)=>{
+    const card=$(node),images=card.find('img');
+    if(images.length>1)images.each((_,image)=>{try{if(new URL($(image).attr('src')??'').pathname.includes('/content/images/icon/')){$(image).closest('a').remove();changed=true;}}catch{}});
+    card.children('p').each((_,paragraph)=>{const p=$(paragraph);if(collapseWhitespace(p.text())==='Geoffrey HuntleyGeoffrey Huntley'){p.text('Geoffrey Huntley');changed=true;}});
+    const visit=(element:import('domhandler').AnyNode)=>{if(element.type==='text'){const next=element.data.replace(/&#(?:0*39|x0*27);/gi,"'");if(next!==element.data){element.data=next;changed=true;}}else if('children'in element&&!(element.type==='tag'&&['pre','code'].includes(element.name)))for(const child of element.children)visit(child);};visit(node);
+  });
   $('figure').each((_,node)=>{
     const figure=$(node);if(figure.is('[data-reader-card]')||figure.find('table,pre,blockquote,video,picture').length)return;
     const usefulImage=figure.find('img').toArray().some(image=>{
@@ -69,6 +76,9 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
     p.attr('data-reader-embed','true').empty().append($('<a>').attr('href',page.href).text('互动内容请访问原文查看。'));changed=true;
   });
   if(host==='browser-use.com'){
+    $('img').each((_,node)=>{try{let image=new URL($(node).attr('src')??'',page);if(image.pathname==='/_next/image'&&image.searchParams.get('url'))image=new URL(image.searchParams.get('url')!,page);
+      if(image.pathname.includes('/benchmark-behind-the-benchmark/')){$(node).attr('data-reader-image-surface','dark');changed=true;}
+    }catch{}});
     const first=$.root().children().first();
     if(first.is('ul')){
       const names=first.children('li').toArray().map(node=>collapseWhitespace($(node).text()));
@@ -96,6 +106,32 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
     if(last.is('p')&&/^(?:The post\b.+appeared first on\b|(?:帖子|文章|本文).+(?:最初|最早|首次)发布于)/i.test(text)&&last.find('a').toArray().some(node=>{
       try{const target=new URL($(node).attr('href')??'',page);target.hash='';return target.href===page.href;}catch{return false;}
     })){last.remove();changed=true;}
+  }
+  $('p').each((_,node)=>{
+    const p=$(node),previous=p.prev();
+    if(/^(?:Sorry, your browser (?:doesn['’]t support playback for this video|does not support (?:this video|the video tag))\.?|(?:抱歉[，,]\s*)?[您你]的浏览器不支持(?:此视频的播放|播放此视频|此视频|视频标签)[。.!！]?)$/.test(collapseWhitespace(p.text()))
+      &&(previous.is('video')||previous.is('p')&&previous.children('video').length)){p.remove();changed=true;}
+  });
+  if(host==='blog.sshh.io'){
+    $.root().children('p').each((_,node)=>{
+      const paragraph=$(node),text=collapseWhitespace(paragraph.text());
+      const promotionalText=/^Thanks for reading Shrivu[’']s Substack! Subscribe for free to receive new posts and support my work\.$/.test(text)||/^感谢阅读\s*Shrivu\s*的\s*Substack[！!]\s*免费订阅(?:以|即可)接收新文章并支持我的工作[。.]$/.test(text);
+      if(promotionalText&&!paragraph.find('img,video,pre,code,table').length){
+        paragraph.remove();changed=true;return;
+      }
+      const links=paragraph.find('a');
+      if(links.length!==1)return;
+      const link=links.first(),linkText=collapseWhitespace(link.text());
+      if(text!==linkText||!['Share','分享'].includes(text))return;
+      try{
+        const target=new URL(link.attr('href')??'',page);
+        if(target.origin===page.origin&&target.pathname===page.pathname&&target.searchParams.get('action')==='share'){
+          paragraph.remove();changed=true;
+        }
+      }catch{}
+    });
+    const children=$.root().children(),last=children.last(),candidate=last.is('hr')?children.eq(children.length-2):last;
+    if(candidate.is('p')&&['No posts','无帖子'].includes(collapseWhitespace(candidate.text()))){candidate.remove();changed=true;}
   }
   return changed?$.html():html;
 }

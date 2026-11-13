@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "katex/dist/katex.min.css";
 /* Classes also live in the site's logo and changelog drawings (site/brand, site/changelog) and in the
    modules' web code (their other files are not scanned: words in backend code and data would become classes). */
 @source "../../../site/brand";
@@ -816,6 +817,9 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
   background: var(--bg-sunk);
 }
 .prose img[data-reader-inline="true"] { display: inline-block; width: auto; height: auto; max-width: 1.5em; max-height: 1em; margin: 0 0.3em 0 0; border-radius: 0; background: none; vertical-align: -0.1em; }
+img[data-reader-image-surface="dark"] { background: #0b0c0e; padding: 12px; box-sizing: border-box; }
+[data-reader-math="katex"] { max-width: 100%; }
+[data-reader-math="katex"]:has(> .katex-display) { display: block; overflow-x: auto; overflow-y: hidden; }
 .prose figure { margin: 1.5em 0; }
 .prose figure[data-reader-card="true"] { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-control); }
 .prose figure[data-reader-card="true"] > p:first-of-type { font-size: 1em; font-weight: 600; }

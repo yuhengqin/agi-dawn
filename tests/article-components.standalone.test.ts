@@ -8,10 +8,23 @@ import { readFileSync } from "node:fs";
 import * as cheerio from "cheerio";
 import { pageRules, readable } from "@agidawn/backend/content/extract";
 import { unsupportedConfig } from "@agidawn/backend/sources/config-keys";
-import { bodyToMarkdown } from "@agidawn/backend/content/markdown";
+import { bodyToMarkdown,markdownBody } from "@agidawn/backend/content/markdown";
 import { sanitizeBody } from "@agidawn/backend/content/sanitize";
+import katex from 'katex';
+import {translateHtml} from '../modules/reader/translation/body.ts';
 
 const prose = "The article explains how to maintain software, with practical examples and measurements. ".repeat(6);
+test('Markdown round trips preserve the local targets and return links of restored footnotes',()=>{
+  const url='https://example.com/article',html='<p>Claim<a href="#footnote-1"><sup>1</sup></a>.</p><p id="footnote-1">Explanation <a href="#footnote-anchor-1">↩</a></p>';
+  const restored=cheerio.load(markdownBody(bodyToMarkdown(html,url),url));
+  restored('a[href^="#"]').each((_,node)=>{const href=restored(node).attr('href')!;assert.equal(restored(href).length,1,'footnote destination survives Markdown');});
+});
+test('Markdown round trips validated structural formulas rather than flattening their layout',()=>{
+  const clean=sanitizeBody(katex.renderToString('\\frac{a}{b}+\\sqrt{x}',{output:'html'}));
+  const restored=markdownBody(bodyToMarkdown(clean),'https://example.com/article');
+  const $=cheerio.load(restored);assert.equal($('[data-reader-math="katex"]').length,1);assert.equal($('.mfrac').length,1);assert.equal($('svg path').length,1);
+  assert.doesNotMatch(markdownBody(bodyToMarkdown('<span data-reader-math="katex" style="background:url(https://evil.example/x)">fake</span>'),'https://example.com'),/evil|style=/);
+});
 const page = (content: string) => `<html><head><title>Maintenance</title></head><body><article><h1>Maintenance</h1><p>${prose}</p>${content}<p>${prose}</p></article></body></html>`;
 const preserve = [
   { selector: ".not-prose:has(.prompt-scroll__content)", as: "pre" as const, code: ".prompt-scroll__content", caption: "[data-prompt-model]" },
@@ -180,5 +193,79 @@ test("source code metadata rules reject unsupported kinds and invalid language s
   assert.deepEqual(unsupportedConfig("rss", { detail: { preserve: [{ selector: ".prompt", as: "pre", code: "pre", kind: "prompt", language: ".lang" }] } }), []);
   for (const fields of [{ kind: "arbitrary" }, { language: " " }, { language: 3 }]) {
     assert.deepEqual(unsupportedConfig("rss", { detail: { preserve: [{ selector: ".code", as: "pre", ...fields }] } }), ["detail.preserve"]);
+  }
+});
+
+const sourceRules=(id:string)=>pageRules(JSON.parse(readFileSync(new URL('../industry/sources.json',import.meta.url),'utf8')).sources.find((source:{id:string})=>source.id===id).config);
+
+test('OpenAI numbered code keeps line boundaries and indentation without the source gutter',()=>{
+  const content='<div class="flex flex-col overflow-hidden rounded-md"><div class="style-scrollbars"><code class="fixture_syntaxHighlight"><pre><div><span>1</span><div>{</div></div><div><span>2</span><div>  "enabled": true</div></div><div><span>3</span><div>}</div></div></pre></code></div></div>';
+  const body=readable(page(content),'https://openai.com/index/example',sourceRules('openai-engineering'))!;
+  assert.equal(cheerio.load(body.html)('pre code').text(),'{\n  "enabled": true\n}');
+});
+
+test('OpenAI source rules retain prompt cards and all bound article tab panels',()=>{
+  const prompts='<div class="not-prose"><div class="prompt-scroll prompt-scroll--header-actions"><div class="prompt-scroll__content">Inspect the repository.\n  Preserve this indentation.</div></div><button>Copy</button></div>';
+  const tabs='<div role="tablist"><button id="tab-a" role="tab" aria-controls="panel-a">First case</button><button id="tab-b" role="tab" aria-controls="panel-b">Second case</button></div>'+
+    '<div id="panel-a" role="tabpanel" aria-labelledby="tab-a"><h2>First case</h2><p>The first public case explains the voice architecture.</p></div>'+
+    '<div id="panel-b" role="tabpanel" aria-labelledby="tab-b" hidden><h2>Second case</h2><p>The second public case explains its evaluation process.</p><p hidden>UNRELATED_HIDDEN</p></div><p hidden>PRIVATE_UNBOUND</p>';
+  const body=readable(page(prompts+tabs),'https://developers.openai.com/blog/example',sourceRules('openai-developer-blog'))!;
+  const $=cheerio.load(body.html);
+  assert.equal($('pre code').text(),'Inspect the repository.\n  Preserve this indentation.');
+  assert.match(body.text,/second public case/);assert.doesNotMatch(body.text,/UNRELATED_HIDDEN|PRIVATE_UNBOUND|Copy/);
+});
+
+test('declared ARIA tables survive scroll containers without dropping cell links or relationships',()=>{
+  const content='<div class="viewport base-ui-disable-scrollbar"><div role="table"><div role="row"><div role="columnheader">Harness</div><div role="columnheader">Cost</div></div><div role="row"><div role="cell">Solo</div><div role="cell"><a href="/cost">$9</a></div></div><div role="row"><div role="cell">Full</div><div role="cell">$200</div></div></div></div>';
+  const body=readable(page(content),'https://www.anthropic.com/research/example',sourceRules('anthropic-engineering'))!;
+  const $=cheerio.load(body.html);
+  assert.deepEqual($('tr').toArray().map(row=>$(row).children().map((_,cell)=>$(cell).text()).get()),[['Harness','Cost'],['Solo','$9'],['Full','$200']]);
+  assert.equal($('td a').attr('href'),'https://www.anthropic.com/cost');
+});
+
+test('Anthropic article media columns retain their pictures and adjacent captions',()=>{
+  const content='<div class="fixture_media-column"><figure><img src="/memory.png" alt="Memory layers"><figcaption>The memory hierarchy.</figcaption></figure></div>';
+  const body=readable(page(content),'https://www.anthropic.com/research/example',sourceRules('anthropic-engineering'))!;
+  assert.equal(cheerio.load(body.html)('img[alt="Memory layers"]').length,1);
+  assert.match(body.text,/memory hierarchy/);
+});
+
+test('Anthropic tables without header roles and modern scrollable code retain every row and line',()=>{
+  const content='<div class="fixture_Viewport base-ui-disable-scrollbar"><div role="table"><div role="row"><div role="cell">Phase</div><div role="cell">Duration</div></div><div role="row"><div role="cell">Review</div><div role="cell">20 min</div></div></div></div><div class="fixture_media-column"><div class="fixture_ScrollArea"><div class="base-ui-disable-scrollbar"><pre><code class="language-plaintext">Plan\n\n  Verify the result.\n</code></pre></div></div></div>';
+  const body=readable(page(content),'https://www.anthropic.com/research/example',sourceRules('anthropic-engineering'))!,$=cheerio.load(body.html);
+  assert.deepEqual($('tr').toArray().map(row=>$(row).children().map((_,cell)=>$(cell).text()).get()),[['Phase','Duration'],['Review','20 min']]);
+  assert.equal($('pre code').text(),'Plan\n\n  Verify the result.\n');
+});
+
+test('Ghost bookmarks cannot replace the author commentary surrounding a large link card',()=>{
+  const input=`<html><head><title>Commentary</title></head><body><article><header><h1>Commentary</h1></header><section class="gh-content gh-canvas"><p>I am introducing this recommendation because the author explains the feedback loop clearly.</p><figure class="kg-card kg-bookmark-card"><a class="kg-bookmark-container" href="https://example.org"><div class="kg-bookmark-content"><div class="kg-bookmark-title">Quoted article</div><div class="kg-bookmark-description">${prose}</div><div class="kg-bookmark-metadata"><span>Author Name</span></div></div><div class="kg-bookmark-thumbnail"><img src="https://example.org/thumb.png"></div></a><figcaption>External recommendation.</figcaption></figure><p>Read this and internalise this. Capture the feedback so that the next iteration improves.</p></section></article></body></html>`;
+  const body=readable(input,'https://ghuntley.com/pressure/',sourceRules('geoffrey-huntley'))!;
+  assert.match(body.text,/introducing this recommendation/);assert.match(body.text,/Read this and internalise/);assert.match(body.text,/Quoted article/);
+});
+
+test('a client-only newsletter shell is not accepted as its full article',()=>{
+  const html=`<html><head><title>Architecture</title></head><body><main><nav class="breadcrumb">newsletter /</nav><h1>Architecture</h1><p class="dek">${prose}</p><hr><hr><section class="signup-cta"><h2>enjoyed this issue?</h2><p>Subscribe for more.</p></section></main></body></html>`;
+  assert.equal(readable(html,'https://latentpatterns.com/newsletter/architecture',sourceRules('latent-patterns')),null);
+  assert.ok(readable(html.replace('<hr><hr>',`<hr><article><p>${prose}</p></article><hr>`),'https://latentpatterns.com/newsletter/architecture',sourceRules('latent-patterns')));
+});
+
+test('HTML-only KaTeX preserves fractions radicals accents and limits through extraction and translation',async()=>{
+  const expressions=[String.raw`\frac{\sigma^2}{n}`,String.raw`\sqrt{3}+\sqrt{5}`,String.raw`\sum_{i=1}^{n}x_i`,String.raw`\underbrace{\sigma^2_{agent}}_{\text{cannot fix}}+\frac{s_\Delta}{\sqrt n}`];
+  const html=expressions.map(tex=>`<p>Formula: ${katex.renderToString(tex,{output:'html'})}</p>`).join('');
+  const body=readable(page(html),'https://publisher.example/article')!,$=cheerio.load(body.html);
+  assert.equal($('[data-reader-math="katex"]').length,expressions.length);
+  assert.ok($('.katex .mfrac .frac-line').length);assert.ok($('.katex .sqrt svg path').length);
+  assert.ok($('.katex .msupsub').length);assert.ok($('.katex [style*="top:"]').length);
+  assert.equal(sanitizeBody(body.html),body.html,'repeated cleaning preserves validated formula layout');
+  const translated=await translateHtml(body.html,async parts=>({t:parts.map(p=>p.replaceAll('Formula:','公式：').replaceAll('The article explains','文章解释')),receiptId:1}));
+  assert.equal(cheerio.load(translated.html)('[data-reader-math="katex"]').length,expressions.length);
+  assert.equal(cheerio.load(translated.html)('[data-reader-math="katex"]').toString(),$('[data-reader-math="katex"]').toString());
+});
+
+test('a forged KaTeX class cannot smuggle scripts external SVG resources or arbitrary layout styles',()=>{
+  for(const inner of ['<script>alert(1)</script>','<span style="position:fixed;inset:0">overlay</span>','<svg><foreignObject>unsafe</foreignObject></svg>','<svg><path fill="url(https://evil.example/x)" d="M0 0"/></svg>']){
+    const body=readable(page(`<span class="katex">${inner}</span>`),'https://publisher.example/article')!;
+    assert.doesNotMatch(body.html,/<script|foreignObject|position:fixed|url\(https/);
+    assert.equal(body.quality,'partial');assert.ok(body.issues.some(issue=>issue.kind==='missing-formula'));
   }
 });

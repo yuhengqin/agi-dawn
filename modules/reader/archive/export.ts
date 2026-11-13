@@ -13,6 +13,8 @@ import {missing} from "../state.ts";
 import {ARCHIVE_LIMITS} from "../config.ts";
 import type {ArchiveManifest} from "../contracts.ts";
 import {markdownText} from "../markdown.ts";
+import {sanitizeBody} from '@agidawn/backend/content/sanitize';
+import {protectKatex,mathResources} from '@agidawn/backend/content/math';
 
 interface BundleFile {path:string;mime:string;bytes:number;sha256:string;body?:Buffer;file?:string}
 const escape=(value:string)=>value.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]!));
@@ -41,7 +43,8 @@ export async function exportSnapshot(id:string) {
       missingResources.push({url:row.original_url.startsWith("data:")?"embedded:"+row.asset_key:row.original_url,reason:row.status==="pending"?"图片尚未保存":row.status==="failed"?"图片未能保存，请对照原文":"图片文件缺失或校验失败"});
     }
   }
-  const $=cheerio.load(snapshot.bodyHtml,null,false);
+  const formulas=protectKatex(sanitizeBody(snapshot.bodyHtml,snapshot.originalUrl));
+  const $=cheerio.load(formulas.html,null,false);
   $("script,style,iframe,object,embed,link,meta,base,form,input,button,textarea,select").remove();
   $("video,audio").replaceWith("<p>音视频请访问原文查看。</p>");
   $("source").remove();
@@ -64,8 +67,10 @@ export async function exportSnapshot(id:string) {
   });
   const complete=snapshot.status==="complete"&&snapshot.quality==="ready"&&!missingResources.length;
   const marker=complete?"":"（不完整）";
-  const body=$.html();
-  const html=Buffer.from(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escape(snapshot.title+marker)}</title><style>body{max-width:780px;margin:40px auto;padding:0 24px;font:18px/1.8 system-ui,sans-serif;color:#202522}img{max-width:100%;height:auto}pre{overflow:auto;background:#f0f2f1;padding:20px;font-size:14px;line-height:1.6}table{border-collapse:collapse;display:block;overflow:auto}th,td{border:1px solid #bbc4be;padding:8px 14px}h1,h2,h3{line-height:1.4}a{color:#145b54}.metadata{font-size:14px;color:#56635a}</style></head><body><header><h1>${escape(snapshot.title+marker)}</h1><p class="metadata">${escape(snapshot.sourceName)} · ${escape(snapshot.author??"")} · ${escape((snapshot.publishedAt?"发布于 ":"收录于 ")+(snapshot.publishedAt??snapshot.discoveredAt))}</p><p><a href="${escape(snapshot.originalUrl)}">阅读原文</a></p>${complete?"":"<p>此归档不完整，请对照原文。缺失资源见 metadata.json。</p>"}</header><main>${body}</main></body></html>`);
+  const body=formulas.restore($.html());
+  const hasMath=body.includes('data-reader-math="katex"');
+  if(hasMath)for(const resource of await mathResources())files.push({...resource,bytes:resource.body.length,sha256:sha256(resource.body)});
+  const html=Buffer.from(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; base-uri 'none'; form-action 'none'"><title>${escape(snapshot.title+marker)}</title>${hasMath?'<link rel="stylesheet" href="math/katex.min.css">':''}<style>img[data-reader-image-surface="dark"]{background:#0b0c0e;padding:12px}[data-reader-math="katex"]{max-width:100%}.katex-display{overflow-x:auto;overflow-y:hidden}body{max-width:780px;margin:40px auto;padding:0 24px;font:18px/1.8 system-ui,sans-serif;color:#202522}img{max-width:100%;height:auto}pre{overflow:auto;background:#f0f2f1;padding:20px;font-size:14px;line-height:1.6}table{border-collapse:collapse;display:block;overflow:auto}th,td{border:1px solid #bbc4be;padding:8px 14px}h1,h2,h3{line-height:1.4}a{color:#145b54}.metadata{font-size:14px;color:#56635a}</style></head><body><header><h1>${escape(snapshot.title+marker)}</h1><p class="metadata">${escape(snapshot.sourceName)} · ${escape(snapshot.author??"")} · ${escape((snapshot.publishedAt?"发布于 ":"收录于 ")+(snapshot.publishedAt??snapshot.discoveredAt))}</p><p><a href="${escape(snapshot.originalUrl)}">阅读原文</a></p>${complete?"":"<p>此归档不完整，请对照原文。缺失资源见 metadata.json。</p>"}</header><main>${body}</main></body></html>`);
   const markdown=Buffer.from(`# ${markdownText(snapshot.title+marker)}\n\n来源：${markdownText(snapshot.sourceName)}\n\n原文：${markdownText(snapshot.originalUrl)}\n\n${bodyToMarkdown(body)}\n`);
   files.unshift(...[{path:"article.html",mime:"text/html",body:html},{path:"article.md",mime:"text/markdown",body:markdown}].map(f=>({...f,bytes:f.body.length,sha256:sha256(f.body)})));
   const manifest:ArchiveManifest={formatVersion:1,snapshotId:id,articleId:snapshot.articleId,bodyRevision:snapshot.bodyRevision,representationHash:snapshot.representationHash,savedAt:snapshot.createdAt,

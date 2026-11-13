@@ -20,10 +20,33 @@ import {buildApp} from "../../../apps/api/src/app.ts";
 import reader from "../server.ts";
 import {archiveSnapshot} from "../archive/assets.ts";
 import {assetFile} from '../archive/assets.ts';
+import {currentSnapshot} from '../archive/snapshots.ts';
+import {mediaCandidates} from '../archive/media.ts';
 
 installModules([reader]);
 const app=await buildApp();
 after(async()=>{await app.close();await stopBoss();await closeDb();});
+test('video reads require exact current snapshots and live permission before making any upstream request',async()=>{
+  config.allowPrivateNetworkFetch=true;let hits=0;
+  const fullBytes=Buffer.alloc(2*1024*1024+17,42);
+  const server=createServer((req,res)=>{hits++;if(req.url==='/no-range.mp4'){res.writeHead(200,{'content-type':'video/mp4','content-length':fullBytes.length});res.end(fullBytes);return;}res.writeHead(206,{'content-type':'video/mp4','content-range':'bytes 0-2/10','cross-origin-resource-policy':'same-origin'});res.end('abc');});
+  server.listen(0,'127.0.0.1');await once(server,'listening');
+  try{
+    const origin=`http://127.0.0.1:${(server.address() as {port:number}).port}`;
+    await sql`INSERT INTO sources(id,name,kind,site_fulltext) VALUES ('media-reader','Media','rss',true)`;
+    const input={sourceId:'media-reader',url:'https://example.com/media',title:'Video',bodyHtml:`<p>Demo</p><video src="${origin}/clip.mp4"></video>`,bodyText:'Demo',bodyStatus:'ok' as const,via:'fetch' as const};
+    const {articleId}=await upsertMaterial(input),snapshot=(await currentSnapshot(articleId))!,key=[...mediaCandidates(snapshot.bodyHtml).keys()][0]!;
+    const route=`/api/reader/articles/${articleId}/media/${snapshot.id}/${key}`;
+    const response=await app.inject({url:route,headers:{range:'bytes=0-2',cookie:'unrelated=secret','if-none-match':'anything'}});assert.equal(response.statusCode,206,response.body);assert.equal(response.headers['content-range'],'bytes 0-2/10');assert.equal(response.headers['cache-control'],'no-store');assert.equal(response.headers['cross-origin-resource-policy'],undefined);
+    assert((await app.inject('/api/site/items/'+articleId)).body.includes(route));
+    const count=hits;assert.equal((await app.inject(route.slice(0,-32)+'a'.repeat(32))).statusCode,404);
+    await sql`UPDATE sources SET site_fulltext=false WHERE id='media-reader'`;assert.equal((await app.inject(route)).statusCode,404);assert.equal(hits,count);
+    await sql`UPDATE sources SET site_fulltext=true WHERE id='media-reader'`;await upsertMaterial({...input,bodyHtml:'<p>New revision</p>',bodyText:'New revision'});assert.equal((await app.inject(route)).statusCode,404);assert.equal(hits,count);
+    const privateRoute=`/api/admin/reader/snapshots/${snapshot.id}/media/${key}`;assert.equal((await app.inject(privateRoute)).statusCode,401);
+    const other=await upsertMaterial({...input,url:'https://example.com/no-range',bodyHtml:`<video src="${origin}/no-range.mp4"></video>`,bodyText:'No range video'}),fixed=(await currentSnapshot(other.articleId))!,otherKey=[...mediaCandidates(fixed.bodyHtml).keys()][0]!;
+    const complete=await app.inject({url:`/api/reader/articles/${other.articleId}/media/${fixed.id}/${otherKey}`,headers:{range:'bytes=0-'}});assert.equal(complete.statusCode,200);assert.deepEqual(complete.rawPayload,fullBytes);assert.equal(complete.headers['accept-ranges'],'none');
+  }finally{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
+});
 
 test("archived images freeze a version and every public read checks current permission",async()=>{
   config.allowPrivateNetworkFetch=true;
@@ -67,6 +90,9 @@ test("archived images freeze a version and every public read checks current perm
     const [badSnapshot]=await sql`SELECT id FROM reader_snapshots WHERE article_id=${bad.articleId}`;
     await archiveSnapshot(badSnapshot!.id);
     assert.equal((await sql`SELECT status FROM reader_snapshots WHERE id=${badSnapshot!.id}`)[0]!.status,"partial");
+    const card=await upsertMaterial({...material,url:'https://example.com/optional-preview',bodyHtml:`<figure data-reader-card="true"><a href="https://example.org/post"><img src="${origin}/bad" alt=""></a><p><a href="https://example.org/post">Linked article</a></p><p>Preview description</p></figure>`,bodyText:'Linked article Preview description'});
+    const [cardSnapshot]=await sql`SELECT id FROM reader_snapshots WHERE article_id=${card.articleId}`;await archiveSnapshot(cardSnapshot!.id);
+    const cardDetail=(await app.inject('/api/site/items/'+card.articleId)).json();assert.match(cardDetail.body.html,/Preview description/);assert.doesNotMatch(cardDetail.body.html,/图片未能保存|<img/);assert.equal((await sql`SELECT status FROM reader_snapshots WHERE id=${cardSnapshot!.id}`)[0]!.status,'partial','archive completeness still records the missing optional resource');
   } finally {server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
 });
 
@@ -86,8 +112,8 @@ test('image count, response bytes and the article budget produce honest partial 
   try {
     await sql`INSERT INTO sources(id,name,kind) VALUES ('archive-limits','Limits','rss')`;
     const capture=async(suffix:string,images:string[])=>{const {articleId}=await upsertMaterial({sourceId:'archive-limits',url:'https://example.com/limits/'+suffix,title:suffix,bodyHtml:'<p>Limit fixture</p>'+images.map(src=>`<img src="${src}">`).join(''),bodyText:'Limit fixture '+suffix,bodyStatus:'ok',via:'fetch'});const [snapshot]=await sql`SELECT id FROM reader_snapshots WHERE article_id=${articleId}`;await archiveSnapshot(snapshot!.id);return snapshot!.id;};
-    const count=await capture('count',Array.from({length:129},(_,n)=>origin+'/small?n='+n));
-    assert.equal(countHits,128);assert.equal((await sql`SELECT status FROM reader_snapshots WHERE id=${count}`)[0]!.status,'partial');
+    const count=await capture('count',Array.from({length:257},(_,n)=>origin+'/small?n='+n));
+    assert.equal(countHits,256);assert.equal((await sql`SELECT status FROM reader_snapshots WHERE id=${count}`)[0]!.status,'partial');
     assert.equal((await sql`SELECT count(*)::int AS n FROM reader_snapshot_assets WHERE snapshot_id=${count} AND status='failed'`)[0]!.n,1);
     const oversized=await capture('oversized',[origin+'/oversized']);
     assert.equal((await sql`SELECT status FROM reader_snapshots WHERE id=${oversized}`)[0]!.status,'partial');
@@ -97,4 +123,12 @@ test('image count, response bytes and the article budget produce honest partial 
     await assert.rejects(stat(assetFile(lastBigHash+'.png')),/ENOENT/,'an image rejected by the total budget is never installed');
     assert.equal((await readdir(path.join(config.dataDir,'reader-archives/assets'))).filter(name=>name.startsWith('.tmp-')).length,0);
   }finally{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));await rm(config.dataDir,{recursive:true,force:true});config.dataDir=originalDir;}
+});
+test('large static article diagrams retain the whole image within the output pixel budget',async()=>{
+  config.allowPrivateNetworkFetch=true;const pixels=await sharp({create:{width:6000,height:4000,channels:4,background:'#d0e3e080'}}).png().toBuffer();
+  const server=createServer((_req,res)=>{res.setHeader('content-type','image/png');res.end(pixels);});server.listen(0,'127.0.0.1');await once(server,'listening');
+  try{const source='large-diagram';await sql`INSERT INTO sources(id,name,kind) VALUES(${source},'Large diagrams','rss')`;
+    const {articleId}=await upsertMaterial({sourceId:source,url:'https://example.com/large-diagram',title:'Large diagram',bodyHtml:`<img src="http://127.0.0.1:${(server.address() as {port:number}).port}/image" alt="Complete diagram">`,bodyText:'Complete diagram',bodyStatus:'ok',via:'fetch'}),snapshot=(await currentSnapshot(articleId))!;await archiveSnapshot(snapshot.id);
+    const [asset]=await sql`SELECT a.path,sa.status FROM reader_snapshot_assets sa JOIN reader_assets a ON a.hash=sa.asset_hash WHERE sa.snapshot_id=${snapshot.id}`;assert.equal(asset!.status,'ready');const meta=await sharp(assetFile(asset!.path)).metadata();assert(meta.width!*meta.height!<=16_000_000);assert(Math.abs(meta.width!-meta.height!*1.5)<=1);assert.equal(meta.hasAlpha,true);
+  }finally{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
 });

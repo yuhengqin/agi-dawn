@@ -96,6 +96,7 @@ export function createImageZoom(source:HTMLImageElement,picture:HTMLImageElement
       const active=session??attach(current,false),clone=active.clone;
       const sx=from.width/target.width,sy=from.height/target.height;
       clone.src=currentPicture.currentSrc||currentPicture.src;
+      if(current.dataset.readerImageSurface)clone.dataset.readerImageSurface=current.dataset.readerImageSurface;else delete clone.dataset.readerImageSurface;
       clone.style.setProperty('transition','none','important');
       Object.assign(clone.style,{
         visibility:'visible',left:`${target.left}px`,top:`${target.top}px`,width:`${target.width}px`,height:`${target.height}px`,

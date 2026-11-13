@@ -3,8 +3,10 @@
 import * as cheerio from "cheerio";
 import sanitizeHtml from "sanitize-html";
 import { isNonArticleImage } from "../lib/image-url.ts";
-import { normalizeVideos } from "./video.ts";
+import { normalizeVideos,prepareVideoMarkup } from "./video.ts";
 import { normalizeTechnicalMarkup } from "./technical-markup.ts";
+import {protectKatex} from './math.ts';
+import {FOOTNOTE_ID,restoreFootnotes} from './footnotes.ts';
 
 const ALLOWED_TAGS = [
   "p", "br", "hr", "h2", "h3", "h4", "h5", "ul", "ol", "li", "blockquote", "pre", "code", "table", "thead", "tbody",
@@ -44,14 +46,16 @@ const DROP_WHOLE = [
 ];
 
 export function sanitizeBody(html: string, baseUrl?: string): string {
-  const cleaned = sanitizeHtml(dropNonBodyMarkup(normalizeTechnicalMarkup(html,baseUrl??"").html), {
+  const formulas=protectKatex(restoreFootnotes(prepareVideoMarkup(dropNonBodyMarkup(normalizeTechnicalMarkup(html,baseUrl??"").html),baseUrl),baseUrl));
+  const cleaned = sanitizeHtml(formulas.html, {
     allowedTags: ALLOWED_TAGS,
     nonTextTags: DROP_WHOLE,
     allowedAttributes: {
+      '*':['id'],
       a: ["href", "title"],
       figure: ['data-reader-card','data-reader-figure-status','data-reader-figure-loss'],
       p: ['data-reader-embed'],
-      img: ["src", "alt", "width", "height", "title", "data-reader-inline"],
+      img: ["src", "alt", "width", "height", "title", "data-reader-inline",'data-reader-image-surface'],
       video: ["src", "poster", "width", "height", "controls", "playsinline", "preload"],
       source: ["src", "type"],
       code: ["class"],
@@ -67,6 +71,7 @@ export function sanitizeBody(html: string, baseUrl?: string): string {
     allowedSchemesByTag: { img: ["http", "https", "data"] },
     allowProtocolRelative: true,
     transformTags: {
+      '*':(tagName,attribs)=>{if(attribs.id&&!FOOTNOTE_ID.test(attribs.id))delete attribs.id;if(attribs['data-reader-image-surface']!=='dark')delete attribs['data-reader-image-surface'];return {tagName,attribs};},
       h1: "h2",
       h6: "h5",
       div: (tagName, attribs) => ({ tagName: "p", attribs }),
@@ -97,7 +102,7 @@ export function sanitizeBody(html: string, baseUrl?: string): string {
     exclusiveFilter: (frame) =>
       frame.tag === "img" && (!frame.attribs.src || isNonArticleImage(frame.attribs.src, frame.attribs.width, frame.attribs.height)),
   });
-  return normalizeBlocks(cleaned);
+  return formulas.restore(normalizeBlocks(cleaned));
 }
 
 const BLOCK_TAGS = new Set(["p", "h2", "h3", "h4", "h5", "ul", "ol", "li", "blockquote", "pre", "table", "figure", "hr", "dl", "picture", "video"]);
@@ -188,6 +193,7 @@ export function unwrapProxyUrl(src: string): string {
 
 function resolveUrl(href: string, base?: string): string {
   if (!href) return href;
+  if(href.startsWith('#')&&FOOTNOTE_ID.test(href.slice(1)))return href;
   try {
     return new URL(href, base).toString();
   } catch {

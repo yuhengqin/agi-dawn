@@ -1,11 +1,10 @@
 import type {OutlineEntry} from '@agidawn/contracts/site';
-import {stripTagMarkup} from '../lib/text.ts';
 import * as cheerio from 'cheerio';
 
 export function withOutline(html:string,options:{excludeFigures?:boolean}={}){
   const outline:OutlineEntry[]=[];let n=0;
   const output=html.replace(/<h([2-4])(?: id="sec-\d+")?>([\s\S]*?)<\/h\1>/gi,(_match,level:string,inner:string)=>{
-    const id='sec-'+(++n),text=stripTagMarkup(inner,'').trim();
+    const id='sec-'+(++n),text=cheerio.load(inner,null,false).root().text().replace(/\s+/g,' ').trim();
     if(text)outline.push({id,text:text.slice(0,80),level:Number(level)});
     return `<h${level} id="${id}">${inner}</h${level}>`;
   });

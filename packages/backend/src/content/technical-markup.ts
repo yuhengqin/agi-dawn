@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import sanitizeHtml from "sanitize-html";
 import type { BodyIssue } from "@agidawn/contracts/site";
+import {cleanKatex} from './math.ts';
 
 const SVG_TAGS=["svg","g","path","rect","circle","ellipse","line","polyline","polygon","text","tspan","defs","linearGradient","radialGradient","stop","marker","clipPath","title","desc","use"];
 const SVG_ATTRIBUTES=["xmlns","viewBox","width","height","x","y","x1","x2","y1","y2","cx","cy","r","rx","ry","d","points","transform","fill","fill-opacity","stroke","stroke-width","stroke-opacity","stroke-dasharray","stroke-linecap","stroke-linejoin","opacity","font-family","font-size","font-weight","text-anchor","dominant-baseline","id","offset","stop-color","stop-opacity","markerWidth","markerHeight","refX","refY","orient","marker-end","marker-start","clip-path","href"];
@@ -40,11 +41,17 @@ export function normalizeTechnicalMarkup(html:string,baseUrl:string,trackIssues=
     if(!["code","prompt"].includes(pre.attr("data-code-kind")??""))pre.removeAttr("data-code-kind");
   });
   $(".katex").each((_,node)=>{
-    const math=$(node).find("math").first();
-    if(math.length) $(node).replaceWith(math.clone());
+    const original=$(node),math=original.find("math").first();
+    if(math.length){original.replaceWith(math.clone());return;}
+    const holder=original.closest('[data-reader-math="katex"]').length?original.closest('[data-reader-math="katex"]')
+      :original.parent().is('.katex-display')?original.parent():original;
+    const clean=cleanKatex($.html(holder));
+    if(clean)holder.replaceWith(clean);
+    else{const note=$('<span>').append($('<a>').attr('href',baseUrl).text('公式未能保存，查看原文'));mark(note,{kind:'missing-formula',message:'部分公式未能保存，请对照原文。'});holder.replaceWith(note);}
   });
   $("svg").each((_,node)=>{
     const original=$(node);
+    if(original.closest('[data-reader-math="katex"]').length)return;
     if(original.closest("nav,header,footer,button").length||isHeadingPermalinkIcon(original,baseUrl)) {original.remove();return;}
     // XML attributes stay literal here; the HTML parser otherwise reserializes href as xlink:href.
     const drawing=cheerio.load($.html(original),{xmlMode:true}),svg=drawing('svg').first();

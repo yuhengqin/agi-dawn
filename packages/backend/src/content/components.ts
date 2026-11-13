@@ -68,7 +68,12 @@ function codeBlock(document: ContentDocument, el: ContentElement, rule: Preserve
   const text = rule.code ? el.querySelector(rule.code) : el;
   if (!text) return null;
   const pre = document.createElement("pre"), code = document.createElement("code");
-  code.textContent = shownText(text, text.localName !== "pre" && text.localName !== "code");
+  const lines=[...text.children],first=Number(lines[0]?.firstElementChild?.textContent);
+  const numbered=lines.length>0&&first>=0&&lines.every((line,index)=>line.children.length===2
+    &&line.firstElementChild?.localName==='span'&&line.lastElementChild?.localName==='div'
+    &&line.firstElementChild.textContent?.trim()===String(first+index));
+  code.textContent = numbered?lines.map(line=>shownText(line.lastElementChild!,false)).join('\n')
+    :shownText(text, text.localName !== "pre" && text.localName !== "code");
   if (rule.kind) pre.setAttribute("data-code-kind", rule.kind);
   const labelLanguage = rule.language ? el.querySelector(rule.language) : null;
   const language = (labelLanguage ? shownText(labelLanguage) : null) || text.getAttribute("data-language") || el.getAttribute("data-language")
@@ -85,6 +90,7 @@ function codeBlock(document: ContentDocument, el: ContentElement, rule: Preserve
 }
 
 function descriptionTable(document: ContentDocument, el: ContentElement): ContentElement | null {
+  if(el.getAttribute('role')==='table')return ariaTable(document,el);
   const columns = [...el.children].map(column => {
     const list = column.querySelector("dl");
     const heading = [...column.children].find(child => child !== list && child.getAttribute("aria-hidden") !== "true" && shownText(child));
@@ -101,6 +107,28 @@ function descriptionTable(document: ContentDocument, el: ContentElement): Conten
     || column.rows.some((row, i) => !row.label || !row.value || row.label !== rows[i]!.label))) return null;
   return componentTable(document, ["", ...columns.map(column => column.label)],
     rows.map((entry, i) => [entry.label, ...columns.map(column => column.rows[i]!.value)]));
+}
+
+/** Explicit table roles preserve the source's rows before layout containers are pruned. */
+function ariaTable(document:ContentDocument,el:ContentElement):ContentElement|null{
+  const visible=(node:ContentElement)=>{for(let at:ContentElement|null=node;at&&at!==el;at=at.parentElement)if(componentHidden(at))return false;return true;};
+  const rows=[...el.querySelectorAll('[role="row"]')].filter(row=>row.closest('[role="table"]')===el&&visible(row));
+  const cells=rows.map(row=>[...row.querySelectorAll('[role="columnheader"],[role="rowheader"],[role="cell"]')].filter(cell=>cell.closest('[role="row"]')===row&&visible(cell)));
+  const width=cells[0]?.length??0;
+  if(cells.flat().some(cell=>['aria-colspan','aria-rowspan','aria-colindex'].some(name=>cell.hasAttribute(name)&&cell.getAttribute(name)!=='1'))
+    ||rows.some(row=>row.hasAttribute('aria-rowindex')))return null;
+  if(width<2||cells.length<2||cells.some(row=>row.length!==width))return null;
+  const hasHead=cells[0]!.every(cell=>cell.getAttribute('role')==='columnheader');
+  const table=document.createElement('table'),head=document.createElement('thead'),body=document.createElement('tbody');
+  // Readability otherwise treats a small headerless table as layout despite the explicit source role.
+  table.setAttribute('summary',el.getAttribute('aria-label')||'Article data table');
+  cells.forEach((row,index)=>{const tr=document.createElement('tr');row.forEach(value=>{
+    const cell=document.createElement(value.getAttribute('role')==='cell'?'td':'th'),copy=value.cloneNode(true) as ContentElement;
+    for(const child of copy.querySelectorAll('[hidden],[aria-hidden="true"],script,style'))child.remove();
+    for(const child of copy.querySelectorAll('[style]'))if(componentHidden(child))child.remove();
+    cell.innerHTML=copy.innerHTML;tr.append(cell);
+  });(index===0&&hasHead?head:body).append(tr);});
+  if(hasHead)table.append(head);table.append(body);return table;
 }
 
 const converters = { pre: codeBlock, table: descriptionTable };

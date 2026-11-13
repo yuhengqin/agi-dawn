@@ -1,7 +1,8 @@
 // Outbound HTTP for collectors, the image proxy and the paid APIs: SSRF guard, routing, limits.
 import net from "node:net";
 import { lookup } from "node:dns/promises";
-import { addAbortListener } from "node:events";
+import { addAbortListener,once } from "node:events";
+import {PassThrough} from 'node:stream';
 import { Agent, Pool, ProxyAgent, fetch as undiciFetch, type Dispatcher } from "undici";
 import { config } from "../config.ts";
 import { assertPublicUrl, guardedLookup } from "./url.ts";
@@ -66,6 +67,10 @@ function dispatcherFor(viaProxy: boolean, privateHost: boolean): Dispatcher | un
 }
 
 export interface GuardedFetchOptions {
+  /** Caller cancellation shares the same deadline and cancels active network reads. */
+  signal?:AbortSignal;
+  /** Internal streaming consumer; receives the same checked, timed and byte-limited response. */
+  consumeBody?:(response:{status:number;url:string;headers:Headers;body:AsyncIterable<Buffer>;signal:AbortSignal})=>Promise<void>;
   method?: string;
   headers?: Record<string, string>;
   body?: string;
@@ -121,7 +126,7 @@ export async function guardedFetch(input: string, opts: GuardedFetchOptions = {}
   // One budget includes DNS, every redirect and the body. Restarting it at each hop allowed a
   // nominal 20 s image request to occupy the API for minutes. A configured cooldown is queue time.
   const budget = networkBudget(opts.timeoutMs ?? 20_000);
-  const signal = budget.signal;
+  const signal = opts.signal?AbortSignal.any([budget.signal,opts.signal]):budget.signal;
   try {
     const route = opts.route ?? "egress";
     const curl = (DEPLOYMENT as { curlFetch?: { hosts: string[]; intervalMs: number } }).curlFetch;
@@ -157,6 +162,8 @@ export async function guardedFetch(input: string, opts: GuardedFetchOptions = {}
       const browserProfile = curlHost(url) && ["GET", "HEAD"].includes(method) && requestBody === undefined;
       let res;
       if (browserProfile) {
+        // The browser-fingerprint bridge buffers a JSON/base64 response; never give it a stream budget.
+        if(opts.consumeBody)throw new Error('Streaming is not supported by the browser-profile transport');
         if (url.username || url.password) throw new Error("URLs with credentials are not supported");
         const addresses = pinned.get(hostOf(url)) ?? await withinDeadline(resolve(url), signal);
         const address = addresses.find(value => net.isIP(value) === 4) ?? addresses[0];
@@ -193,6 +200,11 @@ export async function guardedFetch(input: string, opts: GuardedFetchOptions = {}
         }
         continue;
       }
+      if(opts.consumeBody){
+        const bounded=async function*(){let size=0;if(res.body)for await(const chunk of res.body as unknown as AsyncIterable<Uint8Array>){size+=chunk.byteLength;if(size>maxBytes)throw new Error(`Response too large from ${url.hostname}`);yield Buffer.from(chunk);}};
+        await opts.consumeBody({status:res.status,url:url.toString(),headers:res.headers as unknown as Headers,body:bounded(),signal});
+        return {status:res.status,url:url.toString(),headers:res.headers as unknown as Headers,body:Buffer.alloc(0),truncated:false,text:()=>''};
+      }
       const chunks: Buffer[] = [];
       let size = 0;
       let truncated = false;
@@ -220,6 +232,21 @@ export async function guardedFetch(input: string, opts: GuardedFetchOptions = {}
       };
     }
   } finally { budget.close(); }
+}
+
+/** Keep one checked HTTP response open with backpressure instead of assembling separate versions. */
+export async function guardedStreamFetch(input:string,opts:Omit<GuardedFetchOptions,'consumeBody'|'truncate'>={}){
+  const body=new PassThrough({highWaterMark:64*1024}),closed=new AbortController();
+  body.once('close',()=>closed.abort());body.on('error',()=>{});
+  let resolve!:(value:{status:number;url:string;headers:Headers;body:PassThrough})=>void,reject!:(reason:unknown)=>void;
+  const ready=new Promise<{status:number;url:string;headers:Headers;body:PassThrough}>((yes,no)=>{resolve=yes;reject=no;});
+  void guardedFetch(input,{...opts,signal:opts.signal?AbortSignal.any([opts.signal,closed.signal]):closed.signal,consumeBody:async response=>{
+    resolve({status:response.status,url:response.url,headers:response.headers,body});
+    const signal=AbortSignal.any([response.signal,closed.signal]);
+    for await(const chunk of response.body){if(body.destroyed)break;if(!body.write(chunk))await once(body,'drain',{signal});}
+    body.end();
+  }}).catch(error=>{reject(error);body.destroy(error instanceof Error?error:new Error('media stream failed'));});
+  return ready;
 }
 
 /** Pause only while another process owns the host's rate slot; network time remains cumulative. */

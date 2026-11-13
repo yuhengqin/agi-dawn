@@ -5,13 +5,13 @@ import {isChineseText} from '@agidawn/backend/lib/text';
 
 type Request=(parts:string[],retry?:boolean)=>Promise<{t:string[]|null;receiptId:number}>;
 const blocks=new Set(['p','h1','h2','h3','h4','h5','h6','li','blockquote','figcaption','td','th','dt','dd','caption']);
-const container=/^(p|h[1-6]|li|blockquote|figcaption|td|th|dt|dd|caption|ul|ol|table|pre|figure|div)$/;
-const protectedElements='picture, video, img, code, math, svg';
+const container=/^(p|h[1-6]|li|blockquote|figcaption|td|th|dt|dd|caption|ul|ol|dl|table|thead|tbody|tfoot|tr|pre|figure|div)$/;
+const protectedElements='picture, video, img, code, math, svg, [data-reader-math="katex"]';
 
 /** Infer the article's prose language, excluding protected code and generated reader notices. */
 export function isChineseBody(html:string,language?:string|null):boolean{
   const $=cheerio.load(html,null,false);
-  $('pre,code,math,svg,[data-reader-embed],figure[data-reader-figure-status="missing"] > p:first-child').remove();
+  $('pre,code,math,svg,[data-reader-math],[data-reader-embed],figure[data-reader-figure-status="missing"] > p:first-child').remove();
   return isChineseText($.root().text(),language);
 }
 
@@ -26,6 +26,12 @@ function shield(html:string){
 }
 function restore(text:string|null,input:ReturnType<typeof shield>):string|null{
   if(!text?.trim())return null;
+  const prose=(html:string)=>{const $=cheerio.load(html,null,false);$(protectedElements).remove();return $.root().text().replace(/⟦\d+⟧/g,'').replace(/https?:\/\/[^\s<>]+/g,'').replace(/\s+/g,' ').trim();};
+  const before=prose(input.html),after=prose(text);
+  if(!/[{}\[\]]/.test(before)&&/[{}\[\]]/.test(after))return null;
+  if(!/\p{Script=Han}/u.test(before)&&!(/\p{Script=Han}/u.test(after))
+    &&(before.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g)?.length??0)>=8
+    &&before.toLowerCase()===after.toLowerCase())return null;
   const counts=new Map<number,number>();
   for(const match of text.matchAll(/⟦(\d+)⟧/g)){const n=Number(match[1]);counts.set(n,(counts.get(n)??0)+1);}
   if(counts.size!==input.tokens.length||input.tokens.some((_,i)=>counts.get(i)!==1))return null;
@@ -38,9 +44,8 @@ function restore(text:string|null,input:ReturnType<typeof shield>):string|null{
   return $.html().replace(/⟦(\d+)⟧/g,(_,n:string)=>input.tokens[Number(n)]!);
 }
 
-/** Only wording goes to the model; original containers, code and media stay here. */
-export async function translateHtml(html:string,request:Request){
-  const $=cheerio.load(html,null,false),all:Array<{html:string;write:(html:string)=>void}>=[];
+function proseSegments($:cheerio.CheerioAPI){
+  const all:Array<{html:string;write:(html:string)=>void}>=[];
   // Direct text around nested lists/paragraphs is a segment too, without adding wrapper elements.
   const visit=(nodes:AnyNode[])=>{
     let inline:AnyNode[]=[];
@@ -61,6 +66,22 @@ export async function translateHtml(html:string,request:Request){
     flush();
   };
   visit($.root().children().toArray());
+  return all;
+}
+
+/** Only wording goes to the model; original containers, code and media stay here. */
+export async function translateHtml(html:string,request:Request,previous?:{sourceHtml:string;translatedHtml:string}){
+  const $=cheerio.load(html,null,false),all=proseSegments($),cache=new Map<string,string>(),ambiguous=new Set<string>();
+  const key=(input:ReturnType<typeof shield>)=>JSON.stringify([input.html,input.tokens,input.links]);
+  if(previous){
+    const source=proseSegments(cheerio.load(previous.sourceHtml,null,false)),translated=proseSegments(cheerio.load(previous.translatedHtml,null,false));
+    if(source.length===translated.length)source.forEach((segment,index)=>{
+      const input=shield(segment.html),candidate=shield(translated[index]!.html),id=key(input);
+      if(JSON.stringify(input.tokens)!==JSON.stringify(candidate.tokens)||JSON.stringify(input.links)!==JSON.stringify(candidate.links)||!restore(candidate.html,input))return;
+      if(cache.has(id)&&cache.get(id)!==candidate.html){cache.delete(id);ambiguous.add(id);}
+      if(!ambiguous.has(id))cache.set(id,candidate.html);
+    });
+  }
   let remaining=60_000;
   const chosen:typeof all=[];
   for(const segment of all){if(segment.html.length>remaining)break;remaining-=segment.html.length;chosen.push(segment);}
@@ -77,7 +98,9 @@ export async function translateHtml(html:string,request:Request){
     }
     return output;
   }
-  const first=await batches(inputs.map(input=>input.html)),translated=first.map((text,i)=>restore(text,inputs[i]!));
+  const translated=inputs.map(input=>restore(cache.get(key(input))??null,input));
+  const requested=translated.flatMap((text,index)=>text===null?[index]:[]);
+  if(requested.length){const first=await batches(requested.map(i=>inputs[i]!.html));requested.forEach((i,k)=>{translated[i]=restore(first[k]??null,inputs[i]!);});}
   const missing=translated.flatMap((text,i)=>text===null?[i]:[]);
   if(missing.length){const again=await batches(missing.map(i=>inputs[i]!.html),true);missing.forEach((i,k)=>{translated[i]=restore(again[k]??null,inputs[i]!);});}
   let segments=0;chosen.forEach((segment,i)=>{if(translated[i]!==null){segment.write(translated[i]!);segments++;}});
