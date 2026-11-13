@@ -82,6 +82,23 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
     link.replaceWith(thumbnails.flatMap(image=>image.toArray()).concat(head.toArray(),description.flatMap(text=>$('<p>').text(text).toArray())));
     card.find('figcaption').remove();changed=true;
   });
+  if(host==='ghuntley.com'){
+    const path=page.pathname.replace(/\/+$/,''),opening=$.root().children().first();
+    const decoration=path==='/z80'?'✨':path==='/stdlib'?'🗞️':null;
+    if(decoration&&opening.is('p')&&!opening.children().length&&opening.text().trim()===decoration&&opening.next().is('p')){opening.remove();changed=true;}
+    if(path==='/open-webui'){
+      const first=$.root().children().first(),card=first.next(),rest=card.next(),prefix=collapseWhitespace(first.text()),chinese=prefix==='这是对';
+      const title=card.find('p > a').filter((_,node)=>{
+        try{const target=new URL($(node).attr('href')??'',page);return target.hostname.replace(/^www\./,'')==='ghuntley.com'&&target.pathname.replace(/\/+$/,'')==='/screwed'&&!!$(node).text().trim();}catch{return false;}
+      });
+      // This publisher inserted a bookmark between the two halves of its opening sentence.
+      if(first.is('p')&&!first.children().length&&(chinese||prefix==='This is a follow-up to')&&card.is('figure,blockquote')&&title.length===1&&rest.is('p')
+        &&(chinese?/^但更多是面向家长的。/.test(rest.text()):/^but targeted more towards parents\./.test(rest.text()))){
+        const joined=$('<p>').text(chinese?'这是对《':'This is a follow-up to ').append(title.clone()).append(chinese?'》的后续补充，':' ').append(rest.contents());
+        first.replaceWith(joined);rest.remove();if(card.is('figure'))card.attr('data-reader-card','true');changed=true;
+      }
+    }
+  }
   if(host==='ghuntley.com')$('figure[data-reader-card="true"]').each((_,node)=>{
     const card=$(node),images=card.find('img');
     if(images.length>1)images.each((_,image)=>{try{if(new URL($(image).attr('src')??'').pathname.includes('/content/images/icon/')){$(image).closest('a').remove();changed=true;}}catch{}});

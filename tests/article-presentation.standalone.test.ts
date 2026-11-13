@@ -78,6 +78,46 @@ test('Ghost bookmark thumbnails remain links without turning the description int
   assert.match(result,/src="https:\/\/example.org\/thumb.png"/);assert.equal(cleanArticlePresentation(result,{url:'https://ghuntley.com/patch/'}),result);
 });
 
+test('a verified inline Ghost bookmark no longer splits the original or translated opening sentence',()=>{
+  const context={url:'https://ghuntley.com/open-webui/'};
+  for(const chinese of [false,true])for(const tag of ['figure','blockquote']){
+    const title=chinese?'亲爱的学生：AI 来了':'Dear Student: AI is here';
+    const beginning=chinese?'这是对 ':'This is a follow-up to ';
+    const continuation=chinese?'但更多是面向家长的。我儿子刚满十岁，':'but targeted more towards parents. My son recently turned ten, ';
+    const card=`<${tag}><p><a href="https://ghuntley.com/screwed/">${title}</a></p><p>A preview of the linked article.</p><img src="https://example.org/preview.png"></${tag}>`;
+    const html=`<p>${beginning}</p>${card}<p>${continuation}<a href="https://ghuntley.com/dothings">writing together</a>.</p><h2>Next</h2><pre><code>keep &lt;T&gt;\n  source</code></pre>`;
+    const result=cleanArticlePresentation(html,context),$=cheerio.load(result,null,false),opening=$.root().children().first();
+    assert.equal(opening.is('p'),true);assert.equal(opening.find('a').length,2);
+    assert.equal(opening.find('a').first().attr('href'),'https://ghuntley.com/screwed/');
+    assert.equal(opening.text(),chinese?`这是对《${title}》的后续补充，${continuation}writing together.`:`This is a follow-up to ${title} ${continuation}writing together.`);
+    assert.equal($(tag).length,1);assert.match($(tag).text(),/A preview/);assert.equal($('img').attr('src'),'https://example.org/preview.png');
+    assert.equal($('pre code').text(),'keep <T>\n  source');assert.equal(cleanArticlePresentation(result,context),result);
+  }
+});
+
+test('independent bookmarks and unverified opening fragments retain their paragraph boundaries',()=>{
+  const card='<figure><p><a href="https://ghuntley.com/screwed/">Earlier article</a></p><p>Useful preview.</p></figure>';
+  for(const [url,start,link] of [
+    ['https://other.example/open-webui/','This is a follow-up to ',card],
+    ['https://ghuntley.com/another/','This is a follow-up to ',card],
+    ['https://ghuntley.com/open-webui/','A complete introduction.',card],
+    ['https://ghuntley.com/open-webui/','This is a follow-up to ',card.replace('/screwed/','/other/')],
+  ]){
+    const html=`<p>${start}</p>${link}<p>but targeted more towards parents. More prose.</p>`;
+    assert.equal(cleanArticlePresentation(html,{url}),html);
+  }
+});
+
+test('confirmed Ghost callout decorations do not become the first paragraph',()=>{
+  for(const [slug,icon] of [['z80','✨'],['stdlib','🗞️']]){
+    const prose='<p>A useful notice with <code>ls</code> and <a href="https://example.org">a link</a>.</p><p>✨ stays in later prose.</p>';
+    assert.equal(cleanArticlePresentation(`<p>${icon}</p>`+prose,{url:`https://ghuntley.com/${slug}/`}),prose);
+    for(const url of ['https://other.example/'+slug+'/','https://ghuntley.com/another/'])assert.equal(cleanArticlePresentation(`<p>${icon}</p>`+prose,{url}),`<p>${icon}</p>`+prose);
+    const meaningful=`<p><a href="https://example.org">${icon}</a></p>`+prose;
+    assert.equal(cleanArticlePresentation(meaningful,{url:`https://ghuntley.com/${slug}/`}),meaningful);
+  }
+});
+
 test('paired historical Substack footnotes and their return links stay inside the current body',()=>{
   const context={url:'https://blog.sshh.io/p/example'},html='<p>Explanation<a href="https://blog.sshh.io/p/example#footnote-2">2</a>.</p><p><a href="https://blog.sshh.io/p/example#footnote-anchor-2">2</a></p><p>A supporting note.</p>';
   const result=cleanArticlePresentation(html,context),$=cheerio.load(result,null,false),links=$('a');
