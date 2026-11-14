@@ -824,6 +824,7 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
   height: auto;
   background: var(--bg-sunk);
 }
+.article-prose img:not([data-reader-inline="true"]) { max-width: 70%; }
 .article-prose video { width: 100%; }
 .prose img[data-reader-inline="true"] { display: inline-block; width: auto; height: auto; max-width: 1.5em; max-height: 1em; margin: 0 0.3em 0 0; border-radius: 0; background: none; vertical-align: -0.1em; }
 img[data-reader-image-surface="dark"] { background: #0b0c0e; padding: 12px; box-sizing: border-box; }
