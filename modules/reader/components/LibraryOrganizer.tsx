@@ -99,7 +99,7 @@ export default function LibraryOrganizer({items,filters,navigating,returnSearch,
           <ul className="list-disc space-y-1 break-words pl-5">{chosen.map(item=><li key={item.id}>{item.title}</li>)}</ul>
           <p className="text-sm text-ink-3">任一文章发生冲突，整批都不会保存。整理后，不再符合当前筛选的文章会移出列表。</p>
         </section>}
-        <div className="mt-5 flex flex-wrap gap-3"><button type="submit" className="min-h-12 rounded-control bg-accent px-4 text-white disabled:opacity-50">{saving?"整理中…":review?`确认整理${chosen.length}篇`:"检查批量变更"}</button>{review&&<button type="button" className={button} onClick={()=>setReview(false)}>返回调整</button>}</div>
+        <div className="mt-5 flex flex-wrap gap-3"><button type="submit" className="min-h-12 rounded-control bg-accent px-4 text-accent-contrast disabled:opacity-50">{saving?"整理中…":review?`确认整理${chosen.length}篇`:"检查批量变更"}</button>{review&&<button type="button" className={button} onClick={()=>setReview(false)}>返回调整</button>}</div>
       </fieldset>
     </form>
     {error&&<div className="mt-4"><p role="alert" className="text-hot">{error}</p><button type="button" disabled={busy} className={button+" mt-3"} onClick={()=>{reset();setMessage("");void revalidator.revalidate();}}>重新载入列表并清除选择</button></div>}

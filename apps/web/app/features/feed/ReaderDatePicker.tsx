@@ -158,7 +158,7 @@ function DateDraft({from:appliedFrom,to:appliedTo,action,onApply,fromName='from'
             const selected=!!day&&((!!from&&!!to&&day>=from&&day<=to)||day===from||day===to);
             const inRange=!!day&&!dateError(shownFrom)&&!dateError(shownTo)&&!!shownFrom&&!!shownTo&&day>=shownFrom&&day<=shownTo,end=!!day&&(day===shownFrom||day===shownTo);
             return <td key={index} role="gridcell" aria-selected={selected} className={`reader-date-cell ${inRange?(hasPreview?'bg-accent/5':'bg-accent/10'):''}`} data-start={inRange&&day===shownFrom||undefined} data-end={inRange&&day===shownTo||undefined}>{day&&<button type="button" data-date={day} tabIndex={day===focusDay?0:-1} aria-label={dayLabel(day)} aria-current={day===today?'date':undefined}
-              className={`reader-date-day outline-offset-[-2px] focus-visible:outline-2 focus-visible:outline-accent ${end?(hasPreview?'bg-accent/15 font-medium text-accent':'bg-accent font-medium text-white'):'text-ink hover:bg-bg-sunk'}`}
+              className={`reader-date-day outline-offset-[-2px] focus-visible:outline-2 focus-visible:outline-accent ${end?(hasPreview?'bg-accent/15 font-medium text-accent-ink':'bg-accent font-medium text-accent-contrast'):'text-ink hover:bg-bg-sunk'}`}
               onFocus={()=>setFocusDay(day)} onPointerEnter={event=>{if(event.pointerType==='mouse')setPreview(day);}} onClick={()=>choose(day)} onKeyDown={event=>keyDown(event,day)}>{Number(day.slice(8))}</button>}</td>;
           })}</tr>)}</tbody>
         </table>
@@ -171,7 +171,7 @@ function DateDraft({from:appliedFrom,to:appliedTo,action,onApply,fromName='from'
         <p role="status" aria-label="日期范围预览">{hasPreview?`预览：${rangeSummary(previewFrom,previewTo)}`:''}</p>
       </div>
       <button type="button" className={action} onClick={close}>取消</button>
-      <button type="submit" disabled={invalid} className="min-h-10 rounded-mark bg-accent px-4 text-sm text-white disabled:opacity-40">应用日期</button>
+      <button type="submit" disabled={invalid} className="min-h-10 rounded-mark bg-accent px-4 text-sm text-accent-contrast disabled:opacity-40">应用日期</button>
     </div>
   </Form>;
 }

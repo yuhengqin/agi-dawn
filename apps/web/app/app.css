@@ -80,7 +80,7 @@
 .reader-source-picker select { position: absolute; inset: 0; width: 100%; padding-inline-end: 24px; appearance: none; background: transparent; color: inherit; font: inherit; text-overflow: ellipsis; cursor: pointer; }
 .reader-source-picker > svg { position: absolute; right: 0; pointer-events: none; }
 .reader-source-picker select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.reader-pagination { --reader-pagination-active: light-dark(#0064fa, #80b7ff); --reader-pagination-active-bg: light-dark(#eaf4ff, #173451); display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 16px; color: var(--ink-3); font-size: 13px; }
+.reader-pagination { --reader-pagination-active: var(--accent); --reader-pagination-active-bg: var(--accent-soft); display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 16px; color: var(--ink-3); font-size: 13px; }
 .reader-pagination-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px 8px; max-width: 100%; margin-inline-start: auto; }
 .reader-pagination-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
 .reader-page-control { display: inline-flex; min-height: 44px; min-width: 44px; align-items: center; justify-content: center; gap: 4px; padding-inline: 8px; border-radius: var(--radius-tile); font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink); }
@@ -162,7 +162,7 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 }
 
 /* ---------------------------------------------------------------------------
-   Design tokens: warm off-white paper, ink text, one teal accent (cyan in
+   Design tokens: warm off-white paper, ink text, one blue accent (lighter in
    dark), hairline borders, no gradients.
    Components use the semantic names below; values change per theme only.
    --------------------------------------------------------------------------- */
@@ -262,10 +262,10 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
   --line: #dfe4e1;
   --line-strong: #d1d9d5;
   --line-soft: #e9ede9;
-  --accent: #176b75;
-  --accent-ink: #145f68;
-  --accent-soft: rgba(23, 107, 117, 0.08);
-  --accent-softer: rgba(23, 107, 117, 0.05);
+  --accent: #0062df;
+  --accent-ink: #005bd1;
+  --accent-soft: #eaf2ff;
+  --accent-softer: rgba(0, 98, 223, 0.05);
   --accent-contrast: #ffffff;
   --note: #526f72;
   --hot: #b3402a;
@@ -295,7 +295,7 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
   --code-title: #6f42c1;
   --code-variable: #a13d10;
   --code-meta: #b42348;
-  --selection: rgba(23, 107, 117, 0.16);
+  --selection: rgba(0, 98, 223, 0.16);
 }
 
 @media (min-width: 961px) {
@@ -322,10 +322,10 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.12);
   --line-soft: rgba(255, 255, 255, 0.06);
-  --accent: #12ccd8;
-  --accent-ink: #2ce2e8;
-  --accent-soft: rgba(18, 204, 216, 0.12);
-  --accent-softer: rgba(18, 204, 216, 0.06);
+  --accent: #70adff;
+  --accent-ink: #94c2ff;
+  --accent-soft: rgba(112, 173, 255, 0.12);
+  --accent-softer: rgba(112, 173, 255, 0.06);
   --accent-contrast: #000000;
   --note: #8fb8a8;
   --hot: #d86a52;
@@ -355,7 +355,7 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
   --code-title: #ab9df2;
   --code-variable: #fc9867;
   --code-meta: #ff6188;
-  --selection: rgba(18, 204, 216, 0.22);
+  --selection: rgba(112, 173, 255, 0.22);
 }
 
 @layer base {

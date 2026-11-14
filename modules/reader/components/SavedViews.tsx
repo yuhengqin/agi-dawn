@@ -7,7 +7,7 @@ import {readerViewQueryKeys as keys} from "../contracts.ts";
 const base="/api/admin/reader/views";
 const control="mt-1 block min-h-12 w-full min-w-0 rounded-control border border-line bg-surface px-3 text-base focus-visible:outline-2 focus-visible:outline-accent";
 const button="min-h-12 rounded-control border border-line px-4 disabled:opacity-50";
-const primary="min-h-12 rounded-control bg-accent px-4 text-white disabled:opacity-50";
+const primary="min-h-12 rounded-control bg-accent px-4 text-accent-contrast disabled:opacity-50";
 const statuses={"to-read":"待读",reading:"在读",read:"已读"};
 function href(filters:ReaderViewQuery){const query=new URLSearchParams();for(const key of keys)if(filters[key])query.set(key,filters[key]!);return "/admin/reader"+(query.size?"?"+query:"");}
 export function describeLibraryQuery(q:ReaderViewQuery,catalog:LibraryFilters){return [q.q&&"关键词："+q.q,q.sourceId&&"来源："+(catalog.sources.find(s=>s.id===q.sourceId)?.name??q.sourceId),q.category&&"类别："+(catalog.categories.find(c=>c.id===q.category)?.name??q.category),q.topic&&"主题："+(catalog.topics.find(t=>t.slug===q.topic)?.name??q.topic),q.starred&&"收藏："+(q.starred==="true"?"已收藏":"未收藏"),q.status&&"阅读状态："+statuses[q.status],q.hasNote&&"笔记："+(q.hasNote==="true"?"有笔记":"无笔记"),q.sort==='note-updated'&&"排序：笔记最近更新",(q.dateFrom||q.dateTo)&&`${q.dateField==='note-updated'?'笔记更新':'收录'}日期（北京时间）：${q.dateFrom??'不限'} 至 ${q.dateTo??'不限'}`].filter(Boolean).join("；")||"全部文章";}

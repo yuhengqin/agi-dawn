@@ -6,6 +6,10 @@
 
 `ARTICLE_FOOTER.hideActionsForSources` 按稳定来源 ID 隐藏普通文章文末的来源、原文入口与点赞一行，当前为 `geoffrey-huntley`。页首信息、文末主题、继续阅读和私人阅读区保持；更改后重新构建并重启 web。
 
+## 界面配色
+
+界面采用蓝色强调色，沿用现有布局与明暗切换。`apps/web/app/app.css` 的共享变量控制侧栏、链接、目录、按钮、筛选、分页与文本选区；浅色使用 `#0062df` 和 `#eaf2ff` 选中底色，深色使用 `#70adff`，实心按钮文字跟随 `--accent-contrast`。配色参考[掘金文章页](https://juejin.cn/post/7663822459978137646)，文字蓝色适当加深以保证小字号对比度。修改后重新构建并重启 web，无需迁移数据库。
+
 ## 分类与主题
 
 管理员从 `/admin/reader/taxonomy` 的“分类与主题管理”页维护两个目录。分类区块为 `#categories`，主题区块为 `#topics`。旧 `/admin/reader/categories` 和 `/admin/reader/topics` 链接分别转到对应区块。
