@@ -120,7 +120,7 @@ node scripts/smoke.ts --base http://localhost:3000
 
 ### 服务管理
 
-本次Linux工作副本使用systemd用户服务托管API、生产构建web和worker，复用现有 `article-reader-pg` 容器。它是本机运行方式，始终绑定127.0.0.1，不开放公网端口。
+本次Linux工作副本使用systemd用户服务托管API、生产构建web和worker，复用现有 `article-reader-pg` 容器。服务进程绑定127.0.0.1；公网可达性仍取决于本机隧道与反向代理配置，回环地址不能阻止这些进程转入的请求。3000 端口的 Vite 开发服务仅供本机调试，不配置 FRP 等公网转发。
 
 本机生产网页使用 `http://localhost:4040`，API仍使用 `http://127.0.0.1:3001`，独立开发网页保留3000端口。生产web的systemd覆盖文件 `~/.config/systemd/user/agi-dawn-web.service.d/ports.conf` 设置 `WEB_PORT=4040 SITE_URL=http://localhost:4040`；私有 `.env` 的 `SITE_URL` 同步为该生产地址，使API和worker生成的链接一致。修改覆盖文件后执行 `systemctl --user daemon-reload`，重新构建web并重启生产API、web和worker；就绪后执行 `node scripts/smoke.ts --base http://localhost:4040`。独立开发服务不需要随生产更新重启。
 

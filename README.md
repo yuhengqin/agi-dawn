@@ -41,6 +41,8 @@ npm run dev:web
 
 打开 [localhost:3000](http://localhost:3000)，后台入口为 [localhost:3000/admin](http://localhost:3000/admin)。使用 `.env` 中的 `ADMIN_PASSWORD` 登录。新库默认关闭采集、模型调用和外部推送，初始化后的文章列表可以为空。当前站主的常驻实例使用 4040 端口，其他安装仍以各自配置为准。见 [本机常驻运行](docs/deploy.md#本机常驻运行)。
 
+3000 端口的 Vite 开发服务仅供本机调试，不配置 FRP 等公网隧道转发。
+
 准备常驻运行或验证生产构建时，执行 `npm run build -w @agidawn/web`。
 
 ### 交给编码 Agent 安装
