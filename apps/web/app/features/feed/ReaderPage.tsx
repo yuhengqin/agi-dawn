@@ -1,6 +1,7 @@
-import { Link } from "react-router";
-import { useRef } from "react";
-import { matchRanges, searchWords } from "@agidawn/contracts/search";
+import { Link, useLocation } from "react-router";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { matchRanges, searchSnippet, searchWords, visibleSummaryPrefix } from "@agidawn/contracts/search";
+import type { ReaderItemSummary, ReaderMatch } from "@agidawn/contracts/site";
 import type { ReaderPageData } from "./reader.server";
 import { ReaderFilters,ReaderToolbar } from "./ReaderFilters";
 import { PhoneBar } from "../../components/shell/PhoneBar";
@@ -29,10 +30,94 @@ export function readerMeta(value:ReaderPageData|undefined){
 }
 
 const recoveryLink="inline-flex min-h-10 items-center text-sm text-accent underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+const matchFieldLabels={title:'标题',summary:'摘要',source:'来源',topic:'主题',body:'正文'} as const;
+
+function ReaderFeedRow({item,query,words,target,listReturn}:{
+  item:ReaderItemSummary;query:Record<string,string>;words:readonly string[];target:Record<string,string>;listReturn?:{idx:number;to:string};
+}){
+  const title=item.metadataTranslation?.title??item.title;
+  const rawSummary=item.metadataTranslation?.summary??item.summary;
+  const summary=rawSummary&&item.summaryTruncated&&!/[.!?。！？…]["'”’）)]*$/.test(rawSummary.trim())?rawSummary+'…':rawSummary;
+  const fullDisplayed=[title,summary??''].join(' ');
+  const missingFromCard=words.filter(word=>matchRanges(fullDisplayed,[word]).length===0);
+  const summaryOnlyWords=summary?words.filter(word=>matchRanges(title,[word]).length===0&&matchRanges(summary,[word]).length>0):[];
+  const ssrSummaryVisible=summary?visibleSummaryPrefix(summary,112):'';
+  const ssrClipped=summaryOnlyWords.filter(word=>matchRanges(ssrSummaryVisible,[word]).length===0);
+  const [clippedWords,setClippedWords]=useState<string[]>(ssrClipped);
+  const summaryRef=useRef<HTMLParagraphElement>(null);
+  const summaryKey=summaryOnlyWords.join('\0');
+  useLayoutEffect(()=>{
+    const el=summaryRef.current;
+    if(!el||!summaryOnlyWords.length){setClippedWords(prev=>prev.length?[]:prev);return;}
+    const check=()=>{
+      if(el.scrollHeight<=el.clientHeight+1){setClippedWords(prev=>prev.length?[]:prev);return;}
+      const box=el.getBoundingClientRect();
+      const visibleMarks=[...el.querySelectorAll('mark')].filter(mark=>{
+        const rects=[...mark.getClientRects()];
+        return rects.length>0&&rects.every(rect=>rect.top<box.bottom-2&&rect.bottom<=box.bottom+2);
+      }).map(mark=>mark.textContent??'').join(' ');
+      const next=summaryOnlyWords.filter(word=>matchRanges(visibleMarks,[word]).length===0);
+      setClippedWords(prev=>prev.length===next.length&&prev.every((word,i)=>word===next[i])?prev:next);
+    };
+    check();
+    const observer=new ResizeObserver(check);
+    observer.observe(el);
+    return()=>observer.disconnect();
+  },[summary,summaryKey]);
+  const missingWords=[...new Set([...missingFromCard,...clippedWords])];
+  const covers=(hit:ReaderMatch,need:readonly string[])=>{
+    if(matchRanges(hit.snippet,need).length>0)return true;
+    if(hit.language==='original'&&hit.snippet.includes('…')){
+      if(hit.field==='title'&&matchRanges(item.title,need).length>0)return true;
+      if(hit.field==='summary'&&item.summary&&matchRanges(item.summary,need).length>0)return true;
+    }
+    return false;
+  };
+  const shownSummaryLanguage:ReaderMatch['language']=item.metadataTranslation?.summary?'translation':'original';
+  const candidates:ReaderMatch[]=(item.matches??[]).filter(hit=>
+    hit.field==='body'||hit.field==='topic'||
+    (missingFromCard.length>0&&hit.language==='original'&&!!item.metadataTranslation&&['title','summary'].includes(hit.field)&&covers(hit,missingFromCard))||
+    (clippedWords.length>0&&hit.field==='summary'&&hit.language===shownSummaryLanguage&&matchRanges(hit.snippet,clippedWords).length>0)
+  );
+  if(clippedWords.length>0&&summary&&!candidates.some(hit=>matchRanges(hit.snippet,clippedWords).length>0)){
+    candidates.push({field:'summary',language:shownSummaryLanguage,snippet:searchSnippet(summary,clippedWords)});
+  }
+  const extra=(missingWords.length>0?candidates.find(hit=>covers(hit,missingWords)):undefined)??candidates[0];
+  const search=query.q?new URLSearchParams({q:query.q}):null;
+  if(search)for(const hit of item.matches??[]){
+    if(hit.language==='original'&&!!item.metadataTranslation&&['title','summary'].includes(hit.field)&&(missingFromCard.length===0||!covers(hit,missingFromCard)))continue;
+    search.append('match',`${hit.field}:${hit.language}`);
+  }
+  return <li className="reader-feed-row"><article>
+    <Link viewTransition to={`/items/${item.id}${search?'?'+search:''}`} state={listReturn?{returnToList:listReturn}:undefined} aria-label={title} draggable={false} className="reader-feed-entry">
+      <h2 className="reader-feed-title"><SearchHighlight text={title} query={query.q}/></h2>
+      {summary&&<p ref={summaryRef} className="reader-feed-summary"><SearchHighlight text={summary} query={query.q}/></p>}
+      {extra&&<p className="reader-search-match">{matchFieldLabels[extra.field]}{extra.language==='translation'?'译文':'原文'}命中：<SearchHighlight text={extra.snippet} query={query.q}/></p>}
+    </Link>
+    <div className="reader-feed-meta flex flex-col gap-x-6 gap-y-1 text-ink-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1"><Link className="reader-meta-item hover:underline" to={readerLink(target,{sourceId:item.source.id})}><IconDoc size={15}/><span>{item.source.name}</span></Link>
+        <time className="reader-meta-item whitespace-nowrap" dateTime={item.publishedAt??item.discoveredAt} title={item.publishedAt?'发布时间':'收录时间'}><IconCalendar size={15}/><span>{item.publishedAt?'':'收录于 '}{readerDate(item.publishedAt??item.discoveredAt)}</span></time>
+        {item.readingMinutes&&<span className="reader-meta-item whitespace-nowrap"><IconClock size={15}/><span>约 {item.readingMinutes} 分钟</span></span>}
+        {item.bodyState.status==='pending'&&<span className="reader-body-status">全文暂未就绪</span>}
+        {item.bodyState.status==='partial'&&item.bodyState.issues.some(issue=>issue.kind!=='missing-figure')&&<span className="reader-body-status" title="正文有缺失，请对照原文">正文不完整</span>}
+        {(item.bodyState.status==='not-permitted'||item.bodyState.status==='unavailable')&&!item.readingMinutes&&<span className="reader-body-status" title="本站仅提供摘要，点击进入后可前往原文阅读">仅摘要</span>}
+      </div>
+      <ArticleEngagementBar item={item} compact/>
+    </div>
+  </article></li>;
+}
 
 export function ReaderPage({page,sources,topics,categories,query,latestArticleDate}:ReaderPageData) {
+  const location=useLocation();
   const datePickerTrigger=useRef<HTMLElement>(null);
   const target=useReaderQuery(query);
+  const rawIdx=typeof window!=='undefined'?(window.history.state as {idx?:unknown}|null)?.idx:undefined;
+  const [syncedIdx,setSyncedIdx]=useState<number|undefined>(typeof rawIdx==='number'?rawIdx:undefined);
+  useEffect(()=>{
+    const idx=(window.history.state as {idx?:unknown}|null)?.idx;
+    if(typeof idx==='number')setSyncedIdx(idx);
+  },[location.key,location.pathname,location.search,location.hash]);
+  const listReturn=typeof window!=='undefined'?{idx:(typeof rawIdx==='number'?rawIdx:syncedIdx)??0,to:location.pathname+location.search}:undefined;
   const hasDates=!!(query.from||query.to);
   const activeFilters=[query.category,query.topic,query.sourceId,query.q].filter(Boolean).length;
   const hasRecoveryLinks=!!(query.sourceId||query.q||(!hasDates&&(query.category||query.topic)));
@@ -67,30 +152,7 @@ export function ReaderPage({page,sources,topics,categories,query,latestArticleDa
         {!hasDates&&activeFilters>=2&&<Link to={readerLink(target.limit?{limit:target.limit}:{},{})} className={recoveryLink}>清除全部筛选</Link>}
       </div>}
     </div>:<ol className="divide-y divide-line border-b border-line">
-      {page.items.map(item=>{const title=item.metadataTranslation?.title??item.title,rawSummary=item.metadataTranslation?.summary??item.summary;
-        const summary=rawSummary&&item.summaryTruncated&&!/[.!?。！？…]["'”’）)]*$/.test(rawSummary.trim())?rawSummary+'…':rawSummary;
-        const displayed=[title,summary??''].join(' ');
-        const allVisible=words.length>0&&words.every(word=>matchRanges(displayed,[word]).length>0);
-        const extra=item.matches?.find(hit=>hit.field==='body'||hit.field==='topic'||(!allVisible&&hit.language==='original'&&!!item.metadataTranslation&&['title','summary'].includes(hit.field)));
-        const search=query.q?new URLSearchParams({q:query.q}):null;
-        if(search)for(const hit of item.matches??[])search.append('match',`${hit.field}:${hit.language}`);
-        return <li key={item.id} className="reader-feed-row"><article>
-        <Link viewTransition to={`/items/${item.id}${search?'?'+search:''}`} aria-label={title} draggable={false} className="reader-feed-entry">
-          <h2 className="reader-feed-title"><SearchHighlight text={title} query={query.q}/></h2>
-          {summary&&<p className="reader-feed-summary"><SearchHighlight text={summary} query={query.q}/></p>}
-          {extra&&<p className="reader-search-match">{({title:'标题',summary:'摘要',source:'来源',topic:'主题',body:'正文'})[extra.field]}{extra.language==='translation'?'译文':'原文'}命中：<SearchHighlight text={extra.snippet} query={query.q}/></p>}
-        </Link>
-        <div className="reader-feed-meta flex flex-col gap-x-6 gap-y-1 text-ink-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1"><Link className="reader-meta-item hover:underline" to={readerLink(target,{sourceId:item.source.id})}><IconDoc size={15}/><span>{item.source.name}</span></Link>
-            <time className="reader-meta-item whitespace-nowrap" dateTime={item.publishedAt??item.discoveredAt} title={item.publishedAt?'发布时间':'收录时间'}><IconCalendar size={15}/><span>{item.publishedAt?'':'收录于 '}{readerDate(item.publishedAt??item.discoveredAt)}</span></time>
-            {item.readingMinutes&&<span className="reader-meta-item whitespace-nowrap"><IconClock size={15}/><span>约 {item.readingMinutes} 分钟</span></span>}
-            {item.bodyState.status==='pending'&&<span className="reader-body-status">全文暂未就绪</span>}
-            {item.bodyState.status==='partial'&&item.bodyState.issues.some(issue=>issue.kind!=='missing-figure')&&<span className="reader-body-status" title="正文有缺失，请对照原文">正文不完整</span>}
-            {(item.bodyState.status==='not-permitted'||item.bodyState.status==='unavailable')&&!item.readingMinutes&&<span className="reader-body-status" title="本站仅提供摘要，点击进入后可前往原文阅读">仅摘要</span>}
-          </div>
-          <ArticleEngagementBar item={item} compact/>
-        </div>
-      </article></li>;})}
+      {page.items.map(item=><ReaderFeedRow key={item.id} item={item} query={query} words={words} target={target} listReturn={listReturn}/>)}
     </ol>}
     </EngagementProvider>
     {page.total>0&&<ReaderPagination {...{page,query}}/>}

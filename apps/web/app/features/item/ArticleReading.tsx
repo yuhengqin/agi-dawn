@@ -120,7 +120,7 @@ export function MobileArticleOutline(props:OutlineProps&{progress:number}){
   },[]);
   return <details ref={details} onToggle={fit} className="article-mobile-outline lg:hidden" onBlur={event=>{if(event.relatedTarget&&!event.currentTarget.contains(event.relatedTarget as Node))event.currentTarget.open=false;}}>
     <summary aria-label="展开文章目录" className="flex min-h-11 cursor-pointer items-center gap-2 text-[13px]"><span className="shrink-0 font-medium">本文目录</span><span className="min-w-0 flex-1 truncate text-ink-3">{props.outline.find(entry=>entry.id===props.current)?.text??'文章开头'}</span><span className="tabular-nums text-ink-3" aria-hidden="true">{props.progress}%</span><IconChevronDown size={14}/></summary>
-    <nav aria-label="手机文章目录" className="article-mobile-outline-panel scrollbar-thin"><OutlineLinks {...props} navigate={id=>{if(details.current)details.current.open=false;props.navigate(id);}}/></nav>
+    <nav aria-label="折叠文章目录" className="article-mobile-outline-panel scrollbar-thin"><OutlineLinks {...props} navigate={id=>{if(details.current)details.current.open=false;props.navigate(id);}}/></nav>
   </details>;
 }
 

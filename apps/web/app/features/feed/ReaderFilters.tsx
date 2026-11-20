@@ -17,7 +17,7 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
   const [draft,setDraft]=useState(query.q??''),[focused,setFocused]=useState(false),[recentOpen,setRecentOpen]=useState(false);
   const recentSearches=useRecentSearches();
   const container=useRef<HTMLDivElement>(null),input=useRef<HTMLInputElement>(null),timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
-  const composing=useRef(false),submitted=useRef<string|null>(null),editedFor=useRef<string|null>(null);
+  const composing=useRef(false),submitted=useRef<string|null>(null),editedFor=useRef<string|null>(null),suppressOpenOnFocus=useRef(false);
   const target=useReaderQuery(query),latestQuery=useRef(target);
   useLayoutEffect(()=>{latestQuery.current=target;},[target]);
   const cancel=()=>{clearTimeout(timer.current);timer.current=undefined;};
@@ -66,19 +66,20 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
     onBlur={event=>{if(!event.relatedTarget||!event.currentTarget.contains(event.relatedTarget as Node))setRecentOpen(false);}}
     onKeyDown={event=>{
       if(event.key==='Escape'&&!event.nativeEvent.isComposing&&!composing.current&&showRecent&&document.activeElement!==input.current){
-        event.preventDefault();event.stopPropagation();setRecentOpen(false);input.current?.focus();
+        event.preventDefault();event.stopPropagation();suppressOpenOnFocus.current=true;setRecentOpen(false);input.current?.focus();
       }
     }}>
     <Form role="search" method="get" action="/" className="flex min-w-0 items-center gap-1 rounded-control border border-line bg-surface pl-3 pr-0.5 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent"
       onSubmit={event=>{event.preventDefault();if(!composing.current){const value=draft;search(value,false);setRecentOpen(false);if(value.trim())addRecentSearch(value);}}}>
       <PreservedFilters query={query} except={['q']}/>
       <input ref={input} aria-label="搜索文章" className="reader-search-input min-h-10 w-full min-w-0 bg-transparent text-base text-ink outline-none sm:text-sm" type="search" name="q" maxLength={200} value={draft} placeholder="搜索文章"
-        onFocus={()=>{setFocused(true);setRecentOpen(true);}}
+        onFocus={()=>{setFocused(true);if(suppressOpenOnFocus.current)suppressOpenOnFocus.current=false;else setRecentOpen(true);}}
         onBlur={()=>setFocused(false)}
         onClick={()=>setRecentOpen(true)}
         onKeyDown={event=>{
           if(event.key==='Escape'&&!event.nativeEvent.isComposing&&!composing.current){
-            if(showRecent){event.preventDefault();event.stopPropagation();setRecentOpen(false);}
+            event.preventDefault();
+            if(showRecent){event.stopPropagation();setRecentOpen(false);}
             else input.current?.blur();
           }
         }}
@@ -90,7 +91,7 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
     {showRecent&&<div className="reader-recent-searches" aria-label="最近搜索">
       <div className="reader-recent-searches-header">
         <span>最近搜索</span>
-        <button type="button" className="reader-recent-searches-clear" onMouseDown={event=>event.preventDefault()} onClick={()=>{clearRecentSearches();setRecentOpen(false);input.current?.focus();}}>清空历史</button>
+        <button type="button" className="reader-recent-searches-clear" onMouseDown={event=>event.preventDefault()} onClick={()=>{suppressOpenOnFocus.current=true;clearRecentSearches();setRecentOpen(false);input.current?.focus();}}>清空历史</button>
       </div>
       <div className="reader-recent-searches-list">
         {recentSearches.map(term=><button key={term} type="button" className="reader-recent-search-item" onMouseDown={event=>event.preventDefault()} onClick={()=>{setDraft(term);addRecentSearch(term);setRecentOpen(false);search(term,false);}}>{term}</button>)}

@@ -7,6 +7,7 @@ import type { LightboxImage } from "../../components/ui/Lightbox";
 import { IconCheck, IconChevronDown, IconCopy } from "../../components/icons";
 import { copyText } from "../../lib/clipboard";
 import { declaredLanguage, isPlainLanguage, languageLabel } from "./code-language";
+import katexCssUrl from "katex/dist/katex.min.css?url";
 
 const LazyLightbox = lazy(() => import("../../components/ui/Lightbox").then((m) => ({ default: m.Lightbox })));
 
@@ -146,7 +147,9 @@ function enhanceCode(root: HTMLElement, prefix: string): { controls: CodeControl
 
 export function ArticleBody({ html }: { html: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const prefix = useId();
+  const hasKatex = html.includes('data-reader-math="katex"');
   const [codeControls, setCodeControls] = useState<CodeControls[]>([]);
   const [images, setImages] = useState<LightboxImage[]>([]);
   const [open, setOpen] = useState<number | null>(null);
@@ -163,7 +166,6 @@ export function ArticleBody({ html }: { html: string }) {
     setOpen(null);
     const root = ref.current;
     if (!root) return;
-    if (root.querySelector('[data-reader-math="katex"]')) void import("./katex");
     for (const anchor of root.querySelectorAll<HTMLAnchorElement>("a[href]")) {
       if (anchor.closest("pre")) continue;
       const raw = anchor.getAttribute("href")?.trim();
@@ -210,6 +212,7 @@ export function ArticleBody({ html }: { html: string }) {
       if (index < 0) return;
       e.preventDefault();
       e.stopPropagation();
+      opener.current = img;
       setLightboxLoaded(true);
       setImages(list.map((i) => ({
         src: i.src,
@@ -233,9 +236,10 @@ export function ArticleBody({ html }: { html: string }) {
   }, [html]);
   return (
     <>
+      {hasKatex && <link rel="stylesheet" href={katexCssUrl} precedence="default" />}
       <div ref={ref} className="prose article-prose" dangerouslySetInnerHTML={{ __html: html }} />
       {codeControls.map(control => createPortal(<CodeBlockTools {...control}/>, control.tools, control.id))}
-      {lightboxLoaded && <Suspense fallback={null}><LazyLightbox images={images} index={open} onIndex={setOpen} onClose={() => setOpen(null)} /></Suspense>}
+      {lightboxLoaded && <Suspense fallback={null}><LazyLightbox images={images} index={open} onIndex={setOpen} onClose={() => setOpen(null)} returnFocus={opener} /></Suspense>}
     </>
   );
 }

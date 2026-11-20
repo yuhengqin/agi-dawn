@@ -1,6 +1,6 @@
 import {sql} from '../db.ts';
 import type postgres from 'postgres';
-import {matchRanges} from '@agidawn/contracts/search';
+export {searchSnippet} from '@agidawn/contracts/search';
 export type SearchSql=postgres.PendingQuery<postgres.Row[]>;
 
 // The whitespace characters normalized by collapseWhitespace in displayed metadata.
@@ -53,9 +53,4 @@ export function metadataSearchText(value:SearchSql,source:SearchSql):SearchSql{
     ELSE '' END,'' ORDER BY ordinal),''),'[[:space:]]+',' ','g'))
     FROM (SELECT parts,ordinal,row_number() OVER(PARTITION BY parts[1] ORDER BY ordinal) AS occurrence
       FROM regexp_matches(${value},${tokens},'g') WITH ORDINALITY AS token(parts,ordinal)) AS values) END`;
-}
-export function searchSnippet(text:string,words:readonly string[]):string{
-  const first=matchRanges(text,words)[0]?.start??0,chars=[...text],start=Math.max(0,[...text.slice(0,first)].length-45);
-  const prefix=start?'…':'',room=160-prefix.length,suffix=chars.length-start>room?'…':'';
-  return prefix+chars.slice(start,start+room-suffix.length).join('')+suffix;
 }

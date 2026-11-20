@@ -69,7 +69,7 @@ export default defineConfig({
           groups: [
             { name: "framework", test: /node_modules[\\/](?:react|react-dom|scheduler|react-router|@react-router|cookie|set-cookie-parser|turbo-stream)[\\/]/, priority: 30 },
             { name: "motion", test: /node_modules[\\/](?:motion|framer-motion|motion-dom|motion-utils)[\\/]/, priority: 20 },
-            { name: "shared", test: /apps[\\/]web[\\/]app[\\/](?:(?!features[\\/]|routes[\\/])|features[\\/]search[\\/])|[\\/](?:industry|site)[\\/]/, minShareCount: 2, priority: 10 },
+            { name: "shared", test: /apps[\\/]web[\\/]app[\\/](?:(?!features[\\/]|routes[\\/]|components[\\/]ui[\\/](?:Menu|Lightbox|image-zoom)\.)|features[\\/]search[\\/])|[\\/](?:industry|site)[\\/]/, minShareCount: 2, priority: 10 },
             { name: "feed", test: /apps[\\/]web[\\/]app[\\/]features[\\/](?:feed[\\/]|hot[\\/]|item[\\/]preview\.)/, minShareCount: 2, priority: 10 },
           ],
         },

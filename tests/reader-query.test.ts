@@ -300,3 +300,34 @@ test("anonymous engagement accepts the SSH-forwarded origin and rejects cross-or
     assert.deepEqual((await app.inject({url:'/api/site/engagement?ids='+id,headers:{host,cookie}})).json().items,[{id,views:1,likes:0,liked:false}]);
   }finally{await app.close();}
 });
+
+test('public search preserves 128-char keywords in snippets and centers multi-word hits past clamped summary lines',async()=>{
+  const {installModules,serverModules}=await import('@agidawn/backend/modules'),{default:reader}=await import('../modules/reader/server.ts');
+  const {matchRanges}=await import('@agidawn/contracts/search');
+  const installed=serverModules();installModules([reader]);
+  try{
+    const sourceId='long-keyword-and-clamped-summary';
+    await sql`INSERT INTO sources(id,name,kind) VALUES(${sourceId},'Snippet regression','rss')`;
+    const longWord='k'.repeat(128);
+    const longSummary=`Leading English context before the very long identifier ${longWord} followed by trailing context that makes the summary exceed one hundred and sixty characters easily.`;
+    const {articleId:longId}=await upsertMaterial({sourceId,title:'Long Token Article',excerpt:longSummary,url:'https://example.org/long-token',via:'fetch'});
+    await sql`INSERT INTO reader_metadata_translations(article_id,source_title,source_summary,title,summary,status)
+      VALUES(${longId},'Long Token Article',${longSummary},'超长关键词测试文章','中文摘要不包含该超长英文标识符。','translated')`;
+    const longPage=await pool.loadReaderList({sourceId,q:longWord});
+    assert.equal(longPage.total,1);
+    const origHit=longPage.items[0]!.matches?.find(hit=>hit.field==='summary'&&hit.language==='original');
+    assert.ok(origHit,'original summary match is returned');
+    assert.ok(origHit.snippet.includes(longWord),'128-char keyword must not be truncated inside snippet');
+    assert.ok(matchRanges(origHit.snippet,[longWord]).length>0,'frontend matchRanges must still match the full 128-char keyword');
+
+    const longZhSummary='这里是一段超过两行显示上限的中文摘要，前半部分讨论模型架构、推理调度、上下文工程、评测基准以及生产部署细节，特意让前八十个汉字都不出现第二个检索词，直到末尾才提到 Rust 内存安全实践。';
+    const {articleId:clippedId}=await upsertMaterial({sourceId,title:'Claude Guide',excerpt:'Deep dive into systems engineering and Rust safety.',url:'https://example.org/claude-clipped',via:'fetch'});
+    await sql`INSERT INTO reader_metadata_translations(article_id,source_title,source_summary,title,summary,status)
+      VALUES(${clippedId},'Claude Guide','Deep dive into systems engineering and Rust safety.','用 Claude 做工程',${longZhSummary},'translated')`;
+    const clippedPage=await pool.loadReaderList({sourceId,q:'Claude Rust'});
+    assert.equal(clippedPage.total,1);
+    const zhSummaryHit=clippedPage.items[0]!.matches?.find(hit=>hit.field==='summary'&&hit.language==='translation');
+    assert.ok(zhSummaryHit,'translated summary match is returned');
+    assert.ok(zhSummaryHit.snippet.includes('Rust'),'summary snippet centers on the word hidden past line 2');
+  }finally{installModules(installed);}
+});

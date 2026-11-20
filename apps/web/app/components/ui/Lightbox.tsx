@@ -1,4 +1,4 @@
-import { useEffect,useLayoutEffect,useRef,useState } from "react";
+import { useEffect,useLayoutEffect,useRef,useState,type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { createImageZoom } from "./image-zoom";
 import { useModal } from "./modal";
@@ -17,10 +17,14 @@ export interface LightboxImage {
  * between pictures; closing puts focus back where it was. On touch screens a picture follows the finger:
  * sideways to the next or previous one, down to close; two fingers zoom as the browser does.
  */
-export function Lightbox({ images, index, onIndex, onClose }: { images: LightboxImage[]; index: number | null; onIndex: (i: number) => void; onClose: () => void }) {
+export function Lightbox({ images, index, onIndex, onClose, returnFocus }: { images: LightboxImage[]; index: number | null; onIndex: (i: number) => void; onClose: () => void; returnFocus?: RefObject<HTMLElement | null> }) {
   const open = index !== null && !!images[index];
   const current = open ? images[index!]! : null;
   const many = images.length > 1;
+  const fallbackOpener = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+  if (open && !wasOpen.current) fallbackOpener.current = current?.source ?? null;
+  wasOpen.current = open;
   const [phase,setPhase]=useState<'opening'|'open'|'closing'>('opening');
   const motion=useRef<ReturnType<typeof createImageZoom>|null>(null),layer=useRef<HTMLDivElement>(null),closing=useRef(false),generation=useRef(0);
   const [zoom,setZoom]=useState<number|null>(null),[dimensions,setDimensions]=useState({width:0,height:0}),[viewport,setViewport]=useState({width:0,height:0});
@@ -87,10 +91,13 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
     const onWheel=(event:WheelEvent)=>{
       const currentState=wheelState.current;
       if(currentState.phase!=='open'||!currentState.fit||event.deltaY===0)return;
-      if(!currentState.enlarged&&event.deltaY>0)return;
-      if(!(event.ctrlKey||event.metaKey||!currentState.enlarged))return;
+      if(!event.ctrlKey&&!event.metaKey&&Math.abs(event.deltaX)>Math.abs(event.deltaY))return;
       event.preventDefault();
-      currentState.resize(event.deltaY<0?currentState.scale*1.25:(currentState.scale/1.25<=currentState.fit+0.001?null:currentState.scale/1.25));
+      if(event.deltaY<0){
+        if(currentState.scale<4)currentState.resize(currentState.scale*1.25);
+      }else if(currentState.enlarged){
+        currentState.resize(currentState.scale/1.25<=currentState.fit+0.001?null:currentState.scale/1.25);
+      }
     };
     box.addEventListener('wheel',onWheel,{passive:false});
     return()=>box.removeEventListener('wheel',onWheel);
@@ -100,6 +107,7 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
     open,
     panel: dialog,
     initialFocus: closeButton,
+    returnFocus: returnFocus ?? fallbackOpener,
     onClose:close,
     onKeyDown: (e) => {
       if(phase!=='open')return;

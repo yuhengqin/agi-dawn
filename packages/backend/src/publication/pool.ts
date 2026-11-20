@@ -4,7 +4,7 @@ import {sql,type Db} from "../db.ts";
 import {findTopic} from "./topics.ts";
 import {READER_COLUMNS,READER_FROM,toReaderItem,withReaderMetadata,type ReaderRow} from "./items.ts";
 import {shared} from "../lib/cache.ts";
-import {searchWords,matchRanges} from '@agidawn/contracts/search';
+import {searchWords,matchRanges,visibleSummaryPrefix} from '@agidawn/contracts/search';
 import type {ReaderMatch,ReaderMetadataTranslation} from '@agidawn/contracts/site';
 import {searchSnippet} from './search-text.ts';
 import {readerFilters,ReaderQueryError,withSearchCapacity} from './query.ts';
@@ -43,11 +43,16 @@ export async function loadReaderList(query:ReaderListQuery):Promise<ReaderListPa
   for(const row of content)if(row.translated_title)translations.set(row.id,{title:row.translated_title,summary:row.translated_summary});
   const items=await withReaderMetadata(content.map(toReaderItem),translations);
   for(const [index,item] of items.entries())if(words.length){
-    const row=content[index]!,fields:Array<[ReaderMatch['field'],ReaderMatch['language'],string|null]>=[
+    const row=content[index]!,shownTitle=item.metadataTranslation?.title??item.title,shownSummary=item.metadataTranslation?.summary??item.summary??'';
+    const displayed=[shownTitle,visibleSummaryPrefix(shownSummary,70)].join(' ');
+    const missing=words.filter(word=>matchRanges(displayed,[word]).length===0);
+    const fields:Array<[ReaderMatch['field'],ReaderMatch['language'],string|null]>=[
       ['title','translation',item.metadataTranslation?.title??null],['summary','translation',item.metadataTranslation?.summary??null],
       ['title','original',item.title],['summary','original',item.summary],['source','original',item.source.name],['topic','original',row.topic_names],
       ['body','translation',row.translated_body],['body','original',row.search_body]];
-    item.matches=fields.filter(([, ,text])=>text&&matchRanges(text,words).length).map(([field,language,text])=>({field,language,snippet:searchSnippet(text!,words)}));
+    item.matches=fields.filter(([, ,text])=>text&&matchRanges(text,words).length).map(([field,language,text])=>({
+      field,language,snippet:searchSnippet(text!,missing.length&&matchRanges(text!,missing).length?missing:words),
+    }));
   }
   return {items,total:summary.total,page:summary.page,limit,pageCount:summary.page_count};
 }

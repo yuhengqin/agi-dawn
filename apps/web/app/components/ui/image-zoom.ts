@@ -69,6 +69,7 @@ export function createImageZoom(source:HTMLImageElement,picture:HTMLImageElement
     for(const [image,visibility] of hidden)image.style.visibility=visibility;
     hidden.clear();
     if(session){
+      session.source.classList.remove('medium-zoom-image--hidden');
       session.clone.style.visibility='hidden';
       session.clone.style.setProperty('transition','none','important');
       void session.zoom.close();

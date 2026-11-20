@@ -47,14 +47,14 @@ function SideLink({ item, dot = false, collapsed = false, dialogOpener }: {
     "aria-description": unread ? "有新的更新" : undefined,
     "data-active": isActive || inArticle,
     title: collapsed ? item.label : undefined,
-    className: `${linkClass} ${collapsed ? "justify-center" : ""}`,
+    className: `${linkClass} sidebar-nav-link ${collapsed ? "justify-center" : ""}`,
   };
   const content = <>
       <span className="flex w-5 shrink-0 justify-center">
         <Icon size={17} />
       </span>
-      <span className={collapsed ? "sr-only" : "min-w-0 truncate"}>{item.label}</span>
-      {unread && <span className="ml-auto">{footerDot}</span>}
+      <span className={collapsed ? "sr-only" : "sidebar-nav-label min-w-0 truncate"}>{item.label}</span>
+      {unread && <span className="sidebar-expanded-only ml-auto">{footerDot}</span>}
   </>;
   return dialogOpener
     ? <InfoLink {...props} opener={dialogOpener} aria-haspopup={isActive ? undefined : "dialog"}>{content}</InfoLink>
@@ -84,8 +84,8 @@ function SidebarOptions({ items, dot, collapsed }: { items: NavItem[]; dot: bool
           <IconUser size={18} />
           {collapsed && dot && <span className="absolute -right-1 -top-1">{footerDot}</span>}
         </span>
-        <span className={collapsed ? "sr-only" : "flex-1 text-left"}>我的</span>
-        {!collapsed && <>{dot && footerDot}<IconChevronDown size={15} className="sidebar-options-chevron shrink-0" /></>}
+        <span className={collapsed ? "sr-only" : "sidebar-nav-label flex-1 text-left"}>我的</span>
+        {!collapsed && <span className="sidebar-expanded-only inline-flex items-center gap-2.5">{dot && footerDot}<IconChevronDown size={15} className="sidebar-options-chevron shrink-0" /></span>}
       </button>
       <section id="sidebar-options" ref={panel} popover="auto" aria-label="我的选项" className="sidebar-options scrollbar-thin" data-collapsed={collapsed}
         onClick={event => {
@@ -139,8 +139,8 @@ export function Sidebar({ changelogVersion, categories, initiallyCategoriesColla
   const toggleLabel = collapsed ? "展开侧栏" : "收起侧栏";
   return (
     <aside id="desktop-sidebar" className="site-sidebar sticky top-0 hidden h-dvh w-[var(--desktop-sidebar-width,194px)] shrink-0 flex-col border-r border-line bg-sidebar px-2.5 pb-3 pt-4 lg:flex">
-      <div className={`mb-3 flex h-11 shrink-0 items-center ${collapsed ? "justify-center" : "justify-between gap-1 pl-1"}`}>
-        {!collapsed && <Link to="/" className="flex min-w-0 items-center text-ink" aria-label={`${SITE.name} 首页`}>
+      <div className={`sidebar-brand-row mb-3 flex h-11 shrink-0 items-center ${collapsed ? "justify-center" : "justify-between gap-1 pl-1"}`}>
+        {!collapsed && <Link to="/" className="sidebar-expanded-only flex min-w-0 items-center text-ink" aria-label={`${SITE.name} 首页`}>
           <Wordmark size={24} />
         </Link>}
         <button type="button" aria-label={toggleLabel} title={toggleLabel} aria-controls="sidebar-navigation" aria-expanded={!collapsed}
@@ -154,7 +154,7 @@ export function Sidebar({ changelogVersion, categories, initiallyCategoriesColla
           {primary?.items.map(item => <SideLink key={item.to} item={item} collapsed={collapsed} />)}
         </div>
         <div className="scrollbar-thin -mx-1 min-h-0 flex-1 overflow-y-auto px-1 pb-2">
-          {!collapsed && <div className="mt-3 border-t border-line pt-2">
+          {!collapsed && <div className="sidebar-expanded-only mt-3 border-t border-line pt-2">
             <button type="button" aria-expanded={!categoriesCollapsed} aria-controls="sidebar-categories"
               className="flex min-h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-control px-2.5 text-left text-[13px] font-medium text-ink-3 hover:bg-bg-sunk hover:text-ink"
               onClick={() => {
@@ -170,16 +170,16 @@ export function Sidebar({ changelogVersion, categories, initiallyCategoriesColla
             </div>
           </div>}
           {sections.map(section => <div key={section.title} className="mt-3 grid gap-0.5">
-            {!collapsed && <div className="px-2.5 pb-1 text-[11px] text-ink-4">{section.title}</div>}
+            {!collapsed && <div className="sidebar-expanded-only px-2.5 pb-1 text-[11px] text-ink-4">{section.title}</div>}
             {section.items.map(item => <SideLink key={item.to} item={item} collapsed={collapsed} />)}
           </div>)}
         </div>
       </nav>
-      {!collapsed && hasFilings && <SidebarFilings />}
+      {!collapsed && hasFilings && <div className="sidebar-expanded-only"><SidebarFilings /></div>}
       <SidebarOptions items={options} dot={dot} collapsed={collapsed} />
       {!collapsed && <div role="separator" aria-label="调整侧栏宽度" aria-orientation="vertical" aria-controls="desktop-sidebar"
         aria-valuemin={MIN_SIDEBAR_WIDTH} aria-valuemax={MAX_SIDEBAR_WIDTH} aria-valuenow={width} aria-valuetext={`${width} 像素`}
-        title="拖动调整侧栏宽度" tabIndex={0} className="sidebar-resize-handle"
+        title="拖动调整侧栏宽度" tabIndex={0} className="sidebar-resize-handle sidebar-expanded-only"
         onPointerDown={event => {
           if (event.button !== 0 || !event.isPrimary) return;
           drag.current = { x: event.clientX, width };

@@ -1,5 +1,5 @@
-import {data,Link,useLoaderData,useNavigate,useRouteLoaderData} from "react-router";
-import {useEffect,useState} from 'react';
+import {data,Link,useLoaderData,useLocation,useNavigate,useRouteLoaderData} from "react-router";
+import {useEffect,useRef,useState} from 'react';
 import type {Route} from "./+types/item";
 import type {loader as rootLoader} from "../root";
 import type {ReaderItemDetail} from "@agidawn/contracts/site";
@@ -30,7 +30,14 @@ export function meta({loaderData}:Route.MetaArgs){return pageMeta({title:loaderD
 const notices={pending:"全文暂未就绪。可以先阅读摘要，或访问原文。",unavailable:"暂时无法取得全文，请访问原文。",partial:"正文有缺失，请对照原文。","not-permitted":"本来源暂以摘要与原文链接展示。",ready:""};
 export default function Item(){const item=useLoaderData<typeof loader>();return <ItemReading key={item.id} item={item}/>;}
 function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useState(false),[outlineCollapsed,setOutlineCollapsed]=useState(false);
-  const navigate=useNavigate();
+  const location=useLocation(),navigate=useNavigate();
+  const historyUsr=typeof window!=='undefined'?(window.history.state as {usr?:{returnToList?:{idx?:unknown;to?:unknown}}}|null)?.usr:undefined;
+  const rawReturn=(location.state as {returnToList?:{idx?:unknown;to?:unknown}}|null)?.returnToList??historyUsr?.returnToList;
+  const parsedReturn=rawReturn&&typeof rawReturn.to==='string'&&rawReturn.to.startsWith('/')&&!rawReturn.to.startsWith('//')
+    ?{to:rawReturn.to,idx:typeof rawReturn.idx==='number'?rawReturn.idx:undefined}:null;
+  const savedReturn=useRef<{to:string;idx?:number}|null>(null);
+  if(parsedReturn)savedReturn.current=parsedReturn;
+  const listReturn=parsedReturn??savedReturn.current;
   const root=useRouteLoaderData<typeof rootLoader>('root');
   const categoryName=item.category?root?.categories?.find(category=>category.id===item.category)?.name:undefined;
   const translated=item.body?.language==='translation'?item.body:null,metadata=item.metadataTranslation,outline=item.body?.outline??[],html=item.body?.html??null;
@@ -57,7 +64,11 @@ function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useS
     <article className="public-article break-words pb-12 pt-5 lg:pt-0">
       <header className="article-heading">
         <div className="article-top-bar">
-          <Link to="/" className="article-back-link" onClick={event=>{if(!event.button&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&typeof window!=='undefined'&&(window.history.state as {idx?:number}|null)?.idx){event.preventDefault();void navigate(-1);}}}><IconArrowLeft size={15}/><span>返回列表</span></Link>
+          <Link to={listReturn?.to??'/'} className="article-back-link" onClick={event=>{
+            if(event.button||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+            const currentIdx=typeof window!=='undefined'?(window.history.state as {idx?:number}|null)?.idx:undefined;
+            if(listReturn&&typeof listReturn.idx==='number'&&typeof currentIdx==='number'&&currentIdx>listReturn.idx){event.preventDefault();void navigate(listReturn.idx-currentIdx);}
+          }}><IconArrowLeft size={15}/><span>返回列表</span></Link>
           {categoryName&&<span className="article-category-badge">{categoryName}</span>}
         </div>
         <h1 tabIndex={-1} className="article-title" data-search-content>{metadata?.title??item.title}</h1>
@@ -86,7 +97,7 @@ function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useS
       {showFooter&&<footer role="contentinfo" aria-label="文章后续阅读" className="article-footer">
         {showFooterActions&&<div className="flex flex-wrap items-center gap-x-6 gap-y-2"><Link to={`/?${new URLSearchParams({sourceId:item.source.id})}`} aria-label={`查看更多 ${item.source.name} 文章`} className="text-sm text-ink-3 hover:text-accent hover:underline">{item.source.name}</Link><a href={item.links.original} target="_blank" rel="noreferrer" aria-label="文末打开原文" className="article-tool-link text-accent">打开原文<IconExternal size={16}/></a><ArticleEngagementBar item={item} labelPrefix="文末" showViews={false}/></div>}
         {item.topics.length>0&&<nav aria-label="文末主题" className="article-topics">{item.topics.map(topic=><Link key={topic.slug} to={`/?${new URLSearchParams({topic:topic.slug})}`}>{topic.name}</Link>)}</nav>}
-        {!!item.related?.length&&<div className="article-related mt-6"><h2 className="text-sm font-medium">继续阅读</h2><ul className="article-related-list mt-3 space-y-3">{item.related.map(related=><li key={related.id} className="article-related-item"><Link viewTransition to={'/items/'+related.id} className="article-related-title text-accent hover:underline">{related.metadataTranslation?.title??related.title}</Link><div className="article-related-meta mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3"><span>{related.source.name}</span><time dateTime={related.publishedAt??related.discoveredAt}>{readerDate(related.publishedAt??related.discoveredAt)}</time>{!!related.readingMinutes&&<span>约 {related.readingMinutes} 分钟</span>}</div></li>)}</ul></div>}
+        {!!item.related?.length&&<div className="article-related mt-6"><h2 className="text-sm font-medium">继续阅读</h2><ul className="article-related-list mt-3 space-y-3">{item.related.map(related=><li key={related.id} className="article-related-item"><Link viewTransition to={'/items/'+related.id} state={listReturn?{returnToList:listReturn}:undefined} className="article-related-title text-accent hover:underline">{related.metadataTranslation?.title??related.title}</Link><div className="article-related-meta mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3"><span>{related.source.name}</span><time dateTime={related.publishedAt??related.discoveredAt}>{readerDate(related.publishedAt??related.discoveredAt)}</time>{!!related.readingMinutes&&<span>约 {related.readingMinutes} 分钟</span>}</div></li>)}</ul></div>}
       </footer>}
       {webModules().map(module=>module.articleTools?<module.articleTools key={module.name} articleId={item.id}/>:null)}
     </article>

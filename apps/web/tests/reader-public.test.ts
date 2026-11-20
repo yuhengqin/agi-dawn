@@ -1552,7 +1552,7 @@ for(const engine of [chromium,webkit])test(`article outline follows nested secti
     await page.mouse.wheel(0,80);await expect(toc.getByRole('button',{name:'展开：First chapter',exact:true})).toHaveAttribute('aria-expanded','false');
     await toc.getByRole('button',{name:'展开：First chapter',exact:true}).click();
     await page.getByRole('heading',{name:'Second chapter',exact:true}).evaluate(el=>el.scrollIntoView());await expect(toc.getByRole('link',{name:'Second chapter',exact:true})).toHaveAttribute('aria-current','location');
-    await page.setViewportSize({width:390,height:844});await page.locator('summary[aria-label="展开文章目录"]').click();const mobile=page.getByRole('navigation',{name:'手机文章目录',exact:true});
+    await page.setViewportSize({width:390,height:844});await page.locator('summary[aria-label="展开文章目录"]').click();const mobile=page.getByRole('navigation',{name:'折叠文章目录',exact:true});
     await mobile.getByRole('link',{name:'First chapter',exact:true}).click();await expect(mobile).toBeHidden();await expect(page.getByRole('heading',{name:'First chapter',exact:true})).toBeFocused();await expect(page.locator('summary[aria-label="展开文章目录"]')).toContainText('First chapter');
     await page.locator('summary[aria-label="展开文章目录"]').click();await page.keyboard.press('Escape');await expect(mobile).toBeHidden();await expect(page.locator('summary[aria-label="展开文章目录"]')).toBeFocused();
     await page.goBack();await expect(page).toHaveURL(web.origin+'/?q=reading');
@@ -2147,5 +2147,231 @@ test('desktop reading polish covers Go highlighting, no-body summary UX, search 
     await expect(page.getByRole('button',{name:'开启专注模式',exact:true})).toHaveCount(0);
     await expect(page.getByRole('link',{name:'前往原文阅读',exact:true})).toHaveAttribute('href',summaryOnly.links.original);
     await expect(page.getByRole('contentinfo',{name:'文章后续阅读'})).toHaveCount(0);
+  }finally{await browser.close();await web?.stop();}
+});
+
+test('re-fix regressions: return-to-list across related reads, continuous wheel zoom, sticky search stepper, Escape search UX, multi-word snippets, cold bundle/no-JS KaTeX and collapsed sidebar pre-hydration',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  const picture='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1200"><rect width="2400" height="1200" fill="white"/></svg>').toString('base64');
+  const longKeyword='q'.repeat(128);
+  const longOriginalSummary=`Leading English context before ${longKeyword} and trailing explanation after the long technical token.`;
+  const clippedZhSummary='这里是一段明显超过列表卡片两行截断上限的中文摘要内容，前两行专门详细描述多智能体编排、上下文管理、提示词调试、评估基准、工具调用、可观测性追踪、记忆压缩、并发调度、权限边界控制与工程化落地实践细节，确保在宽屏桌面浏览器里前两行占满一百三十多个汉字且完全不包含第二个检索关键词，直到第三行结尾才真正出现 Rust 内存安全实践。';
+  const feedItems=Array.from({length:25},(_,i)=>feedItem({
+    id:i===15?'article-a':i===16?'article-clipped':i===17?'article-long-kw':`filler-${i}`,
+    title:i===15?'Claude Guide':i===16?'Claude Engineering':i===17?'Long Keyword Article':`Filler Article ${i}`,
+    summary:i===15?'Deep dive into Rust memory safety.':i===16?'Engineering note about systems.':i===17?longOriginalSummary:'Regular summary text for list scrolling.',
+    metadataTranslation:i===15?{title:'用 Claude 构建系统',summary:'中文摘要未提及另一语言。'}
+      :i===16?{title:'用 Claude 做工程',summary:clippedZhSummary}
+      :i===17?{title:'超长关键词测试文章',summary:'中文摘要不包含该超长英文标识符。'}
+      :undefined,
+    matches:i===15?[
+      {field:'title',language:'translation',snippet:'用 Claude 构建系统'},
+      {field:'title',language:'original',snippet:'Claude Guide'},
+      {field:'summary',language:'original',snippet:'Deep dive into Rust memory safety.'},
+    ]:i===16?[
+      {field:'title',language:'translation',snippet:'用 Claude 做工程'},
+      {field:'summary',language:'translation',snippet:'…直到第三行结尾才真正出现 Rust 内存安全实践。'},
+    ]:i===17?[
+      {field:'summary',language:'original',snippet:`…context before ${longKeyword} and trailing…`},
+    ]:undefined,
+  }));
+  const longBody=Array.from({length:40},(_,i)=>`<h2 id="sec-${i}">Section ${i}</h2><p>Paragraph ${i} mentions needle here. ${'Long filler prose for scrolling. '.repeat(25)}</p>`).join('')+`<p><img src="${picture}" alt="Wheel test diagram" width="2400" height="1200"></p>`;
+  const articleA=itemDetail({
+    id:'article-a',title:'Claude Guide',metadataTranslation:{title:'用 Claude 构建系统',summary:'中文摘要未提及另一语言。'},
+    outline:Array.from({length:40},(_,i)=>({id:`sec-${i}`,text:`Section ${i}`,level:2})),
+    translation:{bodyHtml:longBody,outline:Array.from({length:40},(_,i)=>({id:`sec-${i}`,text:`Section ${i}`,level:2})),complete:true},
+    related:[feedItem({id:'article-b',title:'Article B'})],
+  });
+  const articleB=itemDetail({id:'article-b',title:'Article B',bodyHtml:'<p>Article B content.</p>'});
+  const mathArticle=itemDetail({id:'math-article',title:'Math Article',bodyHtml:'<p>Formula: <span data-reader-math="katex"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord">x</span></span></span></span></span></p>'});
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/articles')return readerPage(feedItems,url);
+      if(url.pathname==='/api/site/items/article-a')return articleA;
+      if(url.pathname==='/api/site/items/article-b')return articleB;
+      if(url.pathname==='/api/site/items/math-article')return mathArticle;
+      if(url.pathname==='/api/site/engagement')return {items:[]};
+      if(url.pathname==='/api/site/categories')return {items:[{id:'agents',name:'智能体工程'}]};
+      if(url.pathname==='/api/site/sources')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+    }));
+
+    // 1. Cold start of normal article must not download Radix DropdownMenu or KaTeX CSS.
+    const coldPage=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    const coldAssets:string[]=[];
+    coldPage.on('response',res=>{if(res.url().includes('/assets/'))coldAssets.push(res.url());});
+    await visit(coldPage,web.origin+'/items/article-b');
+    assert.ok(!coldAssets.some(u=>/katex/i.test(u)),'normal article must not fetch KaTeX CSS');
+    assert.ok(!coldAssets.some(u=>/Menu-|FigureDismissMenu-/i.test(u)),'normal article must not fetch lazy Menu chunk');
+    for(const u of coldAssets.filter(u=>u.endsWith('.js'))){
+      const text=await (await fetch(u)).text();
+      assert.ok(!text.includes('radix-dropdown')&&!text.includes('DropdownMenuContent'),`${u} must not bundle Radix DropdownMenu`);
+    }
+    await coldPage.close();
+
+    // 2. Math article with JavaScript disabled still loads KaTeX CSS in <head>.
+    const noJsContext=await browser.newContext({javaScriptEnabled:false,viewport:{width:1440,height:900}});
+    const noJsPage=await noJsContext.newPage();
+    const katexRequests:number[]=[];
+    noJsPage.on('response',res=>{if(/katex.*\.css/i.test(res.url()))katexRequests.push(res.status());});
+    await noJsPage.goto(web.origin+'/items/math-article',{waitUntil:'load'});
+    assert.ok(katexRequests.includes(200),'no-JS math article must load KaTeX stylesheet');
+    await expect(noJsPage.locator('head link[rel="stylesheet"][href*="katex"]')).toHaveCount(1);
+    const katexFont=await noJsPage.locator('.katex').evaluate(el=>getComputedStyle(el).fontFamily);
+    assert.match(katexFont,/KaTeX/i,'KaTeX CSS rules apply without JavaScript');
+    await noJsContext.close();
+
+    // 3. Delayed scripts with saved collapsed sidebar: 60px rail hides expanded controls before hydration.
+    const delayContext=await browser.newContext({viewport:{width:1440,height:900}});
+    const delayPage=await delayContext.newPage();
+    await delayPage.goto(web.origin+'/items/article-b',{waitUntil:'domcontentloaded'});
+    await delayPage.evaluate(()=>localStorage.setItem('agidawn-sidebar-v1',JSON.stringify({collapsed:true,width:220})));
+    let releaseScripts=()=>{};
+    const holdScripts=new Promise<void>(resolve=>{releaseScripts=resolve;});
+    await delayPage.route('**/*.js',async route=>{await holdScripts;await route.continue();});
+    await delayPage.goto(web.origin+'/items/article-b',{waitUntil:'domcontentloaded'});
+    const preHydration=await delayPage.evaluate(()=>{
+      const aside=document.getElementById('desktop-sidebar')!;
+      const expandedVisible=[...aside.querySelectorAll<HTMLElement>('.sidebar-expanded-only')].filter(el=>getComputedStyle(el).display!=='none').length;
+      const overflow=aside.scrollWidth>aside.clientWidth+1;
+      return {width:Math.round(aside.getBoundingClientRect().width),expandedVisible,overflow};
+    });
+    assert.equal(preHydration.width,60,'boot script sets 60px collapsed width before scripts load');
+    assert.equal(preHydration.expandedVisible,0,'expanded-only controls stay hidden before hydration');
+    assert.equal(preHydration.overflow,false,'60px rail has no horizontal overflow before hydration');
+    releaseScripts();
+    await expect(delayPage.getByRole('button',{name:'展开侧栏',exact:true})).toBeVisible();
+    await delayContext.close();
+
+    // 4. Multi-word snippet (including clamped line-3 hit & 128-char keyword), collapsed sidebar "我的" menu labels, list Escape UX, return-to-list after #main skip link, sticky search stepper in 900x480, continuous wheel zoom, keyboard Lightbox focus, 1280px outline label.
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    await visit(page,web.origin+'/?q='+encodeURIComponent('Claude Rust'));
+    const card=page.locator('main ol > li').nth(15);
+    await expect(card).toContainText('摘要原文命中：');
+    await expect(card).toContainText('Rust');
+    await expect(card).not.toContainText('标题原文命中：');
+    const clippedCard=page.locator('main ol > li').nth(16);
+    await expect(clippedCard).toContainText('摘要译文命中：');
+    await expect(clippedCard).toContainText('Rust');
+    await visit(page,web.origin+'/?q='+encodeURIComponent(longKeyword));
+    const longKwCard=page.locator('main ol > li').nth(17);
+    await expect(longKwCard).toContainText('摘要原文命中：');
+    await expect(longKwCard).toContainText(longKeyword);
+    await visit(page,web.origin+'/?q='+encodeURIComponent('Claude Rust'));
+
+    // Collapsing the sidebar keeps text labels visible inside the "我的" popover menu.
+    await page.getByRole('button',{name:'收起侧栏',exact:true}).click();
+    await expect(page.locator('#desktop-sidebar')).toHaveCSS('width','60px');
+    await page.locator('.sidebar-options-trigger').click();
+    const optionsPopover=page.locator('#sidebar-options');
+    await expect(optionsPopover).toBeVisible();
+    for(const label of ['关于','更新日志','反馈']){
+      const labelEl=optionsPopover.locator('.sidebar-nav-label',{hasText:label});
+      await expect(labelEl).toBeVisible();
+      const box=await labelEl.boundingBox();
+      assert.ok(box&&box.width>10&&box.height>10,`collapsed "我的" menu item "${label}" must render visible text`);
+    }
+    await page.keyboard.press('Escape');
+    await page.getByRole('button',{name:'展开侧栏',exact:true}).click();
+
+    // Escape in list searchbox preserves keyword; Escape inside recent searches closes menu without reopening.
+    const searchbox=page.getByRole('searchbox',{name:'搜索文章',exact:true});
+    await searchbox.focus();
+    await page.keyboard.press('Enter');
+    await searchbox.focus();
+    await page.keyboard.press('Escape');
+    await expect(searchbox).toHaveValue('Claude Rust');
+    await expect(searchbox).not.toBeFocused();
+    await page.getByRole('button',{name:'清除搜索',exact:true}).click();
+    await expect(page.getByLabel('最近搜索',{exact:true})).toBeVisible();
+    await page.getByLabel('最近搜索',{exact:true}).locator('button').first().focus();
+    await page.keyboard.press('Escape');
+    await expect(page.getByLabel('最近搜索',{exact:true})).toHaveCount(0);
+    await expect(searchbox).toBeFocused();
+
+    // Filtered list scrolled down -> A -> keyboard "跳到正文" (#main) -> related B -> "返回列表" returns straight to filtered list & scroll position.
+    await visit(page,web.origin+'/?category=agents');
+    const linkA=page.getByRole('link',{name:'用 Claude 构建系统',exact:true});
+    await linkA.scrollIntoViewIfNeeded();
+    const listScroll=await page.evaluate(()=>window.scrollY);
+    assert.ok(listScroll>800);
+    await linkA.click();
+    await expect(page).toHaveURL(/\/items\/article-a/);
+    const skipLink=page.getByRole('link',{name:'跳到正文',exact:true});
+    await skipLink.focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/items\/article-a#main$/);
+    await page.getByRole('link',{name:'Article B',exact:true}).click();
+    await expect(page).toHaveURL(/\/items\/article-b/);
+    await page.getByRole('link',{name:'返回列表',exact:true}).click();
+    await expect(page).toHaveURL(web.origin+'/?category=agents');
+    await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBeCloseTo(listScroll,0);
+    // Direct open A -> related B -> "返回列表" navigates to "/" instead of stepping back to A.
+    const directPage=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    await visit(directPage,web.origin+'/items/article-a');
+    await directPage.getByRole('link',{name:'Article B',exact:true}).click();
+    await expect(directPage).toHaveURL(/\/items\/article-b/);
+    await directPage.getByRole('link',{name:'返回列表',exact:true}).click();
+    await expect(directPage).toHaveURL(web.origin+'/');
+    await directPage.close();
+
+    // Sticky search stepper in short 900x480 window keeps active match below sticky collapsible outline.
+    await page.setViewportSize({width:900,height:480});
+    await visit(page,web.origin+'/items/article-a?q=needle');
+    const shortSearchBar=page.getByRole('region',{name:'搜索定位',exact:true});
+    for(let i=0;i<5;i++)await shortSearchBar.getByRole('button',{name:'下一处匹配',exact:true}).click();
+    const shortClearance=await page.evaluate(()=>{
+      const bar=document.querySelector<HTMLElement>('.article-search-context')?.getBoundingClientRect();
+      const toolbar=document.querySelector<HTMLElement>('.article-reading-toolbar')?.getBoundingClientRect();
+      const hl=CSS.highlights?.get('article-search-current');
+      const range=hl?[...hl][0] as Range|undefined:undefined;
+      const rect=range?.getBoundingClientRect();
+      return {barBottom:bar?.bottom??0,toolbarBottom:toolbar?.bottom??0,matchTop:rect?.top??-1,matchBottom:rect?.bottom??-1,vh:window.innerHeight};
+    });
+    assert.ok(shortClearance.toolbarBottom>shortClearance.barBottom,'sticky outline toolbar sits below sticky search bar at 900x480');
+    assert.ok(shortClearance.matchTop>=shortClearance.toolbarBottom+4,`active match top (${shortClearance.matchTop}) must clear sticky outline bottom (${shortClearance.toolbarBottom})`);
+    assert.ok(shortClearance.matchBottom<=shortClearance.vh,'active match stays within short viewport');
+
+    // Sticky search stepper in long article & 1280px collapsible outline accessible name.
+    await page.setViewportSize({width:1280,height:900});
+    await visit(page,web.origin+'/items/article-a?q=needle');
+    await page.getByLabel('展开文章目录',{exact:true}).click();
+    await expect(page.getByRole('navigation',{name:'折叠文章目录',exact:true})).toBeVisible();
+    await page.keyboard.press('Escape');
+    const searchBar=page.getByRole('region',{name:'搜索定位',exact:true});
+    await expect(searchBar).toContainText('当前页面 40 处匹配');
+    for(let i=0;i<36;i++)await searchBar.getByRole('button',{name:'下一处匹配',exact:true}).click();
+    await expect(searchBar).toContainText('36 / 40');
+    const barBox=await searchBar.boundingBox();
+    assert.ok(barBox&&barBox.y>=0&&barBox.y<20,'search stepper stays stuck at viewport top at match 36');
+    assert.ok(await page.evaluate(()=>window.scrollY)>2000);
+
+    // Lightbox continuous normal wheel zoom (in & out) + 1st keyboard open/Escape focus return.
+    await page.setViewportSize({width:1440,height:900});
+    const thumb=page.getByRole('button',{name:'查看大图：Wheel test diagram',exact:true});
+    await thumb.scrollIntoViewIfNeeded();
+    await thumb.focus();
+    await page.keyboard.press('Enter');
+    const dialog=page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button',{name:'放大图片',exact:true})).toBeEnabled();
+    const ratio=()=>dialog.getByRole('status',{name:'图片缩放比例',exact:true}).textContent().then(t=>Number(t?.replace('%','')));
+    const fitPct=await ratio();
+    const stage=dialog.getByRole('region',{name:'可滚动图片',exact:true});
+    const box=(await stage.boundingBox())!;
+    await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+    await page.mouse.wheel(0,-120);
+    await expect.poll(ratio).toBeGreaterThan(fitPct);
+    const step1=await ratio();
+    await page.mouse.wheel(0,-120);
+    await expect.poll(ratio).toBeGreaterThan(step1);
+    const step2=await ratio();
+    await page.mouse.wheel(0,120);
+    await expect.poll(ratio).toBeLessThan(step2);
+    await page.mouse.wheel(0,120);
+    await expect.poll(ratio).toBe(fitPct);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(thumb).toBeFocused();
   }finally{await browser.close();await web?.stop();}
 });

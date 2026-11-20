@@ -1,4 +1,4 @@
-import {useLayoutEffect,useRef,useState} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {Link,useLocation} from 'react-router';
 import {matchRanges,searchWords} from '@agidawn/contracts/search';
 import type {ReaderItemDetail} from '@agidawn/contracts/site';
@@ -39,10 +39,31 @@ export function ArticleSearch({item,onNavigate}:{item:ReaderItemDetail;onNavigat
   const [activeIndex,setActiveIndex]=useState<number|null>(null);
   const [allWordsVisible,setAllWordsVisible]=useState(false);
   const [revision,setRevision]=useState(0);
+  const [stuck,setStuck]=useState(false);
+  const sticky=!!count;
   useLayoutEffect(()=>{
     setActiveIndex(null);
     CSS.highlights?.delete('article-search-current');
   },[query,item.id]);
+  useLayoutEffect(()=>{
+    const node=panel.current,scope=node?.closest<HTMLElement>('.public-article-reading');
+    if(!node||!scope||!sticky){scope?.style.removeProperty('--article-search-h');setStuck(false);return;}
+    const measure=()=>scope.style.setProperty('--article-search-h',`${Math.round(node.getBoundingClientRect().height)}px`);
+    measure();
+    const observer=new ResizeObserver(measure);observer.observe(node);
+    return()=>{observer.disconnect();scope.style.removeProperty('--article-search-h');};
+  },[sticky,query,item.id]);
+  useEffect(()=>{
+    const node=panel.current;if(!node||!sticky){setStuck(false);return;}
+    const onScroll=()=>{
+      const barTop=parseFloat(getComputedStyle(node).top)||0;
+      setStuck(window.scrollY>0&&node.getBoundingClientRect().top<=barTop+1);
+    };
+    onScroll();
+    window.addEventListener('scroll',onScroll,{passive:true});
+    window.addEventListener('resize',onScroll);
+    return()=>{window.removeEventListener('scroll',onScroll);window.removeEventListener('resize',onScroll);};
+  },[sticky,query,item.id]);
   // Mark mounted content before paint; the controls below reserve their space for history restoration.
   useLayoutEffect(()=>{
     const root=panel.current?.closest('article');if(!root)return;
@@ -73,7 +94,7 @@ export function ArticleSearch({item,onNavigate}:{item:ReaderItemDetail;onNavigat
     if(CSS.highlights&&typeof Highlight!=='undefined')CSS.highlights.set('article-search-current',new Highlight(visible[activeIndex]!));
   },[activeIndex,revision,query,item]);
   if(!query)return null;
-  const locateAt=(index:number)=>{
+  const locateAt=(index:number,focusTarget:boolean)=>{
     const visible=ranges.current.filter(range=>range.getClientRects().length>0);if(!visible.length)return;
     const next=((index%visible.length)+visible.length)%visible.length;
     const range=visible[next]!;
@@ -81,8 +102,10 @@ export function ArticleSearch({item,onNavigate}:{item:ReaderItemDetail;onNavigat
     if(CSS.highlights&&typeof Highlight!=='undefined')CSS.highlights.set('article-search-current',new Highlight(range));
     onNavigate();
     const target=range.startContainer.parentElement;
-    if(target&&target.tabIndex<0&&!target.hasAttribute('tabindex'))target.setAttribute('tabindex','-1');
-    target?.focus({preventScroll:true});
+    if(focusTarget){
+      if(target&&target.tabIndex<0&&!target.hasAttribute('tabindex'))target.setAttribute('tabindex','-1');
+      target?.focus({preventScroll:true});
+    }
     // A text range can exist outside a code block or table's horizontal viewport.
     const root=panel.current?.closest('article');
     for(let parent=target;parent&&parent!==root;parent=parent.parentElement){
@@ -90,20 +113,27 @@ export function ArticleSearch({item,onNavigate}:{item:ReaderItemDetail;onNavigat
       const match=range.getBoundingClientRect(),box=parent.getBoundingClientRect(),left=box.left+parent.clientLeft;
       if(match.left<left||match.right>left+parent.clientWidth)parent.scrollLeft+=match.left-left-Math.max(0,(parent.clientWidth-match.width)/2);
     }
-    window.scrollTo({top:Math.max(0,window.scrollY+range.getBoundingClientRect().top-window.innerHeight/4),behavior:'instant'});
+    const scope=panel.current?.closest<HTMLElement>('.public-article-reading');
+    const toolbar=scope?.querySelector<HTMLElement>('.article-reading-toolbar');
+    const barBottom=sticky&&panel.current?(parseFloat(getComputedStyle(panel.current).top)||0)+panel.current.getBoundingClientRect().height:0;
+    const toolbarHeight=toolbar&&getComputedStyle(toolbar).display!=='none'?toolbar.getBoundingClientRect().height:0;
+    const toolbarTop=toolbarHeight>0&&toolbar?(parseFloat(getComputedStyle(toolbar).top)||0):0;
+    const stickyBottom=Math.max(barBottom+toolbarHeight,toolbarTop+toolbarHeight);
+    const targetOffset=Math.max(window.innerHeight/4,stickyBottom+24);
+    window.scrollTo({top:Math.max(0,window.scrollY+range.getBoundingClientRect().top-targetOffset),behavior:'instant'});
   };
-  return <section ref={panel} className="article-search-context" aria-label="搜索定位" data-reading-controls>
+  return <section ref={panel} className="article-search-context" data-sticky={sticky?'true':undefined} data-stuck={stuck?'true':undefined} aria-label="搜索定位" data-reading-controls>
     <div className="article-search-row flex flex-wrap items-center gap-x-4 gap-y-1"><span>搜索：<strong>{query}</strong></span>
       <span role="status" className="min-w-[12em]">{count===null?'正在查找…':count?`当前页面 ${count} 处匹配`:'当前页面未找到关键词'}</span>
       {!!count&&<span className="article-search-controls inline-flex flex-wrap items-center gap-2">
-        {(activeIndex===null||count===1)&&<button type="button" onClick={()=>locateAt(0)}>定位到首处匹配</button>}
+        {(activeIndex===null||count===1)&&<button type="button" onClick={()=>locateAt(0,true)}>定位到首处匹配</button>}
         {count>1&&<span className="article-search-stepper inline-flex items-center gap-1">
-          <button type="button" className="article-search-step" aria-label="上一处匹配" title="上一处匹配" onClick={()=>locateAt((activeIndex??0)-1)}><IconChevronUp size={15}/></button>
-          {activeIndex!==null&&<span className="article-search-counter tabular-nums">{activeIndex+1} / {count}</span>}
-          <button type="button" className="article-search-step" aria-label="下一处匹配" title="下一处匹配" onClick={()=>locateAt((activeIndex??-1)+1)}><IconChevronDown size={15}/></button>
+          <button type="button" className="article-search-step" aria-label="上一处匹配" title="上一处匹配" onClick={()=>locateAt((activeIndex??0)-1,false)}><IconChevronUp size={15}/></button>
+          {activeIndex!==null&&<span className="article-search-counter tabular-nums" aria-live="polite">{activeIndex+1} / {count}</span>}
+          <button type="button" className="article-search-step" aria-label="下一处匹配" title="下一处匹配" onClick={()=>locateAt((activeIndex??-1)+1,false)}><IconChevronDown size={15}/></button>
         </span>}
       </span>}
-      <Link to={location.pathname} replace className="article-search-clear">清除高亮</Link>
+      <Link to={location.pathname} replace state={location.state} className="article-search-clear">清除高亮</Link>
     </div>
     {otherLanguage&&!allWordsVisible&&<>
       <p>搜索结果命中{originalFields.map(field=>fields[field]+'原文').join('、')}；当前显示中文译文。</p>

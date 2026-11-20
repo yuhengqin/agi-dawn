@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {cleanSummary,metadataAddsMarkup,plainMetadata} from '@agidawn/backend/content/snippets';
 import {articleIntro,estimateReadingMinutes,isTruncatedExcerpt,isChineseBody} from '@agidawn/backend/content/reading';
-import {matchRanges,searchWords} from '@agidawn/contracts/search';
+import {matchRanges,searchSnippet,searchWords} from '@agidawn/contracts/search';
 import {toReaderItem,type ReaderRow} from '@agidawn/backend/publication/items';
 
 test('summary cleanup removes a matching RSS footer without hiding useful short text',()=>{
@@ -79,6 +79,12 @@ test('reading estimates support Chinese and English and search highlighting shar
   assert.equal(estimateReadingMinutes(''),null);assert.equal(estimateReadingMinutes('汉'.repeat(700)),2);assert.equal(estimateReadingMinutes('word '.repeat(440)),2);
   assert.deepEqual(matchRanges('read ad stack ad',searchWords('ad')),[{start:5,end:7},{start:14,end:16}]);
   assert.deepEqual(matchRanges('Use C++ and foo.bar',searchWords('C++ foo.bar')),[{start:4,end:7},{start:12,end:19}]);
+  for(const len of [128,200]){
+    const token='a'.repeat(len),text=`Prefix context before ${token} and trailing explanation past the boundary.`;
+    const snippet=searchSnippet(text,[token]);
+    assert.ok(snippet.includes(token),`snippet preserves full ${len}-char keyword`);
+    assert.ok(matchRanges(snippet,[token]).length===1,`matchRanges still highlights full ${len}-char keyword`);
+  }
 });
 
 test('an ellipsis is justified by an actual opening excerpt, not missing punctuation alone',()=>{

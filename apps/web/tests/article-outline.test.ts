@@ -30,7 +30,7 @@ test("a short laptop window keeps several outline entries and can reach the last
       const page = await browser.newPage({ viewport: { width: 1366, height }, reducedMotion: "reduce" });
       await visit(page,web.origin + "/items/outline-short");
       await page.getByLabel('展开文章目录',{exact:true}).click();
-      const nav = page.getByRole("navigation", { name: "手机文章目录" });
+      const nav = page.getByRole("navigation", { name: "折叠文章目录" });
       await expect(nav).toBeVisible();
       await page.waitForTimeout(100);
       const entry = await nav.locator("a").first().evaluate((a) => a.getBoundingClientRect().height);
@@ -142,7 +142,7 @@ for (const engine of [chromium, webkit]) test(`the desktop outline collapses wit
     await page.setViewportSize({ width: 1100, height: 768 });
     await expect(expand).toBeHidden();
     await page.getByLabel("展开文章目录", { exact: true }).click();
-    await expect(page.getByRole("navigation", { name: "手机文章目录", exact: true })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "折叠文章目录", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await page.setViewportSize({ width: 1440, height: 768 });
     await expect(expand).toBeVisible();

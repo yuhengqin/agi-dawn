@@ -33,7 +33,7 @@ export default function SnapshotReading({snapshot}:{snapshot:SnapshotView}){
     </div>
     <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_200px]">
       <div className="min-w-0">
-        {outline.length>0&&<details ref={mobile} onToggle={event=>setOpen(event.currentTarget.open)} className="sticky top-20 z-20 mb-5 border-y border-line bg-bg lg:hidden"><summary aria-label={open?'收起文章目录':'展开文章目录'} className="cursor-pointer truncate py-3 text-sm font-medium">文章目录 · {outline.find(entry=>entry.id===current)?.text??'选择章节'}</summary><div className="absolute inset-x-0 max-h-[55dvh] overflow-y-auto overscroll-contain border border-line bg-bg p-4 shadow-sm">{entries('手机文章目录')}</div></details>}
+        {outline.length>0&&<details ref={mobile} onToggle={event=>setOpen(event.currentTarget.open)} className="sticky top-20 z-20 mb-5 border-y border-line bg-bg lg:hidden"><summary aria-label={open?'收起文章目录':'展开文章目录'} className="cursor-pointer truncate py-3 text-sm font-medium">文章目录 · {outline.find(entry=>entry.id===current)?.text??'选择章节'}</summary><div className="absolute inset-x-0 max-h-[55dvh] overflow-y-auto overscroll-contain border border-line bg-bg p-4 shadow-sm">{entries('折叠文章目录')}</div></details>}
         <div id="reader-body" ref={root} className="min-w-0"><ArticleBody html={snapshot.bodyHtml}/></div>
       </div>
       <aside className="hidden min-w-0 lg:block"><div ref={directory} className={'sticky top-6 max-h-[calc(100dvh-3rem)] overflow-y-auto '+overscroll}>{outline.length>0&&<><h2 className="mb-3 text-sm font-semibold">文章目录</h2>{entries('文章目录')}</>}</div></aside>
