@@ -44,15 +44,20 @@ export async function loadReaderList(query:ReaderListQuery):Promise<ReaderListPa
   const items=await withReaderMetadata(content.map(toReaderItem),translations);
   for(const [index,item] of items.entries())if(words.length){
     const row=content[index]!,shownTitle=item.metadataTranslation?.title??item.title,shownSummary=item.metadataTranslation?.summary??item.summary??'';
-    const displayed=[shownTitle,visibleSummaryPrefix(shownSummary,70)].join(' ');
-    const missing=words.filter(word=>matchRanges(displayed,[word]).length===0);
+    const shownSummaryLanguage:ReaderMatch['language']=item.metadataTranslation?.summary?'translation':'original';
+    const fullCard=[shownTitle,shownSummary].join(' ');
+    const absent=words.filter(word=>matchRanges(fullCard,[word]).length===0);
+    const shortCard=[shownTitle,visibleSummaryPrefix(shownSummary,70)].join(' ');
+    const maybeClipped=words.filter(word=>!absent.includes(word)&&matchRanges(shortCard,[word]).length===0);
     const fields:Array<[ReaderMatch['field'],ReaderMatch['language'],string|null]>=[
       ['title','translation',item.metadataTranslation?.title??null],['summary','translation',item.metadataTranslation?.summary??null],
       ['title','original',item.title],['summary','original',item.summary],['source','original',item.source.name],['topic','original',row.topic_names],
       ['body','translation',row.translated_body],['body','original',row.search_body]];
-    item.matches=fields.filter(([, ,text])=>text&&matchRanges(text,words).length).map(([field,language,text])=>({
-      field,language,snippet:searchSnippet(text!,missing.length&&matchRanges(text!,missing).length?missing:words),
-    }));
+    item.matches=fields.filter(([, ,text])=>text&&matchRanges(text,words).length).map(([field,language,text])=>{
+      const priority=field==='summary'&&language===shownSummaryLanguage?[maybeClipped,absent,words]:[absent,maybeClipped,words];
+      const focus=priority.find(group=>group.length&&matchRanges(text!,group).length)??words;
+      return {field,language,snippet:searchSnippet(text!,focus)};
+    });
   }
   return {items,total:summary.total,page:summary.page,limit,pageCount:summary.page_count};
 }

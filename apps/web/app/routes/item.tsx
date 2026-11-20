@@ -15,6 +15,7 @@ import {FigureNotice} from "../features/item/FigureNotice";
 import {ArticleOutline,ArticleProgress,MobileArticleOutline,useArticleReading} from '../features/item/ArticleReading';
 import {EngagementProvider,ArticleEngagementBar} from "../features/item/ArticleEngagement";
 import {readerDate} from "../lib/format";
+import {isHydrated} from "../lib/hydration";
 import {transitionAppearance} from "../lib/motion";
 import {webModules} from "../site-modules";
 import {pageMeta} from "../lib/seo";
@@ -31,8 +32,10 @@ const notices={pending:"全文暂未就绪。可以先阅读摘要，或访问�
 export default function Item(){const item=useLoaderData<typeof loader>();return <ItemReading key={item.id} item={item}/>;}
 function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useState(false),[outlineCollapsed,setOutlineCollapsed]=useState(false);
   const location=useLocation(),navigate=useNavigate();
-  const historyUsr=typeof window!=='undefined'?(window.history.state as {usr?:{returnToList?:{idx?:unknown;to?:unknown}}}|null)?.usr:undefined;
-  const rawReturn=(location.state as {returnToList?:{idx?:unknown;to?:unknown}}|null)?.returnToList??historyUsr?.returnToList;
+  const [clientReady,setClientReady]=useState(isHydrated);
+  useEffect(()=>{if(!clientReady)setClientReady(true);},[clientReady]);
+  const historyUsr=clientReady?(window.history.state as {usr?:{returnToList?:{idx?:unknown;to?:unknown}}}|null)?.usr:undefined;
+  const rawReturn=clientReady?((location.state as {returnToList?:{idx?:unknown;to?:unknown}}|null)?.returnToList??historyUsr?.returnToList):undefined;
   const parsedReturn=rawReturn&&typeof rawReturn.to==='string'&&rawReturn.to.startsWith('/')&&!rawReturn.to.startsWith('//')
     ?{to:rawReturn.to,idx:typeof rawReturn.idx==='number'?rawReturn.idx:undefined}:null;
   const savedReturn=useRef<{to:string;idx?:number}|null>(null);

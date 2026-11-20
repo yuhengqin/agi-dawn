@@ -13,12 +13,22 @@ export function matchRanges(text:string,words:readonly string[]):Array<{start:nu
   for(const range of ranges){const previous=result.at(-1);if(previous&&range.start<=previous.end)previous.end=Math.max(previous.end,range.end);else result.push({...range});}
   return result;
 }
-/** Keep the entire first matched keyword inside the snippet even for long technical queries. */
+function firstWordMatch(text:string,words:readonly string[]):{start:number;end:number}|undefined{
+  let best:{start:number;end:number}|undefined;
+  for(const word of words){
+    const match=new RegExp(searchPattern(word),'i').exec(text);
+    if(!match)continue;
+    const candidate={start:match.index,end:match.index+match[0].length};
+    if(!best||candidate.start<best.start||(candidate.start===best.start&&candidate.end>best.end))best=candidate;
+  }
+  return best;
+}
+/** Keep the entire first matched keyword inside the snippet without letting repeated short runs bloat it. */
 export function searchSnippet(text:string,words:readonly string[]):string{
-  const first=matchRanges(text,words)[0];
+  const first=firstWordMatch(text,words);
   const chars=[...text];
   const matchStart=first?[...text.slice(0,first.start)].length:0;
-  const matchLen=first?[...text.slice(first.start,first.end)].length:0;
+  const matchLen=first?Math.min([...text.slice(first.start,first.end)].length,200):0;
   const room=Math.max(160,matchLen+24);
   const lead=Math.min(45,Math.max(0,Math.floor((room-matchLen)/2)));
   const start=Math.max(0,matchStart-lead);

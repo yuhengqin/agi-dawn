@@ -65,27 +65,46 @@ function ReaderFeedRow({item,query,words,target,listReturn}:{
     return()=>observer.disconnect();
   },[summary,summaryKey]);
   const missingWords=[...new Set([...missingFromCard,...clippedWords])];
-  const covers=(hit:ReaderMatch,need:readonly string[])=>{
-    if(matchRanges(hit.snippet,need).length>0)return true;
-    if(hit.language==='original'&&hit.snippet.includes('…')){
-      if(hit.field==='title'&&matchRanges(item.title,need).length>0)return true;
-      if(hit.field==='summary'&&item.summary&&matchRanges(item.summary,need).length>0)return true;
-    }
-    return false;
-  };
   const shownSummaryLanguage:ReaderMatch['language']=item.metadataTranslation?.summary?'translation':'original';
-  const candidates:ReaderMatch[]=(item.matches??[]).filter(hit=>
-    hit.field==='body'||hit.field==='topic'||
-    (missingFromCard.length>0&&hit.language==='original'&&!!item.metadataTranslation&&['title','summary'].includes(hit.field)&&covers(hit,missingFromCard))||
-    (clippedWords.length>0&&hit.field==='summary'&&hit.language===shownSummaryLanguage&&matchRanges(hit.snippet,clippedWords).length>0)
-  );
-  if(clippedWords.length>0&&summary&&!candidates.some(hit=>matchRanges(hit.snippet,clippedWords).length>0)){
+  const fullFieldText=(hit:ReaderMatch)=>
+    hit.field==='title'?(hit.language==='translation'?item.metadataTranslation?.title:item.title)
+    :hit.field==='summary'?(hit.language==='translation'?item.metadataTranslation?.summary:item.summary)
+    :null;
+  const focusSnippet=(hit:ReaderMatch,need:readonly string[]):ReaderMatch=>{
+    if(!need.length||matchRanges(hit.snippet,need).length>0)return hit;
+    const source=fullFieldText(hit);
+    return source&&matchRanges(source,need).length>0?{...hit,snippet:searchSnippet(source,need)}:hit;
+  };
+  const coverage=(snippet:string,need:readonly string[])=>need.filter(word=>matchRanges(snippet,[word]).length>0).length;
+  const candidates:ReaderMatch[]=(item.matches??[]).flatMap(raw=>{
+    if(raw.field==='body'||raw.field==='topic')return [raw];
+    if(missingFromCard.length>0&&raw.language==='original'&&!!item.metadataTranslation&&['title','summary'].includes(raw.field)){
+      const hit=focusSnippet(raw,missingFromCard);
+      return coverage(hit.snippet,missingFromCard)>0?[hit]:[];
+    }
+    if(clippedWords.length>0&&raw.field==='summary'&&raw.language===shownSummaryLanguage){
+      const hit=focusSnippet(raw,clippedWords);
+      return coverage(hit.snippet,clippedWords)>0?[hit]:[];
+    }
+    return [];
+  });
+  if(clippedWords.length>0&&summary&&!candidates.some(hit=>coverage(hit.snippet,clippedWords)>0)){
     candidates.push({field:'summary',language:shownSummaryLanguage,snippet:searchSnippet(summary,clippedWords)});
   }
-  const extra=(missingWords.length>0?candidates.find(hit=>covers(hit,missingWords)):undefined)??candidates[0];
+  const pickBest=(list:readonly ReaderMatch[],need:readonly string[])=>{
+    let best:ReaderMatch|undefined,bestCount=0;
+    for(const hit of list){const count=coverage(hit.snippet,need);if(count>bestCount){best=hit;bestCount=count;}}
+    return best;
+  };
+  const extra=(missingFromCard.length>0?pickBest(candidates,missingFromCard):undefined)
+    ??(missingWords.length>0?pickBest(candidates,missingWords):undefined)
+    ??candidates[0];
   const search=query.q?new URLSearchParams({q:query.q}):null;
   if(search)for(const hit of item.matches??[]){
-    if(hit.language==='original'&&!!item.metadataTranslation&&['title','summary'].includes(hit.field)&&(missingFromCard.length===0||!covers(hit,missingFromCard)))continue;
+    if(hit.language==='original'&&!!item.metadataTranslation&&['title','summary'].includes(hit.field)){
+      const focused=focusSnippet(hit,missingFromCard);
+      if(missingFromCard.length===0||coverage(focused.snippet,missingFromCard)===0)continue;
+    }
     search.append('match',`${hit.field}:${hit.language}`);
   }
   return <li className="reader-feed-row"><article>

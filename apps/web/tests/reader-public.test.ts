@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { searchSnippet } from "@agidawn/contracts/search";
 import { chromium, webkit, expect } from "./browser.ts";
 import { fakeApi, feedItem, itemDetail, readerPage, startWebServer, visit, type WebServer } from "./web-server.ts";
 import type { Page } from "@playwright/test";
@@ -2156,13 +2157,17 @@ test('re-fix regressions: return-to-list across related reads, continuous wheel 
   const longKeyword='q'.repeat(128);
   const longOriginalSummary=`Leading English context before ${longKeyword} and trailing explanation after the long technical token.`;
   const clippedZhSummary='这里是一段明显超过列表卡片两行截断上限的中文摘要内容，前两行专门详细描述多智能体编排、上下文管理、提示词调试、评估基准、工具调用、可观测性追踪、记忆压缩、并发调度、权限边界控制与工程化落地实践细节，确保在宽屏桌面浏览器里前两行占满一百三十多个汉字且完全不包含第二个检索关键词，直到第三行结尾才真正出现 Rust 内存安全实践。';
+  const goRustZhSummary='这是一段八十多字的中文摘要前半部分，介绍并发模型、调度器设计、队列治理、错误处理与线上性能观测等工程经验，末尾提到 Go 协程实践。';
+  const goRustOrigSummary=`An English summary that starts with Go goroutine scheduling patterns. ${'Additional architecture details without the second keyword. '.repeat(5)}Finally it explains Rust ownership guarantees.`;
+  const haSnippet=searchSnippet(`前文说明。${'哈'.repeat(3000)}结尾。`,['哈']);
   const feedItems=Array.from({length:25},(_,i)=>feedItem({
-    id:i===15?'article-a':i===16?'article-clipped':i===17?'article-long-kw':`filler-${i}`,
-    title:i===15?'Claude Guide':i===16?'Claude Engineering':i===17?'Long Keyword Article':`Filler Article ${i}`,
-    summary:i===15?'Deep dive into Rust memory safety.':i===16?'Engineering note about systems.':i===17?longOriginalSummary:'Regular summary text for list scrolling.',
+    id:i===15?'article-a':i===16?'article-clipped':i===17?'article-long-kw':i===18?'article-go-rust':i===19?'article-ha-run':`filler-${i}`,
+    title:i===15?'Claude Guide':i===16?'Claude Engineering':i===17?'Long Keyword Article':i===18?'Systems Note':i===19?'Repeated Char Article':`Filler Article ${i}`,
+    summary:i===15?'Deep dive into Rust memory safety.':i===16?'Engineering note about systems.':i===17?longOriginalSummary:i===18?goRustOrigSummary:i===19?'Summary without repeated char.':'Regular summary text for list scrolling.',
     metadataTranslation:i===15?{title:'用 Claude 构建系统',summary:'中文摘要未提及另一语言。'}
       :i===16?{title:'用 Claude 做工程',summary:clippedZhSummary}
       :i===17?{title:'超长关键词测试文章',summary:'中文摘要不包含该超长英文标识符。'}
+      :i===18?{title:'系统工程笔记',summary:goRustZhSummary}
       :undefined,
     matches:i===15?[
       {field:'title',language:'translation',snippet:'用 Claude 构建系统'},
@@ -2173,6 +2178,12 @@ test('re-fix regressions: return-to-list across related reads, continuous wheel 
       {field:'summary',language:'translation',snippet:'…直到第三行结尾才真正出现 Rust 内存安全实践。'},
     ]:i===17?[
       {field:'summary',language:'original',snippet:`…context before ${longKeyword} and trailing…`},
+    ]:i===18?[
+      {field:'summary',language:'translation',snippet:'…末尾提到 Go 协程实践。'},
+      // Simulate an un-focused original summary snippet repeating Go; client must refocus on the missing word Rust.
+      {field:'summary',language:'original',snippet:'An English summary that starts with Go goroutine scheduling patterns. Additional architecture details…'},
+    ]:i===19?[
+      {field:'body',language:'original',snippet:haSnippet},
     ]:undefined,
   }));
   const longBody=Array.from({length:40},(_,i)=>`<h2 id="sec-${i}">Section ${i}</h2><p>Paragraph ${i} mentions needle here. ${'Long filler prose for scrolling. '.repeat(25)}</p>`).join('')+`<p><img src="${picture}" alt="Wheel test diagram" width="2400" height="1200"></p>`;
@@ -2257,6 +2268,23 @@ test('re-fix regressions: return-to-list across related reads, continuous wheel 
     const longKwCard=page.locator('main ol > li').nth(17);
     await expect(longKwCard).toContainText('摘要原文命中：');
     await expect(longKwCard).toContainText(longKeyword);
+
+    // At 1920px searching "Go Rust", translated summary already shows Go -> original summary snippet must show missing Rust.
+    await page.setViewportSize({width:1920,height:900});
+    await visit(page,web.origin+'/?q='+encodeURIComponent('Go Rust'));
+    const goRustCard=page.locator('main ol > li').nth(18);
+    await expect(goRustCard).toContainText('摘要原文命中：');
+    await expect(goRustCard).toContainText('Rust');
+    await expect(goRustCard.locator('.reader-search-match')).not.toContainText('Go goroutine');
+
+    // Consecutive 3000x single-char match ('哈') must remain compact instead of bloating card height.
+    await visit(page,web.origin+'/?q='+encodeURIComponent('哈'));
+    const haMatch=page.locator('main ol > li').nth(19).locator('.reader-search-match');
+    await expect(haMatch).toBeVisible();
+    const haBox=await haMatch.boundingBox();
+    assert.ok(haBox&&haBox.height<160,`repeated-char snippet height must stay compact, got ${haBox?.height}`);
+
+    await page.setViewportSize({width:1440,height:900});
     await visit(page,web.origin+'/?q='+encodeURIComponent('Claude Rust'));
 
     // Collapsing the sidebar keeps text labels visible inside the "我的" popover menu.
@@ -2297,6 +2325,7 @@ test('re-fix regressions: return-to-list across related reads, continuous wheel 
     assert.ok(listScroll>800);
     await linkA.click();
     await expect(page).toHaveURL(/\/items\/article-a/);
+    await expect(page.getByRole('heading',{level:1,name:'用 Claude 构建系统'})).toBeFocused();
     const skipLink=page.getByRole('link',{name:'跳到正文',exact:true});
     await skipLink.focus();
     await page.keyboard.press('Enter');
@@ -2314,6 +2343,22 @@ test('re-fix regressions: return-to-list across related reads, continuous wheel 
     await directPage.getByRole('link',{name:'返回列表',exact:true}).click();
     await expect(directPage).toHaveURL(web.origin+'/');
     await directPage.close();
+
+    // After reloading an article opened from a filtered list, middle-clicking "返回列表" opens the filtered list (not "/").
+    const reloadContext=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    const reloadPage=await reloadContext.newPage();
+    await visit(reloadPage,web.origin+'/?q=needle');
+    await reloadPage.getByRole('link',{name:'用 Claude 构建系统',exact:true}).click();
+    await expect(reloadPage).toHaveURL(/\/items\/article-a\?q=needle/);
+    await reloadPage.reload({waitUntil:'domcontentloaded'});
+    const backAfterReload=reloadPage.getByRole('link',{name:'返回列表',exact:true});
+    await expect(backAfterReload).toHaveAttribute('href','/?q=needle');
+    const [middleTab]=await Promise.all([reloadContext.waitForEvent('page'),backAfterReload.click({button:'middle'})]);
+    await expect(middleTab).toHaveURL(web.origin+'/?q=needle');
+    await middleTab.close();
+    await backAfterReload.click();
+    await expect(reloadPage).toHaveURL(web.origin+'/?q=needle');
+    await reloadContext.close();
 
     // Sticky search stepper in short 900x480 window keeps active match below sticky collapsible outline.
     await page.setViewportSize({width:900,height:480});

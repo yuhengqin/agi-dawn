@@ -85,6 +85,9 @@ test('reading estimates support Chinese and English and search highlighting shar
     assert.ok(snippet.includes(token),`snippet preserves full ${len}-char keyword`);
     assert.ok(matchRanges(snippet,[token]).length===1,`matchRanges still highlights full ${len}-char keyword`);
   }
+  const repeated=searchSnippet('前文说明。'+'哈'.repeat(3000)+'尾声',['哈']);
+  assert.ok([...repeated].length<=160,`repeated single-char run must stay within 160 chars, got ${[...repeated].length}`);
+  assert.ok(repeated.includes('哈'));
 });
 
 test('an ellipsis is justified by an actual opening excerpt, not missing punctuation alone',()=>{

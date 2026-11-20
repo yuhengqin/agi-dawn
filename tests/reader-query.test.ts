@@ -329,5 +329,27 @@ test('public search preserves 128-char keywords in snippets and centers multi-wo
     const zhSummaryHit=clippedPage.items[0]!.matches?.find(hit=>hit.field==='summary'&&hit.language==='translation');
     assert.ok(zhSummaryHit,'translated summary match is returned');
     assert.ok(zhSummaryHit.snippet.includes('Rust'),'summary snippet centers on the word hidden past line 2');
+
+    // Original summary snippet must focus on the word truly absent from the translated summary (Rust), not repeat Go visible on line 2.
+    const zhWithLateGo='这是一段八十多字的中文摘要前半部分，介绍并发模型、调度器设计、队列治理、错误处理与线上性能观测等工程经验，末尾提到 Go 协程实践。';
+    const origGoThenRust=`An English summary that starts with Go goroutine scheduling patterns. ${'Additional architecture details without the second keyword. '.repeat(5)}Finally it explains Rust ownership guarantees.`;
+    const {articleId:goRustId}=await upsertMaterial({sourceId,title:'Systems Note',excerpt:origGoThenRust,url:'https://example.org/go-rust-focus',via:'fetch'});
+    await sql`INSERT INTO reader_metadata_translations(article_id,source_title,source_summary,title,summary,status)
+      VALUES(${goRustId},'Systems Note',${origGoThenRust},'系统工程笔记',${zhWithLateGo},'translated')`;
+    const goRustPage=await pool.loadReaderList({sourceId,q:'Go Rust'});
+    assert.equal(goRustPage.total,1);
+    const origGoRustHit=goRustPage.items[0]!.matches?.find(hit=>hit.field==='summary'&&hit.language==='original');
+    assert.ok(origGoRustHit,'original summary match is returned for Go Rust');
+    assert.ok(origGoRustHit.snippet.includes('Rust'),'original summary snippet must include the truly absent word Rust');
+
+    // Consecutive repeated short matches (3000x '哈') must not bloat the snippet beyond 160 chars.
+    await sql`UPDATE sources SET site_fulltext=true WHERE id=${sourceId}`;
+    const haBody=`<p>开头说明。${'哈'.repeat(3000)}结尾。</p>`;
+    await upsertMaterial({sourceId,title:'Repeated Char Body',url:'https://example.org/repeated-ha',bodyHtml:haBody,bodyText:`开头说明。${'哈'.repeat(3000)}结尾。`,bodyStatus:'ok',via:'fetch'});
+    const haPage=await pool.loadReaderList({sourceId,q:'哈'});
+    assert.equal(haPage.total,1);
+    const haHit=haPage.items[0]!.matches?.find(hit=>hit.field==='body'&&hit.language==='original');
+    assert.ok(haHit,'body match is returned for repeated char');
+    assert.ok([...haHit.snippet].length<=160,`repeated-char snippet must stay <= 160 chars, got ${[...haHit.snippet].length}`);
   }finally{installModules(installed);}
 });
