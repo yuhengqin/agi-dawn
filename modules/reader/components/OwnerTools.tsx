@@ -1,12 +1,15 @@
-import {useEffect,useRef,useState} from "react";
+import {lazy,Suspense,useEffect,useRef,useState} from "react";
+import type {ArticlePassages} from '@agidawn/web/modules';
 import {Link,useBlocker} from "react-router";
 import {OwnerRequestError,hasOwnerSession,OWNER_SESSION_ENDED,ownerRequest,ownerDownload} from "../client.ts";
 import type {ReaderState,ReaderNote} from "../contracts.ts";
 import {withLibrarySearch} from "../library-navigation.ts";
 const button="min-h-11 rounded-control border border-line px-4 text-sm hover:bg-bg-sunk disabled:opacity-50";
-export default function OwnerTools({articleId,libraryReturnSearch=""}:{articleId:string;libraryReturnSearch?:string}) {
+const PassageTools=lazy(()=>import('./PassageTools.tsx'));
+export default function OwnerTools({articleId,libraryReturnSearch="",passages}:{articleId:string;libraryReturnSearch?:string;passages?:ArticlePassages}) {
   const [saved,setSaved]=useState<{state:ReaderState;note:ReaderNote}|null>(null),[draft,setDraft]=useState(""),[message,setMessage]=useState(""),[error,setError]=useState("");
   const [checking,setChecking]=useState(true),[busy,setBusy]=useState(false),[serverNote,setServerNote]=useState<string|null>(null);
+  const [passageDirty,setPassageDirty]=useState(false);
   const base="/api/admin/reader/articles/"+articleId;
   const downloadUrl=useRef<string|null>(null),generation=useRef(0);
   const savedRef=useRef(saved);savedRef.current=saved;
@@ -14,9 +17,10 @@ export default function OwnerTools({articleId,libraryReturnSearch=""}:{articleId
   const clear=()=>{invalidateDownload();savedRef.current=null;setSaved(null);setDraft('');setServerNote(null);setMessage('');setError('');};
   useEffect(()=>()=>invalidateDownload(),[articleId]);
   const dirty=!!saved&&draft!==saved.note.text;
-  const blocker=useBlocker(({currentLocation,nextLocation})=>dirty&&(currentLocation.pathname!==nextLocation.pathname||currentLocation.search!==nextLocation.search));
-  useEffect(()=>{if(blocker.state==='blocked'){if(dirty&&window.confirm('笔记尚未保存，确定放弃草稿并离开？'))blocker.proceed();else blocker.reset();}},[blocker,dirty]);
-  useEffect(()=>{if(!dirty)return;const protect=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue='';};window.addEventListener('beforeunload',protect);return()=>window.removeEventListener('beforeunload',protect);},[dirty]);
+  const unsaved=dirty||passageDirty;
+  const blocker=useBlocker(({currentLocation,nextLocation})=>unsaved&&(currentLocation.pathname!==nextLocation.pathname||currentLocation.search!==nextLocation.search));
+  useEffect(()=>{if(blocker.state==='blocked'){if(unsaved&&window.confirm('笔记尚未保存，确定放弃草稿并离开？'))blocker.proceed();else blocker.reset();}},[blocker,unsaved]);
+  useEffect(()=>{if(!unsaved)return;const protect=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue='';};window.addEventListener('beforeunload',protect);return()=>window.removeEventListener('beforeunload',protect);},[unsaved]);
   useEffect(()=>{
     let active=true;const abort=new AbortController();
     let loading:Promise<{state:ReaderState;note:ReaderNote}>|null=null;
@@ -38,10 +42,12 @@ export default function OwnerTools({articleId,libraryReturnSearch=""}:{articleId
       else setError(error instanceof OwnerRequestError&&error.status===409?"保存冲突：草稿已保留，请载入服务端版本对照后再保存。":error instanceof Error?error.message:"请求失败");}
     finally{setBusy(false);}
   };
-  if(!saved||checking)return null;
+  const selectionTools=passages&&<Suspense fallback={null}><PassageTools key={passages.bodyKey+Boolean(saved)} {...passages}
+    base={base+'/annotations'} owner={!!saved} checking={checking} onDirtyChange={setPassageDirty}/></Suspense>;
+  if(!saved||checking)return <>{selectionTools}</>;
   const state=saved.state;
   const articleHref=withLibrarySearch("/admin/reader/articles/"+articleId,libraryReturnSearch);
-  return <section aria-label="站主私人阅读" className="my-8 border-y border-line py-5">
+  return <>{selectionTools}<section aria-label="站主私人阅读" className="my-8 border-y border-line py-5">
     <div className="mb-4 flex flex-wrap items-center gap-3"><h2 className="mr-auto text-lg font-semibold">私人阅读</h2><Link to={"/admin/reader"+libraryReturnSearch} className="text-sm text-accent">私人书库</Link><Link to={articleHref} className="text-sm text-accent">私人阅读全文</Link><Link to={articleHref+"#versions"} className="text-sm text-accent">归档版本</Link></div>
     <div className="mb-4 flex flex-wrap items-center gap-3">
       <button className={button} disabled={busy} aria-pressed={state.starred} onClick={()=>command(async()=>{const next=await ownerRequest<ReaderState>(base+"/state","PATCH",{expectedVersion:state.version,starred:!state.starred});setSaved({...saved,state:next});})}>{state.starred?"取消收藏":"收藏文章"}</button>
@@ -56,5 +62,5 @@ export default function OwnerTools({articleId,libraryReturnSearch=""}:{articleId
     {dirty&&<p className="mt-2 text-sm text-ink-3">仅导出已保存笔记，当前草稿不会写入文件。</p>}
     {error&&<p role="alert" className="mt-3 text-sm text-hot">{error}</p>}{message&&<p role="status" className="mt-3 text-sm text-ink-3">{message}</p>}
     {serverNote!==null&&<div className="mt-4"><h3 className="text-sm font-medium">服务端笔记</h3><p className="my-2 whitespace-pre-wrap text-sm text-ink-3">{serverNote||"（空）"}</p><button className={button} onClick={()=>setDraft(serverNote)}>采用服务端笔记</button></div>}
-  </section>;
+  </section></>;
 }

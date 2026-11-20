@@ -5,7 +5,7 @@
 // Every page loads web.tsx. A part only one page draws is given as its loader (`Part`), so it ships with that
 // page's code: the page waits for its parts while its own code loads (site-modules.ts `loadParts`) and then
 // renders them like any import.
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, ReactNode, RefObject } from "react";
 import type { NavItem, Tab } from "./components/shell/nav";
 
 export interface AdminNavEntry {
@@ -18,8 +18,14 @@ export interface AdminNavEntry {
 
 export type Part<T> = () => Promise<{ default: T }>;
 
+export interface ArticlePassages {
+  body:RefObject<HTMLDivElement|null>;
+  bodyKey:string;
+  title:string;
+  credit:string;
+}
 export interface WebModule {
-  articleTools?:ComponentType<{articleId:string}>;
+  articleTools?:ComponentType<{articleId:string;passages?:ArticlePassages}>;
   /** Its folder under modules/. */
   name: string;
   /** Desktop sidebar: entries in a section between the engine's 内容 and 更多; modules naming the same section share it. */

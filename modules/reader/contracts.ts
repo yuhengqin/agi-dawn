@@ -13,6 +13,14 @@ export interface ReaderNote {
   updatedAt: string | null;
   version: number;
 }
+export const annotationColors = ['yellow','pink','blue','ink'] as const;
+export type AnnotationColor = typeof annotationColors[number];
+export const annotationNoteLimit = 2000;
+export const annotationQuoteLimit = 20000;
+export interface Passage {start:number;end:number;quote:string}
+export interface PassageAnnotation extends Passage {
+  id:string; bodyKey:string; color:AnnotationColor; note:string; version:number;
+}
 export interface ReaderStatePatch { expectedVersion: number; starred?: boolean; status?: ReaderState["status"] }
 export interface BulkReaderStatePatch { articles:Array<{id:string;expectedVersion:number}>;starred?:boolean;status?:ReaderState["status"] }
 export interface BulkReaderStateResult { selected:number;changed:number }

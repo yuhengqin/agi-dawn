@@ -5,6 +5,34 @@ import { chromium, webkit, expect } from "./browser.ts";
 import { fakeApi, feedItem, itemDetail, readerPage, startWebServer, visit, type WebServer } from "./web-server.ts";
 import type { Page } from "@playwright/test";
 
+test('public passage tools share visible math and reveal horizontally scrolled code',async()=>{
+  const article=itemDetail({id:'share-code',title:'公式与代码',bodyHtml:
+    '<p>取 <span data-reader-math="katex"><span class="katex"><span class="katex-mathml">hidden alternative</span><span class="katex-html" aria-hidden="true"><span class="mord">x</span></span></span></span> 的值。</p>'+
+    '<pre data-language="javascript"><code>'+('long_line '.repeat(110))+'TARGET</code></pre>'});
+  const web=await startWebServer(fakeApi(url=>url.pathname==='/api/site/items/'+article.id?article:undefined)),browser=await chromium.launch();
+  try{
+    const page=await browser.newPage({viewport:{width:1024,height:700},permissions:['clipboard-read','clipboard-write']});
+    await visit(page,web.origin+'/items/'+article.id);
+    const body=page.getByRole('region',{name:'文章正文'}),menu=page.getByRole('group',{name:'选中文字操作'}),share=page.getByRole('dialog',{name:'分享这段文字'});
+    await body.locator('p').evaluate(p=>getSelection()!.selectAllChildren(p));
+    await expect(menu).toBeVisible();await page.keyboard.press('Tab');await expect(menu.getByRole('button',{name:'划线',exact:true})).toBeFocused();
+    await menu.getByRole('button',{name:'分享',exact:true}).click();await expect(share.locator('blockquote')).toHaveText('取 x 的值。');
+    await page.keyboard.press('Escape');
+    const code=body.locator('pre code');
+    await code.evaluate(el=>{
+      const scroller=el.closest('pre')!;scroller.scrollLeft=scroller.scrollWidth;
+      const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
+      let node=walker.nextNode();while(node&&!node.textContent!.includes('TARGET'))node=walker.nextNode();
+      const range=new Range(),start=node!.textContent!.indexOf('TARGET');range.setStart(node!,start);range.setEnd(node!,start+6);
+      const s=getSelection()!;s.removeAllRanges();s.addRange(range);
+    });
+    await menu.getByRole('button',{name:'分享',exact:true}).click();await expect(share.locator('blockquote')).toHaveText('TARGET');
+    await share.getByRole('button',{name:'复制链接'}).click();const url=await page.evaluate(()=>navigator.clipboard.readText());
+    const receiver=await browser.newPage({viewport:{width:1024,height:700}});await visit(receiver,url);
+    await expect.poll(()=>receiver.locator('pre').evaluate(el=>el.scrollLeft)).toBeGreaterThan(100);
+  }finally{await browser.close();await web.stop();}
+});
+
 test('article Escape closes settings before focus mode and page scrolling dismisses reading settings',async()=>{
   const article=itemDetail({id:'reading-dismiss',title:'Reading keyboard controls',bodyHtml:('<p>'+('Saved article text. '.repeat(100))+'</p>').repeat(20)});
   const web=await startWebServer(fakeApi(url=>{

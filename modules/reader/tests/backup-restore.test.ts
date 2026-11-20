@@ -20,6 +20,7 @@ import {readNote} from "../notes.ts";
 import {readState} from "../state.ts";
 import {addView,updateView} from "../views.ts";
 import {savePosition} from "../positions.ts";
+import {createAnnotation} from '../annotations.ts';
 const run=promisify(execFile),originalData=config.dataDir,dirs:string[]=[],databases:string[]=[];
 installModules([reader]);
 after(async()=>{config.dataDir=originalData;await stopBoss();for(const name of databases)await sql.unsafe(`DROP DATABASE "${name}" WITH (FORCE)`);await closeDb();for(const dir of dirs)await rm(dir,{recursive:true,force:true});});
@@ -35,7 +36,8 @@ test("a local-only backup restores private notes, state, views, positions and ve
   const view=await updateView(created.id,{expectedVersion:1,name:'Restored note review'},'restore-test');
   await savePosition(snapshot!.id,{expectedVersion:0,anchor:'sec-1',offset:0.1,progress:0.2});
   const position=await savePosition(snapshot!.id,{expectedVersion:1,anchor:'sec-1',offset:0.3,progress:0.4});
-  const expected={note:await readNote(articleId),state:await readState(articleId),view,position};
+  const annotation=await createAnnotation(articleId,{bodyKey:'a'.repeat(64),start:0,end:5,quote:'Saved',color:'blue',note:'Private passage sentinel'},'restore-test');
+  const expected={note:await readNote(articleId),state:await readState(articleId),view,position,annotation};
   const summary=await runBackup(new Date("2026-10-27T10:00:00Z"),{localOnly:true});
   assert.equal(summary.uploaded,false);assert.equal(summary.complete,true);
   const manifest=JSON.parse(await readFile(summary.group!.manifest,"utf8"));
@@ -56,6 +58,7 @@ test("a local-only backup restores private notes, state, views, positions and ve
     import {verifyReaderArchive} from "./modules/reader/archive/verify.ts";
     import {exportSnapshot} from "./modules/reader/archive/export.ts";
     import {readNote} from "./modules/reader/notes.ts";
+    import {listAnnotations} from "./modules/reader/annotations.ts";
     import {readState,readLibrary} from "./modules/reader/state.ts";
     import {readView} from "./modules/reader/views.ts";
     import {readPosition} from "./modules/reader/positions.ts";
@@ -66,6 +69,7 @@ test("a local-only backup restores private notes, state, views, positions and ve
       const privateRows=async()=>({notes:await sql\`SELECT * FROM reader_notes ORDER BY article_id\`,state:await sql\`SELECT * FROM reader_state ORDER BY article_id\`,views:await sql\`SELECT * FROM reader_saved_views ORDER BY id\`,positions:await sql\`SELECT * FROM reader_positions ORDER BY article_id,body_hash\`,audit:await sql\`SELECT * FROM audit_log ORDER BY id\`}),before=await privateRows();
       assert.deepEqual(await readNote(id),expected.note);assert.deepEqual(await readState(id),expected.state);assert.deepEqual(await readView(expected.view.id),expected.view);
       assert.deepEqual(await readPosition(process.env.RESTORED_SNAPSHOT),{position:expected.position,previous:null});
+      assert.deepEqual(Array.from((await listAnnotations(id)).items),[expected.annotation]);
       const library=await readLibrary(expected.view.filters);assert.deepEqual(library.items.map(item=>item.id),[id]);assert(library.items[0].matches.some(match=>match.field==='note'));assert(library.items[0].note.updatedAt===expected.note.updatedAt);
       assert.equal((await readLibrary({sourceId:'restore-reader',q:'original body'})).items[0].id,id,'restored current body is searchable');
       const single=await exportNote(id),notes=unzipSync(await exportNotes({articleIds:[id]}));assert.equal(strFromU8(notes[single.filename]),single.text);assert(single.text.endsWith(expected.note.text+'\\n'));assert(single.text.includes('note_version: 7'));
@@ -73,6 +77,7 @@ test("a local-only backup restores private notes, state, views, positions and ve
       const bundle=await exportSnapshot(process.env.RESTORED_SNAPSHOT);
       const chunks=[];for await(const chunk of bundle.stream)chunks.push(chunk);
       const files=unzipSync(Buffer.concat(chunks));assert.ok(Buffer.from(files["article.html"]).includes("Restored original body"));assert(!Buffer.from(files['article.html']).includes(expected.note.text));
+      assert(!Buffer.from(files['article.html']).includes(expected.annotation.note));
       assert.deepEqual(await privateRows(),before,'restored search, reading and exports are read-only');
       console.log(JSON.stringify({notes:1,state:1,views:1,positions:1,assets:result.assets,exportFiles:Object.keys(files).length}));
     } finally {await closeDb();}

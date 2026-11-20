@@ -60,6 +60,37 @@ async function ownerHeaders(){
 }
 
 const noteMetadata=(body:string)=>Object.fromEntries(body.split('\n').slice(1,body.split('\n').indexOf('---',1)).map(line=>{const at=line.indexOf(': ');return [line.slice(0,at),JSON.parse(line.slice(at+2))];}));
+test('passage annotations stay private, identify an exact range and reject stale changes',async()=>{
+  const headers=await ownerHeaders(),source='annotations-'+tag();
+  await sql`INSERT INTO sources(id,name,kind,site_fulltext) VALUES(${source},'Annotations','rss',true)`;
+  const material=async (slug:string)=>(await upsertMaterial({sourceId:source,title:slug,url:`https://example.org/${source}/${slug}`,bodyHtml:'<p>选中这段文字</p>',bodyText:'选中这段文字',bodyStatus:'ok',via:'fetch'})).articleId;
+  const id=await material('first'),other=await material('second'),base=`/api/admin/reader/articles/${id}/annotations`;
+  const payload={bodyKey:'a'.repeat(64),start:0,end:6,quote:'选中这段文字',color:'yellow',note:'private passage note'};
+  assert.equal((await app.inject(base)).statusCode,401);
+  assert.equal((await app.inject({method:'POST',url:base,headers:{cookie:headers.cookie},payload})).statusCode,403);
+  for(const patch of [{end:3},{start:-1},{color:'invalid'},{note:'a'.repeat(2001)},{bodyKey:'wrong'}]){
+    assert.equal((await app.inject({method:'POST',url:base,headers,payload:{...payload,...patch}})).statusCode,400);
+  }
+  const create=()=>app.inject({method:'POST',url:base,headers,payload});
+  const created=await Promise.all([create(),create()]);
+  assert.deepEqual(created.map(r=>r.statusCode).sort(),[200,409]);
+  const listed=await app.inject({url:base,headers});
+  assert.equal(listed.headers['cache-control'],'no-store');
+  const [mark]=listed.json().items;
+  assert.equal(mark.note,payload.note);
+  const edit={expectedVersion:mark.version,note:'updated private passage note',color:'blue'};
+  const update=()=>app.inject({method:'PATCH',url:base+'/'+mark.id,headers,payload:edit});
+  assert.equal((await update()).json().version,mark.version+1);
+  assert.equal((await update()).statusCode,409);
+  assert.equal((await app.inject({method:'DELETE',url:base+'/'+mark.id,headers,payload:{expectedVersion:mark.version}})).statusCode,409);
+  assert.equal((await app.inject({url:base.replace(id,other),headers})).json().items.length,0);
+  assert((await app.inject({method:'DELETE',url:base.replace(id,other)+'/'+mark.id,headers,payload:{expectedVersion:mark.version+1}})).statusCode>=400);
+  const published=await app.inject('/api/site/items/'+id);
+  assert.equal(published.statusCode,200);assert(!published.body.includes('private passage note'));
+  assert.equal((await app.inject({method:'DELETE',url:base+'/'+mark.id,headers,payload:{expectedVersion:mark.version+1}})).statusCode,200);
+  assert.deepEqual((await app.inject({url:base,headers})).json().items,[]);
+});
+
 test('private Markdown export reads saved notes and current metadata without changing any article data',async()=>{
   const headers=await ownerHeaders(),source='note-export-'+tag(),category=await addCategory({name:'笔记分类 '+tag()},'test');
   const sourceName='Source "quoted"\n---\nnot_metadata: true';

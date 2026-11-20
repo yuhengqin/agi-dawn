@@ -3,6 +3,7 @@ import {Link,useLocation} from 'react-router';
 import {matchRanges,searchWords} from '@agidawn/contracts/search';
 import type {ReaderItemDetail} from '@agidawn/contracts/site';
 import {IconChevronDown,IconChevronUp} from '../../components/icons';
+import {revealRangeHorizontally} from '../../lib/reading-position';
 
 const fields={title:'标题',summary:'摘要',source:'来源',topic:'主题',body:'正文'};
 const blocks='address,article,aside,blockquote,br,caption,dd,details,div,dl,dt,figcaption,figure,footer,h1,h2,h3,h4,h5,h6,header,hr,li,main,nav,ol,p,pre,section,summary,table,tbody,td,tfoot,th,thead,tr,ul';
@@ -106,13 +107,7 @@ export function ArticleSearch({item,onNavigate}:{item:ReaderItemDetail;onNavigat
       if(target&&target.tabIndex<0&&!target.hasAttribute('tabindex'))target.setAttribute('tabindex','-1');
       target?.focus({preventScroll:true});
     }
-    // A text range can exist outside a code block or table's horizontal viewport.
-    const root=panel.current?.closest('article');
-    for(let parent=target;parent&&parent!==root;parent=parent.parentElement){
-      if(parent.scrollWidth<=parent.clientWidth||!['auto','scroll','hidden'].includes(getComputedStyle(parent).overflowX))continue;
-      const match=range.getBoundingClientRect(),box=parent.getBoundingClientRect(),left=box.left+parent.clientLeft;
-      if(match.left<left||match.right>left+parent.clientWidth)parent.scrollLeft+=match.left-left-Math.max(0,(parent.clientWidth-match.width)/2);
-    }
+    revealRangeHorizontally(range,panel.current?.closest('article'));
     const scope=panel.current?.closest<HTMLElement>('.public-article-reading');
     const toolbar=scope?.querySelector<HTMLElement>('.article-reading-toolbar');
     const barBottom=sticky&&panel.current?(parseFloat(getComputedStyle(panel.current).top)||0)+panel.current.getBoundingClientRect().height:0;

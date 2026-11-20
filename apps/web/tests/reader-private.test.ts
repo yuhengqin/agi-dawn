@@ -5,6 +5,90 @@ import {fakeApi,itemDetail,startWebServer,visit,type WebServer} from "./web-serv
 import type {DataRouter} from "react-router";
 import type {SavedReaderView,ReaderPosition} from "../../../modules/reader/contracts.ts";
 
+test('a selected passage can be annotated privately and shared with a reader at the same passage',async()=>{
+  const browser=await chromium.launch();
+  let web:WebServer|undefined;
+  const id='excerpt-flow',base='/api/admin/reader/articles/'+id;
+  const marks=new Map<string,{id:string;bodyKey:string;start:number;end:number;quote:string;color:string;note:string;version:number}>();
+  let signedIn=true,html='<p>引言与<strong>重复文字</strong>。</p>'+'<p>阅读上下文。</p>'.repeat(28)+'<p>这里是<strong>重复文字</strong>的后半段。</p>';
+  try{
+    web=await startWebServer(fakeApi(async(url,res,req)=>{
+      if(url.pathname==='/api/site/items/'+id)return itemDetail({id,title:'选区验收',bodyHtml:html});
+      if(url.pathname==='/api/auth/session')return {authenticated:signedIn&&!!req.headers.cookie};
+      if(url.pathname.startsWith('/api/admin/')){
+        if(!signedIn||!req.headers.cookie){res.statusCode=401;return {};}
+        if(url.pathname==='/api/admin/me')return {name:'Owner',csrf:'fixture'};
+        if(url.pathname===base)return {state:{starred:false,status:'to-read',version:0},note:{text:'',version:0}};
+        if(!url.pathname.startsWith(base+'/annotations'))return;
+        if(req.method==='GET')return {items:[...marks.values()]};
+        assert.equal(req.headers['x-csrf-token'],'fixture');
+        let body='';for await(const part of req)body+=part;
+        const data=JSON.parse(body);
+        if(req.method==='POST'){const mark={...data,id:'one',version:1};marks.set(mark.id,mark);return mark;}
+        const prev=marks.get('one');
+        if(data.expectedVersion!==prev?.version){res.statusCode=409;return {detail:'版本冲突'};}
+        if(req.method==='PATCH'){const next={...prev!,color:data.color,note:data.note,version:prev!.version+1};marks.set('one',next);return next;}
+        if(req.method==='DELETE'){marks.delete('one');return {deleted:true};}
+      }
+    }));
+    const owner=await browser.newContext({viewport:{width:1360,height:820},permissions:['clipboard-read','clipboard-write']});
+    await owner.addCookies([{name:'testowner',value:'1',url:web.origin}]);
+    const page=await owner.newPage(),url=web.origin+'/items/'+id;
+    const paragraph=page.getByRole('region',{name:'文章正文'}).locator('p').last();
+    const select=async()=>{
+      await paragraph.scrollIntoViewIfNeeded();
+      await paragraph.evaluate(el=>{
+        const range=new Range();range.setStart(el.firstChild!,2);range.setEnd(el.querySelector('strong')!.nextSibling!,3);
+        const selection=getSelection()!;selection.removeAllRanges();selection.addRange(range);
+      });
+    };
+    await visit(page,url+'?q=重复');await expect(page.getByLabel('私人笔记')).toBeVisible();
+    await select();
+    const menu=page.getByRole('group',{name:'选中文字操作'});
+    await expect(menu).toBeVisible();
+    await menu.getByRole('button',{name:'划线',exact:true}).click();
+    await expect.poll(()=>marks.size).toBe(1);
+    await paragraph.locator('strong').click();
+    await menu.getByRole('button',{name:'蓝色下划线',exact:true}).click();
+    await expect.poll(()=>marks.get('one')?.color).toBe('blue');
+    await paragraph.locator('strong').click();await menu.getByRole('button',{name:'笔记',exact:true}).click();
+    const note=page.getByRole('dialog',{name:'选区笔记'});
+    await note.getByLabel('笔记内容').fill('只有站主可见的想法');await note.getByRole('button',{name:'保存笔记'}).click();
+    await expect.poll(()=>marks.get('one')?.note).toBe('只有站主可见的想法');
+    await page.reload();await expect(page.getByText('本文划线与笔记（1）',{exact:true})).toBeVisible();
+    await paragraph.locator('strong').click();await menu.getByRole('button',{name:'笔记',exact:true}).click();
+    await expect(note.getByLabel('笔记内容')).toHaveValue('只有站主可见的想法');
+    await note.getByLabel('笔记内容').fill('保留当前草稿');
+    await expect.poll(()=>page.evaluate(()=>!window.dispatchEvent(new Event('beforeunload',{cancelable:true})))).toBe(true);
+    const original=marks.get('one')!;marks.set('one',{...original,color:'pink',note:'另一窗口修改',version:original.version+1});
+    await note.getByRole('button',{name:'保存笔记'}).click();await expect(note.getByRole('alert')).toBeVisible();
+    await note.getByRole('button',{name:'重新载入'}).click();await expect(note.getByText('另一窗口修改',{exact:true})).toBeVisible();
+    await expect(note.getByLabel('笔记内容')).toHaveValue('保留当前草稿');
+    await note.getByRole('button',{name:'保存笔记'}).click();await expect(note).toHaveCount(0);
+    assert.equal(marks.get('one')?.color,'pink');
+    await select();await menu.getByRole('button',{name:'分享',exact:true}).click();
+    const share=page.getByRole('dialog',{name:'分享这段文字'});
+    await expect(share.locator('blockquote')).toHaveText('是重复文字的后半');
+    await share.getByRole('button',{name:'复制链接'}).click();
+    const link=await page.evaluate(()=>navigator.clipboard.readText());
+    assert(link.startsWith(url+'#'));assert(!link.includes('?q='));
+    await share.getByRole('button',{name:'分享图'}).click();
+    await expect(share.getByRole('img',{name:'摘录分享图'})).toBeVisible();
+    const download=page.waitForEvent('download');await share.getByRole('link',{name:'保存图片'}).click();
+    assert((await download).suggestedFilename().endsWith('.png'));
+    await page.keyboard.press('Escape');await expect(share).toHaveCount(0);
+    const guest=await browser.newPage({viewport:{width:1024,height:680}});
+    await visit(guest,link);await expect.poll(()=>guest.evaluate(()=>scrollY)).toBeGreaterThan(200);
+    assert(!(await guest.content()).includes('保留当前草稿'));
+    await select();await menu.getByRole('button',{name:'笔记',exact:true}).click();
+    signedIn=false;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+    await expect(note).toHaveCount(0);assert(!(await page.content()).includes('保留当前草稿'));
+    html='<p>换版后的正文。</p>';await guest.reload();
+    await expect(guest.getByRole('region',{name:'文章正文'})).toHaveText('换版后的正文。');
+    assert(!(await guest.content()).includes('重复文字的后半'));
+  }finally{await browser.close();await web?.stop();}
+});
+
 test('initial owner loading merges focus rechecks and never replaces a newly edited draft',async()=>{
   const browser=await chromium.launch();let web:WebServer|undefined,reads=0,releaseFirst=()=>{},releaseSecond=()=>{},begun=()=>{};
   const first=new Promise<void>(resolve=>releaseFirst=resolve),second=new Promise<void>(resolve=>releaseSecond=resolve),started=new Promise<void>(resolve=>begun=resolve);

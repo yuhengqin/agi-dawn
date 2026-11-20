@@ -8,10 +8,16 @@ export async function copyText(text: string): Promise<void> {
   } catch {
     const ta = document.createElement("textarea");
     ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    const copied = document.execCommand("copy");
-    ta.remove();
-    if (!copied) throw new Error("copy failed");
+    const opener=document.activeElement;
+    const container=opener?.closest('dialog[open]')??document.body;
+    ta.style.cssText="position:fixed;inset:0 auto auto 0;opacity:0";
+    container.appendChild(ta);
+    try {
+      ta.select();
+      if (!document.execCommand("copy")) throw new Error("copy failed");
+    } finally {
+      ta.remove();
+      if(opener instanceof HTMLElement)opener.focus({preventScroll:true});
+    }
   }
 }

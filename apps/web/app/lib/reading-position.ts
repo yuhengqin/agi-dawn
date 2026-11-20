@@ -4,6 +4,15 @@ function sections(root:HTMLElement,ids:string[]){return [{anchor:null as string|
 const pageTop=(element:HTMLElement)=>element.getBoundingClientRect().top+window.scrollY;
 const margin=(root:HTMLElement)=>parseFloat(getComputedStyle(root).scrollMarginTop)||0;
 
+/** A text range can lie outside a code block or table's horizontal viewport. */
+export function revealRangeHorizontally(range:Range,root:Element|null|undefined){
+  for(let parent=range.startContainer.parentElement;parent&&parent!==root;parent=parent.parentElement){
+    if(parent.scrollWidth<=parent.clientWidth||!['auto','scroll','hidden'].includes(getComputedStyle(parent).overflowX))continue;
+    const match=range.getBoundingClientRect(),box=parent.getBoundingClientRect(),left=box.left+parent.clientLeft;
+    if(match.left<left||match.right>left+parent.clientWidth)parent.scrollLeft+=match.left-left-Math.max(0,(parent.clientWidth-match.width)/2);
+  }
+}
+
 /** Capture the section and its fraction at the reading line, only while inside the body. */
 export function captureReadingPoint(root:HTMLElement,ids:string[]):ReadingPoint|null{
   if(!root.isConnected)return null;

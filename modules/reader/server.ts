@@ -1,6 +1,7 @@
 import { defineServerModule } from "@agidawn/backend/modules";
 import { patchState, saveBulkState, readLibrary, readState, requireArticle } from "./state.ts";
 import { readNote, writeNote } from "./notes.ts";
+import {createAnnotation,deleteAnnotation,listAnnotations,updateAnnotation} from './annotations.ts';
 import {archiveQueue,captureSnapshot,listSnapshots,readSnapshot,currentSnapshot} from "./archive/snapshots.ts";
 import {missing} from "./state.ts";
 import {assetFile,currentSnapshotMatches,publicationBody,snapshotBody} from "./archive/assets.ts";
@@ -51,6 +52,11 @@ export default defineServerModule({ name: "reader",on:{articleCreated:registerTr
   app.patch("/api/admin/reader/articles/:id/state",adminHandler(async(req,_reply,admin)=>patchState(id(req),req.body,admin.name)));
   app.patch("/api/admin/reader/state",adminHandler(async(req,_reply,admin)=>saveBulkState(req.body,admin.name)));
   app.put("/api/admin/reader/articles/:id/note",adminHandler(async(req,_reply,admin)=>writeNote(id(req),req.body,admin.name)));
+  const annotations='/api/admin/reader/articles/:id/annotations';
+  app.get(annotations,adminHandler(async req=>listAnnotations(id(req))));
+  app.post(annotations,adminHandler(async(req,_reply,admin)=>createAnnotation(id(req),req.body,admin.name)));
+  app.patch(annotations+'/:mark',adminHandler(async(req,_reply,admin)=>updateAnnotation(id(req),(req.params as {mark:string}).mark,req.body,admin.name)));
+  app.delete(annotations+'/:mark',adminHandler(async(req,_reply,admin)=>deleteAnnotation(id(req),(req.params as {mark:string}).mark,req.body,admin.name)));
   app.get('/api/admin/reader/articles/:id/note.md',adminHandler(async(req,reply)=>{
     const file=await exportNote(id(req));
     return reply.header('Content-Disposition',`attachment; filename="${file.filename}"`).type('text/markdown; charset=utf-8').send(file.text);

@@ -1,0 +1,84 @@
+:root {
+  --passage-yellow: #f4da83;
+  --passage-pink: #ba526e;
+  --passage-blue: #3e75b5;
+  --passage-ink: var(--ink);
+}
+[data-theme="dark"] {
+  --passage-yellow: #81672d;
+  --passage-pink: #ef99af;
+  --passage-blue: #8db9ee;
+}
+::highlight(passage-yellow) { background-color: var(--passage-yellow); color: var(--ink); }
+::highlight(passage-pink) { text-decoration: underline solid var(--passage-pink) 2px; }
+::highlight(passage-blue) { text-decoration: underline solid var(--passage-blue) 2px; }
+::highlight(passage-ink) { text-decoration: underline solid var(--passage-ink) 2px; }
+::highlight(passage-shared) { background-color: var(--accent-soft); text-decoration: underline var(--accent); }
+
+.passage-tools {
+  position: fixed; z-index: 55; display: flex; align-items: center; gap: 2px;
+  max-width: calc(100vw - 16px); padding: 4px; border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control); background: var(--surface); box-shadow: var(--shadow-pop);
+  color: var(--ink); font-size: 13px; line-height: 1.3; user-select: none;
+}
+.passage-tools button, .passage-actions :is(button,a), .passage-close {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-height: 34px; padding: 0 10px; border-radius: var(--radius-control); cursor: pointer;
+}
+.passage-tools button:hover, .passage-close:hover, .passage-list button:hover { background: var(--bg-sunk); }
+.passage-tools button:disabled, .passage-dialog button:disabled { opacity: .55; cursor: wait; }
+.passage-swatches { display: flex; padding-inline: 3px; border-inline: 1px solid var(--line); }
+.passage-tools .passage-swatch { width: 25px; padding: 0; }
+.passage-swatch i, .passage-list i { display: inline-block; width: 14px; height: 14px; border-radius: 9999px; flex-shrink: 0; }
+[data-color="yellow"] i, .passage-list i[data-color="yellow"] { background: var(--passage-yellow); }
+[data-color="pink"] i, .passage-list i[data-color="pink"] { background: var(--passage-pink); }
+[data-color="blue"] i, .passage-list i[data-color="blue"] { background: var(--passage-blue); }
+[data-color="ink"] i, .passage-list i[data-color="ink"] { background: var(--passage-ink); }
+.passage-swatch[aria-pressed="true"] i { outline: 1px solid var(--ink); outline-offset: 2px; }
+:is(.passage-tools,.passage-dialog,.passage-list) :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.passage-dialog {
+  position: fixed; inset: 0; margin: auto; width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px); padding: 0; overflow-y: auto; overscroll-behavior: contain;
+  border: 1px solid var(--line); border-radius: var(--radius-panel);
+  background: var(--surface); color: var(--ink); box-shadow: var(--shadow-pop);
+}
+.passage-dialog::backdrop { background: rgb(18 27 31 / .42); }
+.passage-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px 10px 22px; border-bottom: 1px solid var(--line); }
+.passage-dialog h2 { font-size: 18px; font-weight: 600; }
+.passage-close { width: 34px; padding: 0; }
+.passage-panel { display: grid; gap: 15px; min-width: 0; padding: 21px; font-size: 14px; }
+.passage-panel blockquote {
+  max-height: 27dvh; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  margin: 0; padding: 2px 0 2px 15px; border-inline-start: 3px solid var(--line-strong);
+  font-family: Georgia, "Songti SC", serif; font-size: 17px; line-height: 1.7;
+}
+.passage-credit, .passage-hint, .passage-counter { color: var(--ink-3); font-size: 13px; overflow-wrap: anywhere; }
+.passage-counter { margin-top: -10px; text-align: right; font-variant-numeric: tabular-nums; }
+.passage-field { display: grid; gap: 6px; font-weight: 500; }
+.passage-field textarea, .passage-panel input { width: 100%; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-control); background: var(--bg); color: var(--ink); font: inherit; }
+.passage-field textarea { min-height: 104px; resize: vertical; font-weight: 400; }
+.passage-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.passage-actions :is(button,a) { border: 1px solid var(--line-strong); min-height: 36px; background: var(--surface); }
+.passage-actions :is(button,a):hover { background: var(--bg-sunk); }
+.passage-actions .primary { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+.passage-actions .primary:hover { background: var(--accent-ink); }
+.passage-actions .passage-remove { margin-inline-end: auto; }
+.passage-channels { display: flex; gap: 20px; font-size: 13px; }
+.passage-channels a, .passage-reload, .passage-hint button { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.passage-panel [role="alert"] { color: var(--hot); }
+.passage-compare { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; background: var(--bg-sunk); }
+.passage-compare h3 { font-size: 13px; color: var(--ink-3); }
+.passage-card, .passage-qr { display: block; margin-inline: auto; max-height: 53dvh; max-width: 100%; width: auto; object-fit: contain; }
+.passage-qr { width: 210px; image-rendering: pixelated; }
+.passage-list { margin-block: 20px; padding-block: 8px; border-block: 1px solid var(--line); font-size: 14px; }
+.passage-list summary { cursor: pointer; width: fit-content; padding: 6px 0; font-weight: 500; }
+.passage-list button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; text-align: start; border-radius: var(--radius-control); cursor: pointer; }
+.passage-list button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.passage-list small { flex: none; color: var(--ink-3); }
+.article-prose .passage-note-marker {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: text-bottom;
+  width: 24px; height: 24px; margin-inline-start: 4px; padding: 0; border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control); background: var(--surface); color: var(--ink-2); cursor: pointer;
+}
+.article-prose .passage-note-marker:is(:hover,:focus-visible) { color: var(--accent); border-color: var(--accent); }
