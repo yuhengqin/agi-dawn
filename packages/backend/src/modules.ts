@@ -35,7 +35,7 @@ export interface ServerModule {
   publicationBody?:(input:PublishedBodyInput)=>Promise<string>;
   publicationTranslation?:(input:PublishedBodyInput)=>Promise<{html:string;complete:boolean}|null>;
   publicationMetadata?:(items:readonly {id:string;title:string;summary:string|null}[])=>Promise<Map<string,ReaderMetadataTranslation>>;
-  /** A parameterized, at-most-one-row SELECT of title, summary and body plain text. */
+  /** At most one row of translated title, summary, searchable body text and currently permitted body_html. */
   publicationSearch?:(input:PublicationSearchInput)=>SearchSql;
   backupDirectories?:readonly string[];
   backupVerify?:(dataDir:string)=>Promise<unknown>;

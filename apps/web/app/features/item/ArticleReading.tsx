@@ -46,20 +46,23 @@ export function useArticleReading(outline:OutlineEntry[],html:string|null,focus:
   return {scope,body,toolbar,current,progress,preserve,navigate,stop};
 }
 
-type OutlineProps={outline:OutlineEntry[];current:string|null;navigate:(id:string)=>void};
-function OutlineLinks({outline,current,navigate}:OutlineProps){
-  const [expanded,setExpanded]=useState<Record<string,boolean>>({});
+type OutlineProps={
+  outline:OutlineEntry[];current:string|null;navigate:(id:string)=>void;
+  expanded:Record<string,boolean>;onExpand:(id:string,open:boolean)=>void;
+};
+const fullyExpandedOutlineLimit=10;
+function OutlineLinks({outline,current,navigate,expanded,onExpand}:OutlineProps){
   const ancestors:string[][]=[];
   const stack:OutlineEntry[]=[];
   for(const entry of outline){while(stack.length&&stack.at(-1)!.level>=entry.level)stack.pop();ancestors.push(stack.map(parent=>parent.id));stack.push(entry);}
   const currentIndex=outline.findIndex(entry=>entry.id===current),activeParents=currentIndex<0?[]:ancestors[currentIndex]!;
-  const open=(id:string)=>expanded[id]!==false;
+  const open=(id:string)=>expanded[id]??(outline.length<=fullyExpandedOutlineLimit||id===current||activeParents.includes(id));
   const click=(event:MouseEvent<HTMLAnchorElement>,id:string)=>{if(event.button||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();navigate(id);};
   return <ol className="article-outline-list">{outline.map((entry,index)=>{
     const children=(outline[index+1]?.level??0)>entry.level,active=entry.id===current,containsCurrent=!open(entry.id)&&activeParents.includes(entry.id);
     return <li key={entry.id} hidden={ancestors[index]!.some(id=>!open(id))} style={{paddingInlineStart:ancestors[index]!.length*12}}>
       <a href={'#'+entry.id} aria-current={active||containsCurrent?'location':undefined} aria-label={containsCurrent?`${entry.text}（当前章节：${outline[currentIndex]?.text}）`:undefined} title={containsCurrent?`当前章节：${outline[currentIndex]?.text}`:undefined} onClick={event=>click(event,entry.id)}>{entry.text}{containsCurrent&&<span className="ml-1 text-[11px] font-normal">· 当前章节</span>}</a>
-      {children&&<button type="button" aria-expanded={open(entry.id)} aria-label={`${open(entry.id)?'收起':'展开'}：${entry.text}`} onClick={()=>setExpanded(value=>({...value,[entry.id]:!open(entry.id)}))}><IconChevronDown size={14}/></button>}
+      {children&&<button type="button" aria-expanded={open(entry.id)} aria-label={`${open(entry.id)?'收起':'展开'}：${entry.text}`} onClick={()=>onExpand(entry.id,!open(entry.id))}><IconChevronDown size={14}/></button>}
     </li>;
   })}</ol>;
 }

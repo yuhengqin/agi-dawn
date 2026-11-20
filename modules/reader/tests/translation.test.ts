@@ -283,3 +283,21 @@ test('English titles and summaries containing Chinese product names still transl
   const {articleId}=await upsertMaterial({...input(),title,excerpt:summary,bodyHtml:undefined,bodyText:undefined,bodyStatus:'pending'});
   await runAll();assert.deepEqual((await detail(articleId)).metadataTranslation,{title:'中文译文：'+title,summary:'中文译文：'+summary});
 });
+
+test('reading time follows the current translation in the list, detail and related articles',async()=>{
+  const sourceId='translation-timing-'+tag();
+  await sql`INSERT INTO sources(id,name,kind,site_fulltext) VALUES(${sourceId},'Timing fixture','rss',true)`;
+  const {articleId}=await upsertMaterial({...input(),sourceId});
+  const {articleId:other}=await upsertMaterial({...input(),sourceId});
+  const translated='<p>'+'译文'.repeat(350)+'</p>';
+  await sql`UPDATE reader_translations SET status='partial',body_html=${translated},complete=false WHERE article_id=${articleId}`;
+  async function times(){
+    const list=(await app.inject('/api/site/articles?sourceId='+sourceId)).json();
+    const item=await detail(articleId),related=(await detail(other)).related;
+    const find=(rows:{id:string;readingMinutes:number|null}[])=>rows.find(row=>row.id===articleId)!.readingMinutes;
+    return [find(list.items),item.readingMinutes,item.body?.readingMinutes??null,find(related)];
+  }
+  assert.deepEqual(await times(),[2,2,2,2]);
+  await sql`UPDATE reader_translations SET source_html='<p>Earlier version</p>' WHERE article_id=${articleId}`;
+  assert.deepEqual(await times(),[1,1,1,1]);
+});

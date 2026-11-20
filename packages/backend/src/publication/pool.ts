@@ -33,7 +33,8 @@ export async function loadReaderList(query:ReaderListQuery):Promise<ReaderListPa
     LIMIT ${limit} OFFSET (SELECT (page-1)*${limit}::bigint FROM pagination)
   ), content AS (
     SELECT ${READER_COLUMNS},translated.title AS translated_title,translated.summary AS translated_summary,
-      translated.body AS translated_body,${originalBody} AS search_body,topic.names AS topic_names
+      translated.body_html AS translated_html,${words.length?sql`translated.body`:sql`NULL::text`} AS translated_body,
+      ${words.length?originalBody:sql`NULL::text`} AS search_body,topic.names AS topic_names
       ${READER_FROM} JOIN selected ON selected.article_id=p.article_id ${joins}
   ) SELECT pagination.*,content.* FROM pagination LEFT JOIN content ON true ORDER BY content.sort_at DESC,content.id DESC`;
   const key=JSON.stringify([query.sourceId??null,query.category??null,query.topic??null,query.from??null,query.to??null,query.q?.trim()??"",page,limit]);

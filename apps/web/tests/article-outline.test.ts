@@ -12,6 +12,50 @@ function outlineApi(item:ReturnType<typeof itemDetail>){
   });
 }
 
+test("a long nested outline shows the chapters and follows the current branch", async () => {
+  const outline = Array.from({ length: 5 }, (_, i) => [
+    { id: `chapter-${i}`, text: `Chapter ${i}`, level: 2 },
+    { id: `section-${i}`, text: `Section ${i}`, level: 3 },
+    { id: `detail-${i}`, text: `Detail ${i}`, level: 4 },
+  ]).flat();
+  const item = itemDetail({ id: "long-nested", title: "A structured article", outline,
+    bodyHtml: "<p>" + "Introductory paragraph. ".repeat(350) + "</p>" +
+      outline.map(o => `<h${o.level} id="${o.id}">${o.text}</h${o.level}><p>${"Article text. ".repeat(150)}</p>`).join(""),
+  });
+  const web = await startWebServer(outlineApi(item));
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    await visit(page, web.origin + "/items/" + item.id);
+    const nav = page.getByRole("navigation", { name: "本文目录", exact: true });
+    await expect(nav.getByRole("link")).toHaveText(outline.filter(o => o.level === 2).map(o => o.text));
+    await expect(nav.getByRole("link", { name: "Chapter 4" })).toBeInViewport();
+    await nav.getByRole("link", { name: "Chapter 2" }).click();
+    await expect(nav.getByRole("button", { name: "收起：Chapter 2" })).toHaveAttribute("aria-expanded", "true");
+    await expect(nav.getByRole("link", { name: "Section 2" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Section 1" })).toBeHidden();
+    // Let the chapter jump land before continuing down the article.
+    await expect.poll(() => page.locator("#chapter-2").evaluate(el =>
+      Math.abs(el.getBoundingClientRect().top - parseFloat(getComputedStyle(el).scrollMarginTop)))).toBeLessThan(2);
+    await page.locator("#detail-3").evaluate(el => el.scrollIntoView({ behavior: "instant" }));
+    await expect(nav.getByRole("link", { name: "Detail 3" })).toHaveAttribute("aria-current", "location");
+    await expect(nav.getByRole("link", { name: "Section 2" })).toBeHidden();
+    await nav.getByRole("button", { name: "收起：Chapter 3" }).press("Enter");
+    await expect(nav.getByRole("link", { name: /Chapter 3（当前章节：Detail 3）/ })).toHaveAttribute("aria-current", "location");
+    await page.mouse.wheel(0, 60);
+    await expect(nav.getByRole("link", { name: "Detail 3", exact: true })).toBeHidden();
+    await nav.getByRole("button", { name: "展开：Chapter 0" }).click();
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await page.getByLabel("展开文章目录", { exact: true }).click();
+    const dropdown = page.getByRole("navigation", { name: "折叠文章目录", exact: true });
+    await expect(dropdown.getByRole("button", { name: "展开：Chapter 3" })).toHaveAttribute("aria-expanded", "false");
+    await expect(dropdown.getByRole("link", { name: "Section 0", exact: true })).toBeVisible();
+  } finally {
+    await browser.close();
+    await web.stop();
+  }
+});
+
 // Failure mode (#182 left half-fixed): between lg and 2xl the outline sits under the right rail's other
 // blocks; on a 1366x657 laptop window only one entry was visible, and a little shorter the rail grew
 // past the window again so the later entries could not be reached at all.

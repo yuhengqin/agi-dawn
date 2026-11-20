@@ -2,9 +2,8 @@ import type {ReaderTopicQuery} from '@agidawn/contracts/site';
 import {beijingMidnight} from '@agidawn/contracts/time';
 import {searchWords,searchPattern} from '@agidawn/contracts/search';
 import {sql,withCustomPlans,type Db} from '../db.ts';
-import {serverModules} from '../modules.ts';
 import {categoryExists} from './categories.ts';
-import {readerVisible} from './items.ts';
+import {readerBodyAllowed,readerTranslationJoin,readerVisible} from './items.ts';
 import {htmlSearchText,sourceSearchText,summarySearchText} from './search-text.ts';
 
 export class ReaderQueryError extends Error {readonly statusCode=400;}
@@ -35,9 +34,8 @@ export async function readerFilters(query:ReaderTopicQuery){
   if(query.category&&!await categoryExists(query.category))throw new ReaderQueryError('invalid category');
   const from=readerDay(query.from),to=readerDay(query.to);if(from&&to&&from>to)throw new ReaderQueryError('from must not follow to');
   const words=searchWords(query.q?.trim()??'').slice(0,6),terms=words.map(searchPattern);
-  const allowed=sql`s.site_fulltext AND p.visibility='public' AND coalesce(o.visibility,'public')='public'`;
-  const extension=serverModules().find(module=>module.publicationSearch)?.publicationSearch?.({articleId:sql`p.article_id`,title:sql`p.title`,summary:sql`p.summary`,bodyRevision:sql`a.body_revision`,bodyHtml:sql`a.body_html`,bodyAllowed:allowed})??sql`SELECT NULL::text AS title,NULL::text AS summary,NULL::text AS body`;
-  const joins=sql`LEFT JOIN LATERAL (${extension}) AS translated ON true
+  const allowed=readerBodyAllowed;
+  const joins=sql`${readerTranslationJoin()}
     LEFT JOIN LATERAL (SELECT string_agg(t.name,' ') AS names FROM article_topics t WHERE p.tags && t.tags) AS topic ON true
     LEFT JOIN LATERAL (SELECT ${summarySearchText(sql`p.summary`,sql`p.title`,sql`p.url`)} AS summary,
       ${summarySearchText(sql`translated.summary`,sql`translated.title`,sql`p.url`)} AS translated_summary,

@@ -41,6 +41,24 @@ test('public body cleanup preserves the stored original and body revision',async
   assert.deepEqual((await sql`SELECT body_html,body_revision,content_hash FROM articles WHERE id=${articleId}`)[0],before);
 });
 
+test('reading time uses the public article text across list, detail and related articles',async()=>{
+  const sourceId='reading-time-'+tag();
+  await sql`INSERT INTO sources(id,name,kind,site_fulltext) VALUES(${sourceId},'Timing fixture','rss',true)`;
+  const material={sourceId,bodyStatus:'ok' as const,via:'fetch' as const};
+  const {articleId}=await upsertMaterial({...material,url:'https://example.org/timed',title:'Timed article',
+    bodyText:'Short extraction',bodyHtml:'<p>'+'word '.repeat(440)+'&amp;</p>'});
+  const {articleId:other}=await upsertMaterial({...material,url:'https://example.org/other',title:'Another article',bodyText:'Related article'});
+  async function times(){
+    const list=(await app.inject('/api/site/articles?sourceId='+sourceId)).json();
+    const item=(await detail(articleId)).json(),related=(await detail(other)).json().related;
+    const find=(rows:{id:string;readingMinutes:number|null}[])=>rows.find(row=>row.id===articleId)!.readingMinutes;
+    return [find(list.items),item.readingMinutes,item.body?.readingMinutes??null,find(related)];
+  }
+  assert.deepEqual(await times(),[2,2,2,2]);
+  await setVisibility(articleId,{visibility:'summary-only',version:0,reason:'metadata only'},'test');
+  assert.deepEqual(await times(),[null,null,null,null]);
+});
+
 test("raw material appears immediately, retains its language and needs no summary or publication date",async()=>{
   const id=await article(),response=await detail(id),item=response.json();
   assert.equal(response.statusCode,200);assert.equal(item.title,"Original technical title");assert.equal(item.summary,null);

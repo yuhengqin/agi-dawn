@@ -31,6 +31,7 @@ export function meta({loaderData}:Route.MetaArgs){return pageMeta({title:loaderD
 const notices={pending:"全文暂未就绪。可以先阅读摘要，或访问原文。",unavailable:"暂时无法取得全文，请访问原文。",partial:"正文有缺失，请对照原文。","not-permitted":"本来源暂以摘要与原文链接展示。",ready:""};
 export default function Item(){const item=useLoaderData<typeof loader>();return <ItemReading key={item.id} item={item}/>;}
 function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useState(false),[outlineCollapsed,setOutlineCollapsed]=useState(false);
+  const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   const location=useLocation(),navigate=useNavigate();
   const [clientReady,setClientReady]=useState(isHydrated);
   useEffect(()=>{if(!clientReady)setClientReady(true);},[clientReady]);
@@ -45,7 +46,9 @@ function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useS
   const categoryName=item.category?root?.categories?.find(category=>category.id===item.category)?.name:undefined;
   const translated=item.body?.language==='translation'?item.body:null,metadata=item.metadataTranslation,outline=item.body?.outline??[],html=item.body?.html??null;
   const languageLabel=translated?'中文译文':item.body?.contentLanguage==='zh'?'中文正文':null;
-  const reading=useArticleReading(outline,html,focus,outlineCollapsed),outlineProps={outline,current:reading.current,navigate:reading.navigate,progress:reading.progress};
+  const reading=useArticleReading(outline,html,focus,outlineCollapsed);
+  const outlineProps={outline,current:reading.current,navigate:reading.navigate,progress:reading.progress,expanded,
+    onExpand:(id:string,open:boolean)=>setExpanded(previous=>({...previous,[id]:open}))};
   useEffect(()=>{
     if(!focus)return;
     const escape=(event:KeyboardEvent)=>{

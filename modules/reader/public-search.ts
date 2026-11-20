@@ -5,7 +5,7 @@ import {htmlSearchText,metadataSearchText} from '@agidawn/backend/publication/se
 export function publicationSearch(input:PublicationSearchInput){
   return sql`SELECT ${metadataSearchText(sql`mt.title`,input.title)} AS title,
     ${metadataSearchText(sql`mt.summary`,input.summary)} AS summary,
-    CASE WHEN ${input.bodyAllowed} AND bt.body_html IS NOT NULL THEN ${htmlSearchText(sql`bt.body_html`)} ELSE NULL END AS body
+    bt.body_html,CASE WHEN ${input.bodyAllowed} AND bt.body_html IS NOT NULL THEN ${htmlSearchText(sql`bt.body_html`)} ELSE NULL END AS body
     FROM (SELECT 1) AS seed
     LEFT JOIN reader_metadata_translations mt ON mt.article_id=${input.articleId} AND mt.status='translated'
       AND mt.source_title=${input.title} AND mt.source_summary IS NOT DISTINCT FROM ${input.summary}
