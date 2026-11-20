@@ -66,10 +66,10 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-control);
-  background: var(--surface);
-  box-shadow: 0 7px 20px #202a3012;
+  background: var(--raised);
+  box-shadow: var(--shadow-pop);
 }
 .reader-date-panel { z-index: 50; width: 560px; padding: 0; overflow: hidden; }
 .reader-date-content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 16px; }
@@ -327,15 +327,15 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #13191c;
-  --bg-sunk: #182024;
-  --bg-muted: #202a2f;
+  --bg: #15191f;
+  --bg-sunk: #1b2027;
+  --bg-muted: #242b35;
   --well: color-mix(in oklab, var(--bg-muted) 60%, transparent);
-  --surface: #1a2226;
-  --surface-2: #1d272b;
-  --raised: #202a2f;
-  --sidebar: #161e21;
-  --daybar: #182024;
+  --surface: #1c222b;
+  --surface-2: #202730;
+  --raised: #252e3b;
+  --sidebar: #181d25;
+  --daybar: #1b2027;
   --ink: #e7eceb;
   --ink-2: #d2dada;
   --ink-3: #a5b0b3;
@@ -880,8 +880,8 @@ input.reader-pagination-field::-webkit-outer-spin-button { -webkit-appearance: n
 .reading-display-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--bg-sunk); }
 .reading-display-options label { position: relative; min-width: 0; cursor: pointer; }
 .reading-display-options input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.reading-display-options span { display: grid; place-items: center; min-height: 32px; padding-inline: 4px; border-radius: var(--radius-mark); color: var(--ink-3); font-size: 13px; pointer-events: none; }
-.reading-display-options input:checked + span { background: var(--surface); color: var(--accent-ink); font-weight: 600; }
+.reading-display-options span { display: grid; place-items: center; min-height: 32px; padding-inline: 4px; border: 1px solid transparent; border-radius: var(--radius-mark); color: var(--ink-3); font-size: 13px; pointer-events: none; }
+.reading-display-options input:checked + span { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
 .reading-display-options input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
 .article-mobile-outline > summary { list-style: none; }
 .article-mobile-outline > summary::-webkit-details-marker { display: none; }

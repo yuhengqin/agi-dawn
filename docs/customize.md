@@ -8,7 +8,9 @@
 
 ## 界面配色
 
-界面采用蓝色强调色，沿用现有布局与明暗切换。`apps/web/app/app.css` 的共享变量控制侧栏、链接、目录、按钮、筛选、分页与文本选区；浅色使用 `#0062df` 和 `#eaf2ff` 选中底色，深色使用 `#70adff`，实心按钮文字跟随 `--accent-contrast`。配色参考[掘金文章页](https://juejin.cn/post/7663822459978137646)，文字蓝色适当加深以保证小字号对比度。修改后重新构建并重启 web，无需迁移数据库。
+界面采用蓝色强调色，沿用现有布局与明暗切换。`apps/web/app/app.css` 的共享变量控制侧栏、链接、目录、按钮、筛选、分页与文本选区；浅色使用 `#0062df` 和 `#eaf2ff` 选中底色，深色使用 `#70adff`，实心按钮文字跟随 `--accent-contrast`。浅色保留暖纸底色，深色以 `#15191f` 为底色，搭配低饱和蓝灰表面；日期与阅读设置弹层使用 `--raised`、`--line-strong` 和随主题变化的阴影，阅读设置以浅蓝底和蓝色边框标识选中值。配色参考[掘金文章页](https://juejin.cn/post/7663822459978137646)，文字蓝色适当加深以保证小字号对比度。修改后重新构建并重启 web，无需迁移数据库。
+
+`site/brand/logo.svg` 使用同一蓝色与白色黎明图形，运行 `node scripts/generate-reader-brand.ts` 同步生成 PNG、Apple 图标和 favicon。图标接口有长缓存，更新图形时一并更新 `apps/web/app/root.tsx` 和 `site/public/manifest.webmanifest` 中的资源版本参数。更改页面底色时，也同步 `root.tsx`、`apps/web/app/lib/local-state.ts` 和 manifest 的浏览器主题色。
 
 ## 分类与主题
 

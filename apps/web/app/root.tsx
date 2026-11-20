@@ -25,10 +25,11 @@ import { webModules } from "./site-modules";
 import type {ReaderPageData} from "./features/feed/reader.server";
 
 export const links: Route.LinksFunction = () => [
-  { rel: "icon", href: "/favicon.ico", sizes: "any" },
-  { rel: "icon", type: "image/png", href: "/icon.png" },
-  { rel: "apple-touch-icon", href: "/apple-icon.png" },
-  { rel: "manifest", href: "/manifest.webmanifest" },
+  // The icon endpoints have a 30-day cache; new artwork gets a new browser cache key.
+  { rel: "icon", href: "/favicon.ico?v=20261114", sizes: "any" },
+  { rel: "icon", type: "image/png", href: "/icon.png?v=20261114" },
+  { rel: "apple-touch-icon", href: "/apple-icon.png?v=20261114" },
+  { rel: "manifest", href: "/manifest.webmanifest?v=20261114" },
 ];
 
 /** The release rendering this document: once a newer one is deployed, a render error reloads the page (entry.client). */
@@ -57,7 +58,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {documentRelease && <meta name="agidawn-release" content={documentRelease} />}
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf9f6" />
-        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#13191c" />
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#15191f" />
         <meta name="apple-mobile-web-app-title" content={SITE.name} />
         <script dangerouslySetInnerHTML={{ __html: APPEARANCE_BOOT_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: SIDEBAR_BOOT_SCRIPT }} />
