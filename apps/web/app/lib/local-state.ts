@@ -110,17 +110,30 @@ function invalidate(key: string) {
 }
 
 // appearance
-export interface ReadingDisplay {size:"default"|"large"|"larger";spacing:"compact"|"default"|"loose";width:"narrow"|"default"|"wide"}
-export const DEFAULT_READING_DISPLAY:ReadingDisplay={size:"default",spacing:"default",width:"default"};
-const readingValues={size:["default","large","larger"],spacing:["compact","default","loose"],width:["narrow","default","wide"]} as const;
+export interface ReadingDisplay {
+  size: number | null;
+  spacing: "compact" | "default" | "loose";
+  width: "narrow" | "default" | "wide";
+  font: "song" | "sans" | "kai";
+}
+export const DEFAULT_READING_DISPLAY:ReadingDisplay={size:null,spacing:"default",width:"default",font:"sans"};
+export const MIN_READING_SIZE = 14;
+export const MAX_READING_SIZE = 26;
+const legacyReadingSizes: Readonly<Record<string, number | undefined>> = {large:20,larger:22};
+const readingValues={spacing:["compact","default","loose"],width:["narrow","default","wide"],font:["song","sans","kai"]} as const;
+const readingKeys = Object.keys(readingValues) as Array<keyof typeof readingValues>;
+const readingSizeProperty = "--reading-font-size";
 export const READING_DISPLAY_CHANGE_EVENT="agi-reading-display-change";
 let unsavedReadingDisplay:ReadingDisplay|undefined;
 function parseReadingDisplay(input:unknown):ReadingDisplay{
   const value=input&&typeof input==="object"&&!Array.isArray(input)?input as Record<string,unknown>:{};
-  const choose=<K extends keyof ReadingDisplay>(key:K):ReadingDisplay[K]=>(readingValues[key] as readonly unknown[]).includes(value[key])?value[key] as ReadingDisplay[K]:DEFAULT_READING_DISPLAY[key];
-  const size=choose("size"),spacing=choose("spacing"),width=choose("width");
-  if(size===DEFAULT_READING_DISPLAY.size&&spacing===DEFAULT_READING_DISPLAY.spacing&&width===DEFAULT_READING_DISPLAY.width)return DEFAULT_READING_DISPLAY;
-  return {size,spacing,width};
+  const choose=<K extends keyof typeof readingValues>(key:K):ReadingDisplay[K]=>(readingValues[key] as readonly unknown[]).includes(value[key])?value[key] as ReadingDisplay[K]:DEFAULT_READING_DISPLAY[key];
+  const rawSize = value.size;
+  let size: ReadingDisplay["size"] = null;
+  if (typeof rawSize === "string" && Object.hasOwn(legacyReadingSizes, rawSize)) size = legacyReadingSizes[rawSize] ?? null;
+  if (typeof rawSize === "number" && Number.isInteger(rawSize) && rawSize >= MIN_READING_SIZE && rawSize <= MAX_READING_SIZE) size = rawSize;
+  const display = {size,spacing:choose("spacing"),width:choose("width"),font:choose("font")};
+  return size === null && readingKeys.every(key => display[key] === DEFAULT_READING_DISPLAY[key]) ? DEFAULT_READING_DISPLAY : display;
 }
 export function getReadingDisplay():ReadingDisplay{return unsavedReadingDisplay??cached(KEYS.readingDisplay,()=>parseReadingDisplay(readJson(KEYS.readingDisplay)));}
 export function setReadingDisplay(input:ReadingDisplay):boolean{
@@ -128,14 +141,23 @@ export function setReadingDisplay(input:ReadingDisplay):boolean{
   unsavedReadingDisplay=saved?undefined:value;invalidate(KEYS.readingDisplay);return saved;
 }
 function applyReadingDisplay(value:ReadingDisplay){
-  const keys=Object.keys(readingValues) as Array<keyof ReadingDisplay>;
-  if(keys.every(key=>document.documentElement.getAttribute("data-reading-"+key)===value[key]))return;
-  // Private readers capture their section before these attributes reflow the text.
+  const root = document.documentElement;
+  const size = value.size === null ? "" : value.size + "px";
+  if (root.style.getPropertyValue(readingSizeProperty) === size && readingKeys.every(key => root.getAttribute("data-reading-" + key) === value[key])) return;
+  // Capture the reading position before the new preferences reflow the text.
   window.dispatchEvent(new Event(READING_DISPLAY_CHANGE_EVENT));
-  for(const key of keys)document.documentElement.setAttribute("data-reading-"+key,value[key]);
+  root.style.setProperty(readingSizeProperty, size);
+  for(const key of readingKeys)root.setAttribute("data-reading-"+key,value[key]);
 }
 export function useReadingDisplay():ReadingDisplay{return useSyncExternalStore(subscribeReadingDisplay,getReadingDisplay,()=>DEFAULT_READING_DISPLAY);}
-const readingBootScript=`(function(){var v;try{v=JSON.parse(localStorage.getItem('${KEYS.readingDisplay}'))}catch(e){}v=v&&typeof v==='object'?v:{};${Object.entries(readingValues).map(([key,values])=>`document.documentElement.setAttribute('data-reading-${key}',${JSON.stringify(values)}.includes(v.${key})?v.${key}:'default');`).join("")}})();`;
+const readingBootScript = `(function(){
+  var v;try{v=JSON.parse(localStorage.getItem('${KEYS.readingDisplay}'))}catch(e){}
+  v=v&&typeof v==='object'?v:{};
+  var root=document.documentElement,size=v.size,legacy=${JSON.stringify(legacyReadingSizes)};
+  if(typeof size==='string'&&Object.hasOwn(legacy,size))size=legacy[size];
+  if(Number.isInteger(size)&&size>=${MIN_READING_SIZE}&&size<=${MAX_READING_SIZE})root.style.setProperty('${readingSizeProperty}',size+'px');
+  ${readingKeys.map(key=>`root.setAttribute('data-reading-${key}',${JSON.stringify(readingValues[key])}.includes(v.${key})?v.${key}:'${DEFAULT_READING_DISPLAY[key]}');`).join("")}
+})();`;
 
 interface FigureNotices {hidden:boolean}
 const DEFAULT_FIGURE_NOTICES:FigureNotices={hidden:false};

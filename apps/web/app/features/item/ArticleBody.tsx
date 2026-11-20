@@ -8,6 +8,7 @@ import { IconCheck, IconChevronDown, IconCopy } from "../../components/icons";
 import { copyText } from "../../lib/clipboard";
 import { declaredLanguage, isPlainLanguage, languageLabel } from "./code-language";
 import katexCssUrl from "katex/dist/katex.min.css?url";
+import "lxgw-wenkai-screen-webfont/lxgwwenkaigbscreenr.css";
 
 const LazyLightbox = lazy(() => import("../../components/ui/Lightbox").then((m) => ({ default: m.Lightbox })));
 

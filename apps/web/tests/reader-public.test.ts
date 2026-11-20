@@ -15,12 +15,12 @@ test('article Escape closes settings before focus mode and page scrolling dismis
   try{
     const page=await browser.newPage({viewport:{width:1440,height:900}});await visit(page,web.origin+'/items/'+article.id);
     await page.getByRole('button',{name:'开启专注模式',exact:true}).click();
-    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.keyboard.press('Escape');
-    await expect(page.getByRole('group',{name:'正文字号',exact:true})).toBeHidden();
+    await page.getByLabel('阅读设置',{exact:true}).click();await page.keyboard.press('Escape');
+    await expect(page.getByRole('slider',{name:'正文字号',exact:true})).toBeHidden();
     await expect(page.getByRole('button',{name:'退出专注模式',exact:true})).toBeVisible();
     await page.keyboard.press('Escape');await expect(page.getByRole('button',{name:'开启专注模式',exact:true})).toBeFocused();
-    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.mouse.move(700,500);await page.mouse.wheel(0,400);
-    await expect(page.getByRole('group',{name:'正文字号',exact:true})).toBeHidden();
+    await page.getByLabel('阅读设置',{exact:true}).click();await page.mouse.move(700,500);await page.mouse.wheel(0,400);
+    await expect(page.getByRole('slider',{name:'正文字号',exact:true})).toBeHidden();
   }finally{await browser.close();await web.stop();}
 });
 
@@ -397,11 +397,11 @@ test('desktop floating reading tools leave the outline and pagination clickable'
     for(const width of [720,800,1024,1280,1366,1440]){
       await page.setViewportSize({width,height:900});await page.evaluate(()=>scrollTo(0,1500));
       const nav=page.getByRole('navigation',{name:'本文目录',exact:true});
-      const bodyBox=await page.getByRole('region',{name:'文章正文',exact:true}).boundingBox(),toolBox=await page.getByLabel('阅读显示设置',{exact:true}).boundingBox();
+      const bodyBox=await page.getByRole('region',{name:'文章正文',exact:true}).boundingBox(),toolBox=await page.getByLabel('阅读设置',{exact:true}).boundingBox();
       assert(bodyBox&&toolBox&&bodyBox.x+bodyBox.width+8<=toolBox.x,'body leaves a separate column for floating tools at '+width);
       if(await nav.isVisible()){const navBox=await nav.boundingBox();assert(navBox&&toolBox&&navBox.x+navBox.width+8<=toolBox.x,'outline leaves a separate column for floating tools');await nav.getByRole('link',{name:'Section 20',exact:true}).click({trial:true,timeout:1500});}
     }
-    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true}).check();await page.keyboard.press('Escape');
+    await page.getByLabel('阅读设置',{exact:true}).click();await page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true}).check();await page.keyboard.press('Escape');
     await page.setViewportSize({width:1920,height:900});
     await page.getByRole('navigation',{name:'本文目录',exact:true}).getByRole('link',{name:'Section 20',exact:true}).click({trial:true,timeout:1500});
     await page.setViewportSize({width:1280,height:900});await visit(page,web.origin+'/');await page.evaluate(()=>scrollTo(0,1400));
@@ -1630,7 +1630,7 @@ for(const engine of [chromium,webkit])test(`article progress and focus controls 
     await expect(page.getByRole('navigation',{name:'本文目录',exact:true}).getByRole('link',{name:'中文 Middle',exact:true})).toHaveAttribute('aria-current','location');
     await expect(region).toContainText('中文 Middle');
     await page.getByRole('button',{name:'开启专注模式',exact:true}).click();await expect(page.getByRole('navigation',{name:'本文目录',exact:true})).toBeHidden();await expect(page.getByRole('navigation',{name:'主导航',exact:true})).toBeHidden();await expect.poll(sectionRatio).toBeCloseTo(.35,1);
-    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'更大',exact:true}).check();await expect.poll(sectionRatio).toBeCloseTo(.35,1);await page.keyboard.press('Escape');
+    await page.getByLabel('阅读设置',{exact:true}).click();await page.getByRole('slider',{name:'正文字号',exact:true}).press('End');await expect.poll(sectionRatio).toBeCloseTo(.35,1);await page.keyboard.press('Escape');
     await page.getByRole('button',{name:'退出专注模式',exact:true}).click();await expect(page.getByRole('navigation',{name:'本文目录',exact:true})).toBeVisible();await expect.poll(sectionRatio).toBeCloseTo(.35,1);
     await page.emulateMedia({reducedMotion:'no-preference'});await page.getByRole('button',{name:'开启专注模式',exact:true}).focus();
     for(let i=0;i<4;i++)await page.keyboard.press('Enter');
@@ -1711,7 +1711,7 @@ for(const engine of [chromium,webkit])test(`translated title and summary remain 
 
 for(const engine of [chromium,webkit])test(`reading display preferences apply, persist, synchronize and reset without changing article data (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined;let writes=0;
-  const article=itemDetail({id:'display-ui',title:'Reading display',bodyHtml:'<h2 id="sec-1">A saved section</h2><pre><code>const readable = true;</code></pre>'+Array.from({length:8},()=>'<p>'+('Readable article content. '.repeat(30))+'</p>').join(''),outline:[{id:'sec-1',text:'A saved section',level:2}]});
+  const article=itemDetail({id:'display-ui',title:'Reading display',bodyHtml:'<h2 id="sec-1">A saved section</h2><pre><code>const readable = true;</code></pre>'+Array.from({length:8},()=>'<p>'+('这是一段可调整字体的正文。Readable article content. '.repeat(30))+'</p>').join(''),outline:[{id:'sec-1',text:'A saved section',level:2}]});
   try{
     web=await startWebServer(fakeApi((url,res,req)=>{
       if(url.pathname==='/api/site/items/display-ui')return article;
@@ -1722,20 +1722,59 @@ for(const engine of [chromium,webkit])test(`reading display preferences apply, p
       if(req.method!=='GET'&&url.pathname!=='/api/site/track')writes++;
     }));
     const context=await browser.newContext({viewport:{width:1920,height:900}}),page=await context.newPage();await visit(page,web.origin+'/items/display-ui');const body=page.locator('article .prose');
-    await page.getByLabel('阅读显示设置',{exact:true}).click();await expect(page.getByRole('button',{name:'恢复默认显示',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'恢复图表提示',exact:true})).toHaveCount(0);await page.keyboard.press('Escape');
+    const settings=page.getByLabel('阅读设置',{exact:true}),slider=page.getByRole('slider',{name:'正文字号',exact:true});
+    const reset=page.getByRole('button',{name:'重置设置',exact:true});
+    const resetHint=page.getByText('重置设置',{exact:true});
+    const family=(tab:Page)=>tab.locator('article .prose').evaluate(el=>getComputedStyle(el).fontFamily);
+    const defaultFamily=await family(page);
     const font=()=>body.evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),height=()=>body.evaluate(el=>parseFloat(getComputedStyle(el).lineHeight)),width=()=>body.evaluate(el=>el.getBoundingClientRect().width);
-    const codeFont=()=>body.locator('pre code').evaluate(el=>parseFloat(getComputedStyle(el).fontSize));await expect.poll(codeFont).toBe(13);
-    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'较大',exact:true}).check();await page.getByRole('group',{name:'正文行距',exact:true}).getByRole('radio',{name:'宽松',exact:true}).check();await page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'窄',exact:true}).check();await expect.poll(font).toBe(20);await expect.poll(height).toBe(40);assert(await width()<=641);const narrow=await width();
+    const codeFont=()=>body.locator('pre code').evaluate(el=>parseFloat(getComputedStyle(el).fontSize));
+    await settings.click();await expect(page.getByText('阅读设置',{exact:true})).toBeVisible();await expect(reset).toBeDisabled();
+    await expect(resetHint).toBeHidden();
+    await settings.focus();await page.keyboard.press('Tab');await expect(slider).toBeFocused();
+    await expect(page.getByRole('button',{name:'恢复图表提示',exact:true})).toHaveCount(0);await expect.poll(codeFont).toBe(13);
+    await expect(slider).toHaveValue('18');await expect(page.getByText('18px',{exact:true})).toBeVisible();
+    const track=await slider.boundingBox();assert(track);
+    const midpoint={x:track.x+track.width/2,y:track.y+track.height/2};
+    await page.mouse.click(midpoint.x,midpoint.y);await expect(slider).toHaveValue('20');
+    await expect(page.getByText('显示设置已记住',{exact:true})).toHaveCount(0);
+    await reset.hover();await expect(resetHint).toBeVisible();
+    await resetHint.hover();await expect(resetHint).toBeVisible();
+    await slider.hover();await expect(resetHint).toBeHidden();
+    await settings.focus();await page.keyboard.press('Tab');await expect(reset).toBeFocused();await expect(resetHint).toBeVisible();
+    await page.keyboard.press('Tab');await expect(slider).toBeFocused();await expect(resetHint).toBeHidden();
+    await slider.press('Home');await expect(slider).toHaveValue('14');await expect.poll(font).toBe(14);
+    await slider.press('End');await expect(slider).toHaveValue('26');await expect.poll(font).toBe(26);
+    await slider.press('ArrowLeft');await expect(page.getByText('25px',{exact:true})).toBeVisible();await expect.poll(font).toBe(25);
+    await page.mouse.click(midpoint.x,midpoint.y);await expect(slider).toHaveValue('20');
+    await page.getByRole('group',{name:'正文行距',exact:true}).getByRole('radio',{name:'宽松',exact:true}).check();
+    await page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'窄',exact:true}).check();
+    const fonts=page.getByRole('group',{name:'正文字体',exact:true});
+    await fonts.getByRole('radio',{name:'宋体',exact:true}).check();await expect.poll(()=>family(page)).toContain('Songti SC');
+    await expect.poll(font).toBe(20);await expect.poll(height).toBe(40);assert(await width()<=641);const narrow=await width();
     await expect.poll(codeFont).toBe(14.5);
-    const second=await context.newPage();await visit(second,web.origin+'/items/display-ui');assert.equal(await second.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),20);await second.getByLabel('阅读显示设置',{exact:true}).click();await second.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'更大',exact:true}).check();await second.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true}).check();await expect.poll(font).toBe(22);await expect.poll(width).toBeGreaterThan(narrow+100);
+    const second=await context.newPage();await visit(second,web.origin+'/items/display-ui');
+    await expect.poll(()=>family(second)).toContain('Songti SC');
+    assert.equal(await second.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),20);
+    await second.getByLabel('阅读设置',{exact:true}).click();await second.getByRole('slider',{name:'正文字号',exact:true}).fill('22');
+    await second.getByRole('radio',{name:'宋体',exact:true}).press('ArrowRight');
+    await second.getByRole('radio',{name:'黑体',exact:true}).press('ArrowRight');
+    await expect(second.getByRole('radio',{name:'楷体',exact:true})).toBeChecked();
+    await second.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true}).check();
+    await expect.poll(()=>family(page)).toContain('KaiTi');await expect.poll(font).toBe(22);await expect.poll(width).toBeGreaterThan(narrow+100);
     await expect.poll(codeFont).toBe(16);assert.equal(await body.locator('.code-block-lines').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),16);
-    await visit(page,page.url());await expect.poll(font).toBe(22);await expect.poll(height).toBe(44);await page.getByLabel('阅读显示设置',{exact:true}).click();await expect(page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true})).toBeChecked();
+    await visit(page,page.url());await expect.poll(font).toBe(22);await expect.poll(height).toBe(44);await settings.click();
+    await expect(fonts.getByRole('radio',{name:'楷体',exact:true})).toBeChecked();await expect(page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:'宽',exact:true})).toBeChecked();
     for(const size of [320,390,1440]){await page.setViewportSize({width:size,height:800});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));}
-    await page.getByRole('button',{name:'恢复默认显示',exact:true}).click();await expect(page.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'默认',exact:true})).toBeChecked();await expect.poll(()=>second.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBe(18);assert.equal(writes,0);
-    await expect.poll(codeFont).toBe(13);
-    await page.evaluate(()=>localStorage.setItem('agi-dawn-reading-display-v1','{"size":"enormous","spacing":"loose","width":"wide"}'));await visit(page,page.url());await expect.poll(font).toBe(18);await expect.poll(height).toBe(36);
+    await reset.press('Enter');await expect(slider).toBeFocused();await expect(reset).toBeDisabled();await expect(slider).toHaveValue('18');await expect(fonts.getByRole('radio',{name:'黑体',exact:true})).toBeChecked();
+    await expect.poll(()=>second.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBe(18);
+    await expect.poll(()=>family(second)).toBe(defaultFamily);await expect.poll(codeFont).toBe(13);
+    await page.evaluate(()=>localStorage.setItem('agi-dawn-reading-display-v1','{"size":"larger","spacing":"loose","width":"wide"}'));await visit(page,page.url());
+    await expect.poll(font).toBe(22);await expect.poll(height).toBe(44);await expect.poll(()=>family(page)).toBe(defaultFamily);
+    await page.evaluate(()=>localStorage.setItem('agi-dawn-reading-display-v1','{"size":27,"font":"unknown","spacing":"loose","width":"wide"}'));await visit(page,page.url());
+    await expect.poll(font).toBe(18);await expect.poll(height).toBe(36);await expect.poll(()=>family(page)).toBe(defaultFamily);
     await page.evaluate(()=>localStorage.setItem('agi-dawn-reading-display-v1','{'));await visit(page,page.url());await expect.poll(height).toBeCloseTo(32.4,1);assert.equal(writes,0);
-    const denied=await browser.newContext({viewport:{width:390,height:800}});await denied.addInitScript(()=>{Object.defineProperty(window,'localStorage',{get(){throw new DOMException('blocked','SecurityError');}});});const blocked=await denied.newPage();await visit(blocked,web.origin+'/items/display-ui');await blocked.getByLabel('阅读显示设置',{exact:true}).click();await blocked.getByRole('group',{name:'正文字号',exact:true}).getByRole('radio',{name:'较大',exact:true}).check();await expect.poll(()=>blocked.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBe(20);await expect(blocked.getByRole('status').filter({hasText:'当前标签页'})).toBeVisible();await visit(blocked,blocked.url());assert.equal(await blocked.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),17);await denied.close();
+    const denied=await browser.newContext({viewport:{width:390,height:800}});await denied.addInitScript(()=>{Object.defineProperty(window,'localStorage',{get(){throw new DOMException('blocked','SecurityError');}});});const blocked=await denied.newPage();await visit(blocked,web.origin+'/items/display-ui');await blocked.getByLabel('阅读设置',{exact:true}).click();await blocked.getByRole('slider',{name:'正文字号',exact:true}).fill('20');await expect.poll(()=>blocked.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBe(20);await expect(blocked.getByRole('status').filter({hasText:'当前标签页'})).toBeVisible();await visit(blocked,blocked.url());assert.equal(await blocked.locator('article .prose').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),17);await denied.close();
   }finally{await browser.close();await web?.stop();}
 });
 
@@ -1769,7 +1808,7 @@ for(const engine of [chromium,webkit])test(`floating theme toggle follows the di
     // An explicit choice stays explicit when the operating system changes to match it.
     assert.equal(await page.evaluate(()=>localStorage.getItem('agidawn-theme')),'light');
     await page.setViewportSize({width:390,height:667});await page.evaluate(()=>scrollTo(0,1500));await expect(page.getByRole('button',{name:'回到顶部',exact:true})).toBeVisible();
-    await page.getByLabel('阅读显示设置',{exact:true}).click();await expect(page.getByText('阅读显示设置',{exact:true})).toBeInViewport({ratio:1});await page.keyboard.press('Escape');
+    await page.getByLabel('阅读设置',{exact:true}).click();await expect(page.getByText('阅读设置',{exact:true})).toBeInViewport({ratio:1});await page.keyboard.press('Escape');
     await page.getByRole('button',{name:'开启专注模式',exact:true}).click();await expect(toggle).toBeVisible();await toggle.click();await expect(html).toHaveAttribute('data-theme','dark');
     await visit(other,web.origin+'/more');await expect(other.getByRole('radiogroup',{name:'外观',exact:true})).toHaveCount(0);
     await expect(other.getByRole('combobox',{name:'字体',exact:true})).toHaveCount(0);
@@ -1866,11 +1905,11 @@ for(const engine of [chromium,webkit])test(`figure notices show hover details an
     await page.setViewportSize({width:320,height:700});await notice.click();await expect(details).toContainText(issues[1]!.message);await trigger.click();await expect(menu.getByRole('menuitem',{name:'永久禁用',exact:true})).toBeVisible();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     await menu.getByRole('menuitem',{name:'永久禁用',exact:true}).click();await expect(notice).toHaveCount(0);await expect(other.getByText('部分图表可能显示不完整',{exact:true})).toHaveCount(0);
     await page.reload();await expect(notice).toHaveCount(0);await visit(page,web.origin+'/items/figure-mixed');await expect(notice).toHaveCount(0);await expect(page.getByText('部分公式保留为源文本，请对照原文。',{exact:true})).toBeVisible();
-    await page.getByLabel('阅读显示设置',{exact:true}).click();await page.getByRole('button',{name:'恢复图表提示',exact:true}).click();await expect(notice).toBeVisible();await expect(other.getByText('部分图表可能显示不完整',{exact:true})).toBeVisible();
+    await page.getByLabel('阅读设置',{exact:true}).click();await page.getByRole('button',{name:'恢复图表提示',exact:true}).click();await expect(notice).toBeVisible();await expect(other.getByText('部分图表可能显示不完整',{exact:true})).toBeVisible();
     await page.keyboard.press('Escape');await visit(page,web.origin+'/items/figure-a');await expect(notice).toBeVisible();assert.equal(writes,0);
     const denied=await browser.newContext({viewport:{width:390,height:800}});await denied.addInitScript(()=>Object.defineProperty(window,'localStorage',{get(){throw new DOMException('blocked','SecurityError');}}));
     const blocked=await denied.newPage();await visit(blocked,web.origin+'/items/figure-a');await blocked.getByRole('button',{name:'关闭图表提示',exact:true}).click();await blocked.getByRole('menuitem',{name:'永久禁用',exact:true}).click();await expect(blocked.getByText('部分图表可能显示不完整',{exact:true})).toHaveCount(0);await expect(blocked.getByRole('status').filter({hasText:'浏览器未能记住'})).toBeVisible();
-    await blocked.getByLabel('阅读显示设置',{exact:true}).click();await blocked.getByRole('button',{name:'恢复图表提示',exact:true}).click();await expect(blocked.getByText('部分图表可能显示不完整',{exact:true})).toBeVisible();await denied.close();
+    await blocked.getByLabel('阅读设置',{exact:true}).click();await blocked.getByRole('button',{name:'恢复图表提示',exact:true}).click();await expect(blocked.getByText('部分图表可能显示不完整',{exact:true})).toBeVisible();await denied.close();
   }finally{await browser.close();await web?.stop();}
 });
 
@@ -2196,7 +2235,7 @@ test('desktop reading polish covers Go highlighting, no-body summary UX, search 
     await page.keyboard.press('Escape');
     // Summary-only detail hides display settings, focus mode and duplicated footer actions, shows primary CTA.
     await visit(page,web.origin+'/items/summary-only');
-    await expect(page.getByLabel('阅读显示设置',{exact:true})).toHaveCount(0);
+    await expect(page.getByLabel('阅读设置',{exact:true})).toHaveCount(0);
     await expect(page.getByRole('button',{name:'开启专注模式',exact:true})).toHaveCount(0);
     await expect(page.getByRole('link',{name:'前往原文阅读',exact:true})).toHaveAttribute('href',summaryOnly.links.original);
     await expect(page.getByRole('contentinfo',{name:'文章后续阅读'})).toHaveCount(0);

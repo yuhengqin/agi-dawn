@@ -201,7 +201,7 @@ for (const engine of [chromium, webkit]) test(`the desktop outline collapses wit
       await page.setViewportSize({ width, height: 768 });
       let defaultGain:number|undefined;
       for (const preference of ["默认", "窄", "宽"]) {
-        await page.getByLabel("阅读显示设置", { exact: true }).click();
+        await page.getByLabel("阅读设置", { exact: true }).click();
         await page.getByRole("group", { name: "正文宽度", exact: true }).getByRole("radio", { name: preference, exact: true }).check();
         await page.keyboard.press("Escape");
         if(!await collapse.isVisible()){
@@ -237,7 +237,7 @@ test('opening a side outline at a desktop layout boundary never shrinks the chos
     const page=await browser.newPage({viewport:{width:1279,height:900}});await visit(page,web.origin+'/items/'+article.id);
     const body=page.getByRole('region',{name:'文章正文',exact:true});
     for(const preference of ['窄','默认','宽']){
-      await page.setViewportSize({width:1279,height:900});await page.getByLabel('阅读显示设置',{exact:true}).click();
+      await page.setViewportSize({width:1279,height:900});await page.getByLabel('阅读设置',{exact:true}).click();
       await page.getByRole('group',{name:'正文宽度',exact:true}).getByRole('radio',{name:preference,exact:true}).check();await page.keyboard.press('Escape');
       let previous=0;
       for(const width of [1279,1280,1320,1366,1400,1440,1828,1920]){
