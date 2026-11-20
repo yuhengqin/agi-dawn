@@ -141,6 +141,27 @@ export function preparePageContent(document: Doc, url: string, rules: ContentRul
   settleStreamedContent(document);
   if (rules.removeSelector) for (const el of document.querySelectorAll(rules.removeSelector)) el.remove();
   settleInlineVisibility(document);
+  // Capture real publisher fragments before adapters and sanitization remove IDs.
+  const figures=document.querySelectorAll('figure');
+  if(figures.length){
+    const ids=new Set<string>(),duplicates=new Set<string>();
+    for(const element of document.querySelectorAll('[id]')){
+      const id=element.getAttribute('id')!;if(ids.has(id))duplicates.add(id);else ids.add(id);
+    }
+    const sections=new Map<El,string>();
+    for(const element of document.querySelectorAll('h1,h2,h3,h4,h5,h6,figure')){
+      const scope=element.closest('article,main,aside,nav,header,footer')??document.body;
+      const id=element.getAttribute('id')??'',unique=duplicates.has(id)?'':id;
+      if(element.localName!=='figure'){
+        if(!element.closest('figure'))sections.set(scope,unique);
+        continue;
+      }
+      element.removeAttribute('data-reader-source-id');element.removeAttribute('data-reader-source-section');
+      const section=sections.get(scope);
+      if(unique)element.setAttribute('data-reader-source-id',unique);
+      else if(section)element.setAttribute('data-reader-source-section',section);
+    }
+  }
   if (rules.bodyAdapter) bodyAdapters[rules.bodyAdapter](document);
   preserveWidgets(document, rules.preserve ?? []);
   for(const figure of document.querySelectorAll('figure')){

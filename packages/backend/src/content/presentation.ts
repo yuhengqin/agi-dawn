@@ -212,5 +212,12 @@ export function cleanArticlePresentation(html:string,context:{url:string;publish
     if(candidate.is('p')&&['No posts','无帖子'].includes(collapseWhitespace(candidate.text()))){candidate.remove();changed=true;}
   }
   if(host==='openai.com')changed=normalizeOpenAIFigures($,page)||changed;
+  $('img:not([data-reader-inline="true"])').each((_,node)=>{
+    const image=$(node);if(image.closest('figure[data-reader-card]').length)return;
+    const label=[image.attr('alt'),image.attr('title')].filter(Boolean).join(' ').replace(/[_-]/g,' ');
+    if(/\b(?:charts?|plots?|graphs?|(?:train(?:ing)?|learning|loss) curves?)\b|曲线图|折线图|柱状图|散点图|热力图/i.test(label)&&image.attr('data-reader-chart')!=='true'){
+      image.attr('data-reader-chart','true');changed=true;
+    }
+  });
   return changed?$.html():html;
 }

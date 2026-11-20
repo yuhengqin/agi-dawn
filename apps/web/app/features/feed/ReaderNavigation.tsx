@@ -25,7 +25,8 @@ export function ReaderNavigation({categories,topics,query}:Pick<ReaderPageData,'
   const target=useReaderQuery(query);
   const selected=topics.find(t=>t.slug===query.topic);
   const shortcuts=ARTICLE_NAVIGATION.topicShortcuts.flatMap(slug=>topics.filter(t=>t.slug===slug));
-  const ordered=[...shortcuts,...topics.filter(t=>!shortcuts.includes(t))];
+  const ranked=[...shortcuts,...topics.filter(t=>!shortcuts.includes(t))];
+  const ordered=[...ranked.filter(t=>t.total>0),...ranked.filter(t=>t.total===0)];
   const container=useRef<HTMLDivElement>(null),measure=useRef<HTMLDivElement>(null),[visibleCount,setVisibleCount]=useState(0);
   const labels=ordered.map(t=>t.name).join('\0');
   useLayoutEffect(()=>{
@@ -38,7 +39,7 @@ export function ReaderNavigation({categories,topics,query}:Pick<ReaderPageData,'
     };
     const observer=new ResizeObserver(update);observer.observe(container.current!);observer.observe(measure.current!);update();return()=>observer.disconnect();
   },[labels]);
-  const visible=ordered.slice(0,visibleCount),extraSelected=selected&&!visible.includes(selected);
+  const visible=ordered.slice(0,visibleCount).filter(t=>t.total>0),extraSelected=selected&&!visible.includes(selected);
   const allVisible=ordered.length>0&&visible.length>=ordered.length;
   const topicLinks=<nav aria-label="全部技术主题" className="grid grid-cols-2 gap-1">
     <Link className={`${navLink} lg:hidden`} to={readerLink(target,{topic:null})} aria-current={!query.topic?'page':undefined}>全部主题</Link>

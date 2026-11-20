@@ -19,6 +19,15 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
   const container=useRef<HTMLDivElement>(null),input=useRef<HTMLInputElement>(null),timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
   const composing=useRef(false),submitted=useRef<string|null>(null),editedFor=useRef<string|null>(null),suppressOpenOnFocus=useRef(false);
   const target=useReaderQuery(query),latestQuery=useRef(target);
+  const pending=navigation.location?.pathname==='/'&&navigation.location.search!==location.search?navigation.location.search:null;
+  const [announced,setAnnounced]=useState<string|null>(null);
+  useEffect(()=>{
+    if(pending===null){setAnnounced(null);return;}
+    const timer=setTimeout(()=>setAnnounced(pending),300);
+    return()=>clearTimeout(timer);
+  },[pending]);
+  const pendingWord=pending===null?'':new URLSearchParams(pending).get('q');
+  const feedback=pending!==null&&announced===pending?(pendingWord?`正在搜索“${pendingWord}”…`:'正在更新结果…'):'';
   useLayoutEffect(()=>{latestQuery.current=target;},[target]);
   const cancel=()=>{clearTimeout(timer.current);timer.current=undefined;};
   const search=(value:string,replace:boolean)=>{
@@ -27,6 +36,11 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
     // A debounced navigation runs outside a discrete input event; update sibling forms before the next change.
     submitted.current=href;void navigate(href,{replace,preventScrollReset:true,flushSync:true});
   };
+  useLayoutEffect(()=>{
+    // A reader may have already edited the server-rendered input before React attached.
+    const value=input.current?.value;
+    if(value!==undefined&&value!==(query.q??'')){editedFor.current=location.key;setDraft(value);}
+  },[]);
   useLayoutEffect(()=>{
     const ownSearch=navigationType!=='POP'&&submitted.current===location.pathname+location.search;
     submitted.current=null;
@@ -70,7 +84,7 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
       }
     }}>
     <Form role="search" method="get" action="/" className="flex min-w-0 items-center gap-1 rounded-control border border-line bg-surface pl-3 pr-0.5 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent"
-      onSubmit={event=>{event.preventDefault();if(!composing.current){const value=draft;search(value,false);setRecentOpen(false);if(value.trim())addRecentSearch(value);}}}>
+      onSubmit={event=>{event.preventDefault();if(!composing.current){const value=input.current?.value??draft;setDraft(value);search(value,false);setRecentOpen(false);if(value.trim())addRecentSearch(value);}}}>
       <PreservedFilters query={query} except={['q']}/>
       <input ref={input} aria-label="搜索文章" className="reader-search-input min-h-10 w-full min-w-0 bg-transparent text-base text-ink outline-none sm:text-sm" type="search" name="q" maxLength={200} value={draft} placeholder="搜索文章"
         onFocus={()=>{setFocused(true);if(suppressOpenOnFocus.current)suppressOpenOnFocus.current=false;else setRecentOpen(true);}}
@@ -85,6 +99,7 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
         }}
         onChange={event=>changed(event.currentTarget.value)} onCompositionStart={()=>{composing.current=true;cancel();}} onCompositionEnd={event=>{composing.current=false;changed(event.currentTarget.value);}}/>
       {!draft&&!focused&&<kbd aria-hidden="true" className="reader-search-kbd hidden lg:inline-flex">/</kbd>}
+      <span role="status" aria-atomic="true" title={feedback||undefined} className={feedback?'max-w-[48%] shrink-0 truncate text-xs text-ink-3':'sr-only'}>{feedback}</span>
       {draft&&<button type="button" aria-label="清除搜索" className="min-h-10 min-w-8 text-lg text-ink-3" onClick={()=>{composing.current=false;setDraft('');search('',true);input.current?.focus();}}>×</button>}
       <button type="submit" aria-label="搜索" title="搜索" className="grid size-11 shrink-0 place-items-center rounded-mark text-accent hover:bg-accent/10 focus-visible:outline-2 focus-visible:outline-accent"><IconSearch size={20}/></button>
     </Form>

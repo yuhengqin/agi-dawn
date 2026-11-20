@@ -12,13 +12,14 @@ test('public search joins original inline words and ignores text absent from the
   const sourceId='original-inline-search';
   await sql`INSERT INTO sources(id,name,kind,site_fulltext) VALUES(${sourceId},'Inline fixture','rss',true)`;
   await upsertMaterial({sourceId,title:'Visible text',url:'https://example.org/inline-search',
-    bodyHtml:'<p>人工<em>智能</em>技术 re<strong>ad</strong> carefully.</p><p><a title="attributeonly" href="https://secreturl.example">First</a></p><p>Second</p>',
+    bodyHtml:'<p>人工<em>智能</em>技术 re<strong>ad</strong> carefully.</p><p><a title="attributeonly" href="https://secreturl.example">First</a></p><p>Second</p><p>Co<em title="a > b">de</em><b>x</b> &amp; C++</p>',
     bodyText:'人工 智能 技术 re ad carefully. First Second staleindexonly',bodyStatus:'ok',via:'fetch'});
   for(const q of ['人工智能','read','人工智能 read']){
     const page=await pool.loadReaderList({sourceId,q});assert.equal(page.total,1,q);
     assert.ok(page.items[0]!.matches?.some(hit=>hit.field==='body'&&hit.language==='original'&&hit.snippet.includes('人工智能技术 read')));
   }
   for(const q of ['ad','FirstSecond','attributeonly','secreturl','staleindexonly'])assert.equal((await pool.loadReaderList({sourceId,q})).total,0,q);
+  for(const q of ['codex','Codex 人工智能','C++','&'])assert.equal((await pool.loadReaderList({sourceId,q})).total,1,q);
   await sql`UPDATE sources SET site_fulltext=false WHERE id=${sourceId}`;
   assert.equal((await pool.loadReaderList({sourceId,q:'人工智能'})).total,0);
 });
@@ -90,6 +91,8 @@ test('SQL body search strips complete quoted tags, joins inline text and decodes
     ['<p>人工<em>智能</em></p><p>边界</p>','人工智能 边界'],
     ['<ul><li>Parent<ul><li>Child</li></ul>Trailing</li></ul>','Parent Child Trailing'],
     ['<p>Before<br>After</p>','Before After'],
+    ['<h2\tid="title">Header</h2><p>A<br/>B<em>C</em>D</p>','Header A BCD'],
+    ["<p>re<a title='compare a > b and c < d'>a</a>d</p>",'read'],
     ['<p data-reader-embed="<p no end">Visible <em>text</em></p>','Visible text'],
     ['<p><a href="https://secret.example" title="Platforms > Xbox">Visible</a></p>','Visible'],
     ['<p data-reader-embed="<a no end">Visible <em>text</em></p>','Visible text'],
@@ -99,6 +102,23 @@ test('SQL body search strips complete quoted tags, joins inline text and decodes
   for(const [html,expected] of examples){const [row]=await sql`SELECT ${htmlSearchText(sql`${html}`)} AS text`;assert.equal(row!.text,expected,html);}
   const [metadata]=await sql`SELECT ${metadataSearchText(sql`${'使用 <model> 和 <a id="L0">标签</a>'}`,sql`${'Use <model>.'}`)} AS text`;
   assert.equal(metadata!.text,'使用 <model> 和 标签');
+});
+
+test('searched pages include topic alternatives from the matching public set before the topic and page filters',async()=>{
+  const sourceId='facet-fixture';
+  await sql`INSERT INTO sources(id,name,kind) VALUES(${sourceId},'Facet fixture','rss')`;
+  for(const tag of ['facet-a','facet-b','facet-c']){
+    await sql`INSERT INTO article_topics(slug,name,group_key,definition,tags) VALUES(${tag},${tag},'field','Facet fixture',${[tag]}::text[])`;
+  }
+  for(const [tag,title] of [['facet-a','Matched first'],['facet-b','Matched second'],['facet-c','Different article']] as const){
+    const {articleId}=await upsertMaterial({sourceId,title,url:'https://example.org/'+tag,via:'fetch'});
+    await sql`UPDATE publications SET tags=${[tag]}::text[] WHERE article_id=${articleId}`;
+  }
+  for(const [topic,total] of [['facet-a',1],['facet-c',0]] as const){
+    const page=await pool.loadReaderList({sourceId,q:'Matched',topic,page:2});
+    assert.equal(page.total,total);assert.equal(page.page,1);
+    assert.deepEqual(page.topics?.filter(t=>t.slug.startsWith('facet-')).map(t=>[t.slug,t.total]).sort(),[['facet-a',1],['facet-b',1],['facet-c',0]]);
+  }
 });
 
 test('public search matches current translated text, technical words and mixed languages without leaking revoked bodies',async()=>{

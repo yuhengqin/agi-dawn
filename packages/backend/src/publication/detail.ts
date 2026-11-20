@@ -2,6 +2,7 @@ import type {ReaderItemDetail} from "@agidawn/contracts/site";
 import {sql} from "../db.ts";
 import {withOutline} from '../content/outline.ts';
 import {cleanArticlePresentation} from '../content/presentation.ts';
+import {locateArticleFigures} from '../content/figure-links.ts';
 import {materialRepresentationHash,serverModules,type MaterialCapture} from "../modules.ts";
 import {READER_COLUMNS,READER_FROM,readerTranslationJoin,readerVisible,toReaderItem,withReaderMetadata,type ReaderRow} from "./items.ts";
 import {listTopics} from "./topics.ts";
@@ -22,7 +23,9 @@ export async function loadItemDetail(id:string):Promise<{kind:"found";item:Reade
     const rewrite=serverModules().find(module=>module.publicationBody)?.publicationBody;
     const clean=(html:string)=>cleanArticlePresentation(html,{url:row.raw_url,publishedAt:row.raw_published_at?.toISOString(),issues:row.body_issues,author:row.author});
     const render=async(html:string)=>clean(rewrite?await rewrite({...input,html:clean(html)}):html.replace(/<img\b[^>]*>/gi,''));
-    const outlined=withOutline(await render(translated?.html??input.html),{excludeFigures:true});
+    const rendered=await render(translated?.html??input.html);
+    const sourceFigures=translated&&rendered.includes('data-reader-figure-status="missing"')?clean(input.html):undefined;
+    const outlined=withOutline(locateArticleFigures(rendered,row.raw_url,sourceFigures),{excludeFigures:true});
     body={...outlined,language:translated?'translation':'original',contentLanguage:isChineseBody(outlined.html)?'zh':null,complete:translated?.complete??true,readingMinutes:summary.readingMinutes??null};
   }
   const topics=(await listTopics()).filter(topic=>topic.tags.some(tag=>row.tags.includes(tag))).map(({slug,name})=>({slug,name}));

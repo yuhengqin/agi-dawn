@@ -29,7 +29,6 @@ export function readerMeta(value:ReaderPageData|undefined){
   return pageMeta({title,path:listPath("/",query),noindex:Object.keys(query).length>0});
 }
 
-const recoveryLink="inline-flex min-h-10 items-center text-sm text-accent underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 const matchFieldLabels={title:'标题',summary:'摘要',source:'来源',topic:'主题',body:'正文'} as const;
 
 function ReaderFeedRow({item,query,words,target,listReturn}:{
@@ -96,9 +95,7 @@ function ReaderFeedRow({item,query,words,target,listReturn}:{
     for(const hit of list){const count=coverage(hit.snippet,need);if(count>bestCount){best=hit;bestCount=count;}}
     return best;
   };
-  const extra=(missingFromCard.length>0?pickBest(candidates,missingFromCard):undefined)
-    ??(missingWords.length>0?pickBest(candidates,missingWords):undefined)
-    ??candidates[0];
+  const extra=pickBest(candidates,missingFromCard)??pickBest(candidates,missingWords);
   const search=query.q?new URLSearchParams({q:query.q}):null;
   if(search)for(const hit of item.matches??[]){
     if(hit.language==='original'&&!!item.metadataTranslation&&['title','summary'].includes(hit.field)){
@@ -138,8 +135,8 @@ export function ReaderPage({page,sources,topics,categories,query,latestArticleDa
   },[location.key,location.pathname,location.search,location.hash]);
   const listReturn=typeof window!=='undefined'?{idx:(typeof rawIdx==='number'?rawIdx:syncedIdx)??0,to:location.pathname+location.search}:undefined;
   const hasDates=!!(query.from||query.to);
-  const activeFilters=[query.category,query.topic,query.sourceId,query.q].filter(Boolean).length;
-  const hasRecoveryLinks=!!(query.sourceId||query.q||(!hasDates&&(query.category||query.topic)));
+  const recoverySource=!hasDates&&(query.category||query.topic||query.q)
+    ?sources.find(source=>source.id===query.sourceId&&source.articles>0):undefined;
   const words=query.q?searchWords(query.q).slice(0,6):[];
   const emptyDateTitle=query.from&&query.to?`${query.from===query.to?query.from:`${query.from} 至 ${query.to}`} 暂无文章`:query.from?`${query.from} 起暂无文章`:`截至 ${query.to} 暂无文章`;
   return <section className="reader-feed mx-auto min-w-0 pb-12 [overflow-wrap:anywhere]">
@@ -161,15 +158,10 @@ export function ReaderPage({page,sources,topics,categories,query,latestArticleDa
       {latestArticleDate&&<p className="text-sm text-ink-3">最近有文章的日期：<time dateTime={latestArticleDate}>{latestArticleDate}</time><span className="mx-2">·</span><Link to={readerLink(target,{from:latestArticleDate,to:latestArticleDate})} aria-label={`查看 ${latestArticleDate} 的文章`} className="inline-flex min-h-9 items-center text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-accent">查看当天文章</Link></p>}
       </>:<>
         <h2 className="text-base font-medium text-ink">没有符合条件的文章</h2>
-        <p className="text-sm text-ink-3">可以移除部分筛选条件，或稍后查看更新。</p>
+        {recoverySource
+          ?<Link to={readerLink(query.limit?{limit:query.limit}:{},{sourceId:recoverySource.id})} className="inline-flex min-h-10 items-center text-sm text-accent underline underline-offset-4">查看 {recoverySource.name} 的 {recoverySource.articles} 篇文章</Link>
+          :<p className="text-sm text-ink-3">{query.topic||query.sourceId||query.category||query.q?'可以移除上方的筛选条件，扩大查找范围。':'收录的文章会显示在这里。'}</p>}
       </>}
-      {hasRecoveryLinks&&<div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        {!hasDates&&query.category&&<Link to={readerLink(target,{category:null})} className={recoveryLink}>移除类别限制</Link>}
-        {!hasDates&&query.topic&&<Link to={readerLink(target,{topic:null})} className={recoveryLink}>移除主题限制</Link>}
-        {query.sourceId&&<Link to={readerLink(target,{sourceId:null})} className={recoveryLink}>移除来源限制</Link>}
-        {query.q&&<Link to={readerLink(target,{q:null})} className={recoveryLink}>清除关键词</Link>}
-        {!hasDates&&activeFilters>=2&&<Link to={readerLink(target.limit?{limit:target.limit}:{},{})} className={recoveryLink}>清除全部筛选</Link>}
-      </div>}
     </div>:<ol className="divide-y divide-line border-b border-line">
       {page.items.map(item=><ReaderFeedRow key={item.id} item={item} query={query} words={words} target={target} listReturn={listReturn}/>)}
     </ol>}

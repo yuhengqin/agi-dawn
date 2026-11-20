@@ -1,5 +1,4 @@
-import {useEffect,useState} from 'react';
-import {Form,useLocation,useNavigation,useSubmit} from 'react-router';
+import {Form,useSubmit} from 'react-router';
 import {READER_PAGE_SIZES} from '@agidawn/contracts/site';
 import type {ReaderPageData} from './reader.server';
 import {PreservedFilters} from './ReaderFilters';
@@ -11,18 +10,10 @@ import {useReaderQuery} from './useReaderQuery';
 type PaginationProps=Pick<ReaderPageData,'page'|'query'>;
 
 export function ReaderListSummary({page}:Pick<ReaderPageData,'page'>){
-  const location=useLocation(),navigation=useNavigation();
-  const busy=navigation.state!=='idle'&&navigation.location?.pathname==='/'&&navigation.location.search!==location.search;
-  const [showSearching,setShowSearching]=useState(false);
-  useEffect(()=>{
-    if(!busy){setShowSearching(false);return;}
-    const timer=setTimeout(()=>setShowSearching(true),300);
-    return()=>clearTimeout(timer);
-  },[busy]);
   const start=(page.page-1)*page.limit+1,end=start+page.items.length-1;
   return <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 text-xs text-ink-3">
-    <p role="status" aria-label="文章分页信息" aria-atomic="true">{busy&&showSearching?'正在搜索…':<>共 {page.total} 篇{page.total>0&&<> · 当前显示 {start}–{end} 篇</>}</>}</p>
-    <span title="缺少发布时间的文章按收录时间排列">按发布时间倒序</span>
+    <p role="status" aria-label="文章分页信息" aria-atomic="true">共 {page.total} 篇{page.total>0&&<> · 当前显示 {start}–{end} 篇</>}</p>
+    {page.total>0&&<span title="缺少发布时间的文章按收录时间排列">按发布时间倒序</span>}
   </div>;
 }
 

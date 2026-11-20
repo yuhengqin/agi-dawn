@@ -1,10 +1,10 @@
 import { data,redirect } from "react-router";
-import { READER_PAGE_SIZES, READER_TOPIC_FILTERS, type ReaderListPage, type TopicSummary } from "@agidawn/contracts/site";
+import { READER_PAGE_SIZES, READER_TOPIC_FILTERS, type ReaderListPage, type ReaderTopicCount } from "@agidawn/contracts/site";
 import { beijingDate } from "@agidawn/contracts/time";
 import { apiGet,loadOr404 } from "../../lib/api.server";
 
 export interface ReaderSource { id:string;name:string;url:string|null;description:string|null;articles:number;fulltext:boolean;latestAt:string|null }
-export type ReaderTopic=TopicSummary;
+export type ReaderTopic=ReaderTopicCount;
 export interface ReaderPageData { page:ReaderListPage;sources:ReaderSource[];topics:ReaderTopic[];categories:Array<{id:string;name:string}>;query:Record<string,string>;latestArticleDate:string|null }
 
 export async function loadReaderPage(request:Request) {
@@ -21,12 +21,14 @@ export async function loadReaderPage(request:Request) {
     params.delete('limit');throw redirect(params.size?`/?${params}`:'/');
   }
   const topicParams=new URLSearchParams([...params].filter(([key])=>READER_TOPIC_FILTERS.some(filter=>filter===key)));
-  const [page,sources,topics,categories]=await Promise.all([
+  const loadTopics=async()=>(await loadOr404<{topics:ReaderTopic[]}>(`/api/site/topics${topicParams.size?'?'+topicParams:''}`,{signal:request.signal})).topics;
+  const [{topics:searchTopics,...page},sources,browseTopics,categories]=await Promise.all([
     loadOr404<ReaderListPage>(`/api/site/articles?${params}`,{signal:request.signal}),
     loadOr404<{items:ReaderSource[]}>("/api/site/sources",{signal:request.signal}),
-    loadOr404<{topics:ReaderTopic[]}>(`/api/site/topics${topicParams.size?'?'+topicParams:''}`,{signal:request.signal}),
+    params.has('q')?undefined:loadTopics(),
     loadOr404<{items:Array<{id:string;name:string}>}>("/api/site/categories",{signal:request.signal}),
   ]);
+  const topics=searchTopics??browseTopics??await loadTopics();
   if(Number(params.get('page')??1)!==page.page){
     if(page.page===1)params.delete('page');else params.set('page',String(page.page));
     throw redirect(params.size?`/?${params}`:'/');
@@ -44,6 +46,6 @@ export async function loadReaderPage(request:Request) {
       if(request.signal.aborted)throw error;
     }
   }
-  return data<ReaderPageData>({page,sources:sources.items,topics:topics.topics,categories:categories.items,query:Object.fromEntries(params),latestArticleDate},{headers:{"Cache-Control":"no-store"}});
+  return data<ReaderPageData>({page,sources:sources.items,topics,categories:categories.items,query:Object.fromEntries(params),latestArticleDate},{headers:{"Cache-Control":"no-store"}});
 }
 export const readerHeaders=()=>({"Cache-Control":"no-store"});

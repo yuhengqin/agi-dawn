@@ -35,7 +35,12 @@ export interface ReaderListQuery {sourceId?:string;category?:string;topic?:strin
 // Topic alternatives apply the other article filters, independently of the selected topic and page.
 export const READER_TOPIC_FILTERS=['sourceId','category','from','to','q'] as const;
 export type ReaderTopicQuery=Pick<ReaderListQuery,(typeof READER_TOPIC_FILTERS)[number]>;
-export interface ReaderListPage {items:ReaderItemSummary[];total:number;page:number;limit:number;pageCount:number}
+export interface ReaderTopicCount extends TopicLink {total:number}
+export interface ReaderListPage {
+  items:ReaderItemSummary[];total:number;page:number;limit:number;pageCount:number;
+  /** Search results include alternatives under the other filters, before topic selection and pagination. */
+  topics?:ReaderTopicCount[];
+}
 export interface SiteMeta {changelogVersion:string}
 export interface ChangelogRelease {date:string;time:string;kind:"更新"|"优化"|"公告"|"下线";title:string;body:string[];urgent?:true;feature?:unknown}
 export interface ChangelogResponse {latestVersion:string;releases:ChangelogRelease[]}

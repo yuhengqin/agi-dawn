@@ -2,6 +2,7 @@ import {sql} from '../db.ts';
 import type postgres from 'postgres';
 export {searchSnippet} from '@agidawn/contracts/search';
 export type SearchSql=postgres.PendingQuery<postgres.Row[]>;
+const htmlTag=`<(?:[^>"']|"[^"]*"|'[^']*')*>`;
 
 // The whitespace characters normalized by collapseWhitespace in displayed metadata.
 const spaces='[\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+';
@@ -35,13 +36,30 @@ export function sourceSearchText(value:SearchSql):SearchSql{
 
 /** Inputs are sanitizer/parse5 serialized HTML, never arbitrary source pages. */
 export function htmlSearchText(html:SearchSql):SearchSql{
-  const tag=`<(?:[^>"']|"[^"]*"|'[^']*')*>`;
-  const boundaries='(</?(?:address|article|aside|blockquote|br|caption|dd|details|div|dl|dt|figcaption|figure|footer|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|summary|table|tbody|td|tfoot|th|thead|tr|ul)(?=[[:space:]/>]))';
-  // Only insert whitespace at block-tag prefixes: even a tag-shaped literal
-  // inside an attribute cannot change its quote boundaries.
+  const blocks='address article aside blockquote br caption dd details div dl dt figcaption figure footer h1 h2 h3 h4 h5 h6 header hr li main nav ol p pre section summary table tbody td tfoot th thead tr ul'.split(' ');
+  const boundaries='(</?(?:'+blocks.join('|')+')(?=[[:space:]/>]))';
+  // Serialized text escapes angle brackets. Only quoted attributes can contain
+  // literal delimiters that require the slower quote-aware tag parser.
   const spaced=sql`regexp_replace(coalesce(${html},''),${boundaries},${' \\1'},'g')`;
-  const text=sql`regexp_replace(${spaced},${tag},'','g')`;
+  const quotedDelimiter='=[[:space:]]*(?:"[^"]*[<>]|\'[^\']*[<>])';
+  const tagName=sql`split_part(translate(ltrim(split_part(part,'>',1),'/'),${'\t\n\r\f/'},'     '),' ',1)`;
+  const text=sql`CASE WHEN ${html} ~ ${quotedDelimiter} THEN regexp_replace(${spaced},${htmlTag},'','g')
+    ELSE (SELECT coalesce(string_agg(CASE WHEN ordinal=1 THEN part ELSE
+      CASE WHEN ${tagName}=ANY(${blocks}::text[]) THEN ' ' ELSE '' END
+        || substr(part,strpos(part,'>')+1) END,'' ORDER BY ordinal),'')
+      FROM string_to_table(${html},'<') WITH ORDINALITY AS parts(part,ordinal)) END`;
   return sql`trim(regexp_replace(replace(replace(replace(replace(${text},'&lt;','<'),'&gt;','>'),'&nbsp;',' '),'&amp;','&'),'[[:space:]]+',' ','g'))`;
+}
+
+/** Rule out impossible HTML hits before extracting the full text. These literal
+ * characters survive entity decoding and can only be separated by inline tags.
+ * Attribute hits and word edges are still checked against the actual visible text. */
+export function bodySearchMatch(html:SearchSql,text:SearchSql,word:string,pattern:string):SearchSql{
+  const literal=word.match(/[a-z0-9_\p{Script=Han}]{2,8}/u)?.[0];
+  const match=sql`(${text} ~* ${pattern})`;
+  if(!literal)return match;
+  const candidate=Array.from(literal).join('(?:'+htmlTag+')*');
+  return sql`CASE WHEN ${html} IS NULL OR ${html} ~* ${candidate} THEN ${match} ELSE false END`;
 }
 
 /** Match plainMetadata: retain only tag-shaped literals that also existed in the source. */

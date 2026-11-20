@@ -4,6 +4,8 @@ import {cleanArticlePresentation} from '@agidawn/backend/content/presentation';
 import {sanitizeBody} from '@agidawn/backend/content/sanitize';
 import {withOutline} from '@agidawn/backend/content/outline';
 import * as cheerio from 'cheerio';
+import {parseHTML} from 'linkedom';
+import {preparePageContent} from '@agidawn/backend/content/pipeline';
 
 test('only the matching Google header date is removed, retaining dates in article prose',()=>{
   const context={url:'https://developers.googleblog.com/article/',publishedAt:'2026-10-29T00:00:00Z'};
@@ -56,6 +58,35 @@ test('legacy missing diagrams receive linked fallbacks, while tables and text qu
   assert.equal((result.match(/此图未保存/g)??[]).length,1);
   assert.match(result,/Complete data/);assert.match(result,/A quotation/);
   assert.equal(cleanArticlePresentation(result,context),result);
+});
+
+test('missing figures use a publisher anchor or the matched original caption, including in saved translations',async()=>{
+  const {locateArticleFigures}=await import('@agidawn/backend/content/figure-links');
+  const url='https://publisher.example/story';
+  const {document}=parseHTML('<html><body><article><h2 id="results">Results</h2><figure id="actual-chart"><figcaption>First chart</figcaption></figure><figure><figcaption>Another chart</figcaption></figure></article></body></html>');
+  preparePageContent(document,url,{});
+  const prepared=cleanArticlePresentation(sanitizeBody(document.body.innerHTML,url),{url});
+  assert.equal(cheerio.load(locateArticleFigures(prepared,url))('figure a').attr('href'),url+'#actual-chart');
+  assert.equal(cheerio.load(locateArticleFigures(prepared,url))('figure a').eq(1).attr('href'),url+'#results:~:text=Another%20chart');
+  const figure=(caption:string)=>'<figure><figcaption>'+caption+'</figcaption></figure>';
+  const original=cleanArticlePresentation('<h2>Budget and execution</h2>'+figure('Costs, gains &amp; trade-offs.')+figure('A separate chart.'),{url});
+  const translated=cleanArticlePresentation('<h2>预算与执行</h2>'+figure('成本、收益与取舍。')+figure('另一张图。'),{url});
+  const $=cheerio.load(locateArticleFigures(translated,url,original)),hrefs=$('figure a').map((_,link)=>$(link).attr('href')).get();
+  assert.equal(new Set(hrefs).size,2);
+  assert.equal(decodeURIComponent(new URL(hrefs[0]!).hash),'#:~:text=Costs, gains & trade-offs.');
+  assert.match($('figure').first().text(),/Costs, gains & trade-offs\./);
+  const mismatch=cheerio.load(locateArticleFigures(translated,url,original+figure('Extra.')));
+  assert.equal(mismatch('figure a').first().attr('href'),url);
+  const withAnchor=original.replace('href="'+url+'"','href="'+url+'#source-results"');
+  assert.equal(cheerio.load(locateArticleFigures(translated,url,withAnchor))('figure a').first().attr('href'),url+'#source-results');
+  const noCaption='<h2>Execution costs</h2><figure data-reader-figure-status="missing"><p><a href="'+url+'">此图未保存，查看原文</a></p></figure>';
+  assert.equal(cheerio.load(locateArticleFigures(noCaption,url))('figure a').attr('href'),url+'#:~:text=Execution%20costs');
+});
+
+test('explicit data charts are sized independently of ordinary images, bookmark previews and inline legends',()=>{
+  const html='<p><img src="/a" alt="sample_train_curves"></p><p><img src="/b" alt="A landscape photograph"></p><figure data-reader-card="true"><img src="/c" alt="Training chart"></figure><p><img src="/d" data-reader-inline="true" alt="Graph legend"></p>';
+  const $=cheerio.load(cleanArticlePresentation(html,{url:'https://example.org/story'}));
+  assert.deepEqual($('img[data-reader-chart="true"]').map((_,n)=>$(n).attr('src')).get(),['/a']);
 });
 
 test('figure and bookmark headings stay out of the public outline without renumbering later sections',()=>{

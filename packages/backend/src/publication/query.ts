@@ -4,7 +4,7 @@ import {searchWords,searchPattern} from '@agidawn/contracts/search';
 import {sql,withCustomPlans,type Db} from '../db.ts';
 import {categoryExists} from './categories.ts';
 import {readerBodyAllowed,readerTranslationJoin,readerVisible} from './items.ts';
-import {htmlSearchText,sourceSearchText,summarySearchText} from './search-text.ts';
+import {bodySearchMatch,htmlSearchText,sourceSearchText,summarySearchText} from './search-text.ts';
 
 export class ReaderQueryError extends Error {readonly statusCode=400;}
 export class SearchBusyError extends Error {readonly retryAfter:number;constructor(retryAfter:number){super('search capacity exhausted');this.retryAfter=retryAfter;}}
@@ -42,8 +42,13 @@ export async function readerFilters(query:ReaderTopicQuery){
       ${sourceSearchText(sql`s.name`)} AS source_name) AS searchable ON true
     LEFT JOIN pool_search ps ON ps.article_id=p.article_id`;
   const originalBody=sql`CASE WHEN ${allowed} THEN CASE WHEN a.body_html IS NOT NULL THEN ${htmlSearchText(sql`a.body_html`)} ELSE ps.body END ELSE NULL END`;
-  const match=terms.reduce((acc,term)=>sql`${acc} AND (p.title ~* ${term} OR searchable.summary ~* ${term} OR searchable.source_name ~* ${term} OR topic.names ~* ${term}
-    OR translated.title ~* ${term} OR searchable.translated_summary ~* ${term} OR (${allowed} AND (${originalBody} ~* ${term} OR translated.body ~* ${term})))`,sql`TRUE`);
+  const match=terms.reduce((acc,term,index)=>{
+    const word=words[index]!;
+    const original=bodySearchMatch(sql`a.body_html`,originalBody,word,term);
+    const translated=bodySearchMatch(sql`translated.body_html`,sql`translated.body`,word,term);
+    return sql`${acc} AND (p.title ~* ${term} OR searchable.summary ~* ${term} OR searchable.source_name ~* ${term} OR topic.names ~* ${term}
+      OR translated.title ~* ${term} OR searchable.translated_summary ~* ${term} OR (${allowed} AND (${original} OR ${translated})))`;
+  },sql`TRUE`);
   const where=sql`${readerVisible} AND ${match}
     ${query.sourceId?sql`AND p.source_id=${query.sourceId}`:sql``}
     ${query.category==='uncategorized'?sql`AND p.category IS NULL`:query.category?sql`AND p.category=${query.category}`:sql``}

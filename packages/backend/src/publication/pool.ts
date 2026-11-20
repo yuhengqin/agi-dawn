@@ -10,7 +10,7 @@ import {searchSnippet} from './search-text.ts';
 import {readerFilters,ReaderQueryError,withSearchCapacity} from './query.ts';
 export {ReaderQueryError,SearchBusyError,withSearchCapacity} from './query.ts';
 type SearchFields={translated_title:string|null;translated_summary:string|null;translated_body:string|null;search_body:string|null;topic_names:string|null};
-type ReaderPageRow={total:number;page:number;page_count:number}&((ReaderRow&SearchFields)|{id:null});
+type ReaderPageRow={total:number;page:number;page_count:number;topics?:ReaderListPage['topics']}&((ReaderRow&SearchFields)|{id:null});
 const sharedReaderSearch=shared((input:{key:string;run:(db:Db)=>Promise<ReaderPageRow[]>})=>input.key,input=>withSearchCapacity(input.run));
 export {searchWords};
 export function searchTerms(q:string){return searchWords(q).slice(0,6).map(t=>t.replace(/[\\%_]/g,m=>"\\"+m));}
@@ -21,22 +21,28 @@ export async function loadReaderList(query:ReaderListQuery):Promise<ReaderListPa
   const {joins,where,originalBody,words,terms}=await readerFilters(query);
   const topic=query.topic?await findTopic(query.topic):null;
   if(query.topic&&!topic)throw new ReaderQueryError("invalid topic");
-  // One statement keeps totals and the selected page on the same database snapshot.
-  const run=async(db:Db)=>db<ReaderPageRow[]>`WITH matches AS MATERIALIZED (
-    SELECT p.article_id,p.sort_at ${READER_FROM} ${joins} WHERE ${where}
-    ${topic?sql`AND p.tags && ${topic.tags}::text[]`:sql``}
-  ), totals AS (SELECT count(*) AS total FROM matches), pagination AS (
+  // Search once, including when the selected topic has no results.
+  const topicFilter=topic?sql`tags && ${topic.tags}::text[]`:sql`true`;
+  // Browsing a topic can push its tag filter all the way down to publications.
+  const materialization=terms.length?sql`MATERIALIZED`:sql`NOT MATERIALIZED`;
+  const topicCounts=terms.length?sql`,(SELECT coalesce(jsonb_agg(jsonb_build_object(
+    'slug',t.slug,'name',t.name,'total',(SELECT count(*) FROM matches m WHERE m.tags && t.tags)
+  ) ORDER BY t.position,t.created_at,t.slug),'[]'::jsonb) FROM article_topics t) AS topics`:sql``;
+  const run=async(db:Db)=>db<ReaderPageRow[]>`WITH matches AS ${materialization} (
+    SELECT p.article_id,p.sort_at,p.tags ${READER_FROM} ${terms.length?joins:sql``} WHERE ${where}
+  ), filtered AS (SELECT article_id,sort_at FROM matches WHERE ${topicFilter}),
+  totals AS (SELECT count(*) AS total FROM filtered), pagination AS (
     SELECT total,ceil(total::numeric/${limit})::bigint AS page_count,
       greatest(1,least(${page}::bigint,ceil(total::numeric/${limit})))::bigint AS page FROM totals
   ), selected AS (
-    SELECT article_id FROM matches ORDER BY sort_at DESC,article_id DESC
+    SELECT article_id FROM filtered ORDER BY sort_at DESC,article_id DESC
     LIMIT ${limit} OFFSET (SELECT (page-1)*${limit}::bigint FROM pagination)
   ), content AS (
     SELECT ${READER_COLUMNS},translated.title AS translated_title,translated.summary AS translated_summary,
       translated.body_html AS translated_html,${words.length?sql`translated.body`:sql`NULL::text`} AS translated_body,
       ${words.length?originalBody:sql`NULL::text`} AS search_body,topic.names AS topic_names
       ${READER_FROM} JOIN selected ON selected.article_id=p.article_id ${joins}
-  ) SELECT pagination.*,content.* FROM pagination LEFT JOIN content ON true ORDER BY content.sort_at DESC,content.id DESC`;
+  ) SELECT pagination.*,content.* ${topicCounts} FROM pagination LEFT JOIN content ON true ORDER BY content.sort_at DESC,content.id DESC`;
   const key=JSON.stringify([query.sourceId??null,query.category??null,query.topic??null,query.from??null,query.to??null,query.q?.trim()??"",page,limit]);
   const rows=terms.length?await sharedReaderSearch({key,run}):await run(sql),summary=rows[0]!;
   type TextRow=ReaderRow&SearchFields;
@@ -60,5 +66,5 @@ export async function loadReaderList(query:ReaderListQuery):Promise<ReaderListPa
       return {field,language,snippet:searchSnippet(text!,focus)};
     });
   }
-  return {items,total:summary.total,page:summary.page,limit,pageCount:summary.page_count};
+  return {items,total:summary.total,page:summary.page,limit,pageCount:summary.page_count,...(summary.topics?{topics:summary.topics}:{})};
 }

@@ -126,6 +126,7 @@ test('desktop reading improvements expose search evidence, immediate presets and
     web=await startWebServer(fakeApi(url=>{
       if(url.pathname==='/api/site/articles')return readerPage([item],url);
       if(url.pathname==='/api/site/items/experience')return article;
+      if(url.pathname==='/api/site/items/related')return itemDetail({id:'related',title:'Another useful article'});
       if(url.pathname==='/api/site/engagement')return {items:[{id:item.id,views:0,likes:0,liked:false}]};
       if(url.pathname==='/api/site/categories'||url.pathname==='/api/site/sources')return {items:[]};
       if(url.pathname==='/api/site/topics')return {topics:[]};
@@ -133,7 +134,7 @@ test('desktop reading improvements expose search evidence, immediate presets and
     }));
     const page=await browser.newPage({viewport:{width:1440,height:900}});await visit(page,web.origin+'/?q=cost');
     await expect(page.locator('main h2 mark')).toHaveText('cost');
-    await expect(page.getByText('正文译文命中：',{exact:false})).toContainText('cost of each task');
+    await expect(page.getByText('正文译文命中：',{exact:false})).toHaveCount(0);
     await expect(page.getByText('约 4 分钟',{exact:true})).toBeVisible();
     await expect(page.getByText('正文不完整',{exact:true})).toHaveCount(0);
     await expect(page.getByRole('button',{name:'点赞',exact:true})).toHaveText('');
@@ -144,6 +145,11 @@ test('desktop reading improvements expose search evidence, immediate presets and
     await expect(page.getByText('中文译文',{exact:true})).toBeVisible();
     await expect(page.getByRole('contentinfo',{name:'文章后续阅读'})).toContainText('Another useful article');
     await expect(page.getByRole('contentinfo',{name:'文章后续阅读'}).getByRole('link',{name:'文末打开原文',exact:true})).toBeVisible();
+    const recommendation=page.getByRole('contentinfo',{name:'文章后续阅读'}).getByRole('listitem').first();
+    await recommendation.scrollIntoViewIfNeeded();
+    const box=await recommendation.boundingBox();assert(box);
+    await recommendation.click({position:{x:box.width-10,y:box.height/2}});
+    await expect(page).toHaveURL(/\/items\/related$/);
   }finally{await browser.close();await web?.stop();}
 });
 
@@ -750,7 +756,7 @@ for(const engine of [chromium,webkit])test(`reader results delay search feedback
     await page.clock.pauseAt(new Date('2026-11-08T10:00:00Z'));
     const input=page.getByRole('searchbox'),status=page.getByRole('status',{name:'文章分页信息',exact:true});
     await expect(status).toContainText('共 2 篇');
-    await status.evaluate(element=>{
+    await page.getByRole('search').getByRole('status').evaluate(element=>{
       const messages:string[]=[];Object.assign(window,{searchStatusMessages:messages});
       new MutationObserver(()=>messages.push(element.textContent??'')).observe(element,{childList:true,characterData:true,subtree:true});
     });
@@ -763,9 +769,9 @@ for(const engine of [chromium,webkit])test(`reader results delay search feedback
 
     gate('slow');await input.fill('slow');await input.press('Enter');await started;
     await page.clock.runFor(100);await expect(status).toContainText('共 1 篇');
-    await page.clock.runFor(250);await expect(status).toHaveText('正在搜索…');
+    await page.clock.runFor(250);await expect(page.getByRole('search').getByRole('status')).toHaveText('正在搜索“slow”…');
     await expect(page.getByRole('link',{name:'quick result',exact:true})).toBeVisible();
-    await expect(page.getByRole('search').getByRole('status')).toHaveCount(0);
+    await expect(status).toContainText('共 1 篇');
     await expect(input).toBeEnabled();await expect(input).toBeFocused();
     await expect(page.getByRole('button',{name:'清除搜索',exact:true})).toBeEnabled();
     await input.dispatchEvent('compositionstart');await input.fill('新输入');release();
@@ -774,7 +780,7 @@ for(const engine of [chromium,webkit])test(`reader results delay search feedback
     await expect(status).toHaveText('共 0 篇');await expect(page.getByRole('heading',{name:'没有符合条件的文章',exact:true})).toBeVisible();
 
     gate('stale');await input.fill('stale');await input.press('Enter');await started;
-    await page.clock.runFor(350);await expect(status).toHaveText('正在搜索…');
+    await page.clock.runFor(350);await expect(page.getByRole('search').getByRole('status')).toHaveText('正在搜索“stale”…');
     await page.getByRole('button',{name:'清除搜索',exact:true}).click();
     await expect(page).toHaveURL(web.origin+'/');await expect(status).toContainText('共 2 篇');await expect(input).toHaveValue('');
     release();await page.clock.runFor(500);await expect(status).toContainText('共 2 篇');
@@ -936,7 +942,7 @@ for(const engine of [chromium,webkit])for(const composing of [false,true])test(`
     await source.selectOption('source');await expect(page).toHaveURL(/sourceId=source/);await expect(status).toContainText('共 1 篇');
     // Keep the response commit inside the debounce window without relying on host speed.
     await page.clock.pauseAt(new Date('2026-11-06T10:00:00Z'));
-    hold=true;await page.evaluate(()=>history.back());await started;await page.clock.runFor(350);await expect(status).toHaveText('正在搜索…');
+    hold=true;await page.evaluate(()=>history.back());await started;await page.clock.runFor(350);await expect(page.getByRole('search').getByRole('status')).toHaveText('正在搜索“old”…');
     if(composing)await input.dispatchEvent('compositionstart');
     const value=composing?'新输入':'newword';await input.fill(value);release();
     await expect(source).toHaveValue('');await expect(status).toContainText('共 1 篇');await expect(input).toHaveValue(value);
@@ -954,6 +960,25 @@ for(const engine of [chromium,webkit])for(const composing of [false,true])test(`
     await page.clock.runFor(400);assert(!searches.includes('discard-before-history'));
     await expect.poll(()=>Object.fromEntries(new URL(page.url()).searchParams)).toEqual({q:'old',category:'coding',limit:'50',sourceId:'source'});
   }finally{release();await browser.close();await web?.stop();}
+});
+
+for(const engine of [chromium,webkit])test(`reader search submits the text entered before the page hydrates (${engine.name()})`,async()=>{
+  const web=await startWebServer(fakeApi(url=>{
+    if(url.pathname==='/api/site/articles')return readerPage([feedItem({id:'result',title:'Search result'})],url);
+    if(['/api/site/categories','/api/site/sources'].includes(url.pathname))return {items:[]};
+    if(url.pathname==='/api/site/topics')return {topics:[]};
+  })),browser=await engine.launch();
+  let release=()=>{};const scripts=new Promise<void>(resolve=>release=resolve);
+  try{
+    const page=await browser.newPage({viewport:{width:1280,height:800}});
+    await page.route('**/*.js',async route=>{await scripts;await route.continue();});
+    await page.goto(web.origin+'/?q=old&limit=50',{waitUntil:'commit'});
+    const input=page.getByRole('searchbox');await input.fill('new keyword');release();
+    await expect(page.getByRole('button',{name:'主题切换'})).toBeVisible();
+    await input.press('Enter');
+    await expect.poll(()=>Object.fromEntries(new URL(page.url()).searchParams)).toEqual({q:'new keyword',limit:'50'});
+    await expect(input).toHaveValue('new keyword');
+  }finally{release();await browser.close();await web.stop();}
 });
 
 for(const engine of [chromium,webkit])test(`reader search discards earlier drafts when history entries share a URL (${engine.name()})`,async()=>{
@@ -997,9 +1022,15 @@ for(const engine of [chromium,webkit])test(`empty reader results can remove only
     const dateRanges:Record<string,string>[]=[{},{from:'2026-10-01',to:'2026-10-28'}];
     for(const dates of dateRanges){
       const selected={...filters,...dates};
-      for(const [key,label] of [['sourceId','移除来源限制'],['q','清除关键词']]){
+      for(const [key,label] of [['sourceId','移除来源：Source'],['q','移除搜索：missing']]){
         await visit(page,web.origin+'/?'+new URLSearchParams(selected));
         await expect(page.getByRole('group',{name:'文章分页控制',exact:true})).toHaveCount(0);
+        await expect(page.getByRole('link',{name:'清除全部筛选',exact:true})).toHaveCount(1);
+        await expect(page.getByText('按发布时间倒序',{exact:true})).toHaveCount(0);
+        if(!dates.from){
+          const href=await page.getByRole('link',{name:'查看 Source 的 1 篇文章',exact:true}).getAttribute('href');
+          assert.deepEqual(Object.fromEntries(new URL(href!,web.origin).searchParams),{sourceId:'source',limit:'50'});
+        }
         await page.getByRole('link',{name:label,exact:true}).click();
         await expect(page.getByRole('link',{name:'Recovered article',exact:true})).toBeVisible();
         const expected={...selected};delete expected[key as keyof typeof expected];
@@ -1008,10 +1039,31 @@ for(const engine of [chromium,webkit])test(`empty reader results can remove only
       }
     }
     const plain=await browser.newPage({javaScriptEnabled:false,viewport:{width:1280,height:800}});
-    await plain.goto(web.origin+'/?'+new URLSearchParams(filters));await plain.getByRole('link',{name:'清除关键词',exact:true}).click();
+    await plain.goto(web.origin+'/?'+new URLSearchParams(filters));await plain.getByRole('link',{name:'移除搜索：missing',exact:true}).click();
     await expect(plain.getByRole('link',{name:'Recovered article',exact:true})).toBeVisible();
     assert.deepEqual(Object.fromEntries(new URL(plain.url()).searchParams),{sourceId:'source',category:'coding',topic:'mcp',limit:'50'});
   }finally{await browser.close();await web?.stop();}
+});
+
+test('searched topic shortcuts come from the article response and keep empty alternatives in the overflow',async()=>{
+  const browser=await chromium.launch();
+  const topics=[{slug:'mcp',name:'Empty topic',total:0},{slug:'positive',name:'Available topic',total:1}];
+  let extraSearches=0;
+  const web=await startWebServer(fakeApi(url=>{
+    if(url.pathname==='/api/site/articles')return {...readerPage([],url),topics};
+    if(['/api/site/sources','/api/site/categories'].includes(url.pathname))return {items:[]};
+    if(url.pathname==='/api/site/topics'){if(url.searchParams.has('q'))extraSearches++;return {topics:[]};}
+  }));
+  try{
+    const page=await browser.newPage({viewport:{width:1440,height:900}});
+    await visit(page,web.origin+'/?q=match&topic=mcp');
+    const tabs=page.getByRole('navigation',{name:'文章主题',exact:true});
+    await expect(tabs.getByRole('link',{name:'Available topic'})).toBeVisible();
+    await expect(tabs.getByRole('link',{name:'Empty topic'})).toHaveCount(0);
+    await page.locator('summary').filter({hasText:'Empty topic'}).click();
+    await expect(page.getByRole('navigation',{name:'全部技术主题'}).getByRole('link',{name:'Empty topic'})).toHaveAttribute('aria-current','page');
+    assert.equal(extraSearches,0);
+  }finally{await browser.close();await web.stop();}
 });
 
 async function datePickerServer(onRead:()=>void=()=>{}){
