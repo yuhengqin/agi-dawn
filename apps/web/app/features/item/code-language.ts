@@ -4,7 +4,12 @@ const LABELS: Record<string, string> = {
   javascript: "JavaScript", js: "JavaScript", typescript: "TypeScript", ts: "TypeScript",
   python: "Python", py: "Python", json: "JSON", css: "CSS", sql: "SQL",
   markdown: "Markdown", md: "Markdown", xml: "HTML / XML", html: "HTML / XML", yaml: "YAML", yml: "YAML",
-  go: "Go", rust: "Rust", java: "Java", cpp: "C++", csharp: "C#", ruby: "Ruby",
+  go: "Go", golang: "Go", rust: "Rust", rs: "Rust", java: "Java",
+  c: "C", h: "C", cpp: "C++", cc: "C++", cxx: "C++", hpp: "C++",
+  csharp: "C#", cs: "C#", ruby: "Ruby", rb: "Ruby",
+  kotlin: "Kotlin", kt: "Kotlin", swift: "Swift", diff: "Diff",
+  dockerfile: "Dockerfile", docker: "Dockerfile",
+  protobuf: "Protobuf", proto: "Protobuf", toml: "TOML", ini: "INI",
 };
 
 export const languageLabel = (language: string) => Object.hasOwn(LABELS, language) ? LABELS[language]! : language;

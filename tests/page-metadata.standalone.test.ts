@@ -16,7 +16,7 @@ after(async()=>{await web?.stop();});
 async function page(path:string){const response=await fetch(web.origin+path);assert.equal(response.status,200,web.logs());return cheerio.load(await response.text());}
 test("reading pages carry the confirmed brand and canonical filter address",async()=>{
   const $=await page("/all?q=Agent&category=uncategorized");
-  assert.equal($("title").text(),"文章 · "+SITE.name);
+  assert.equal($("title").text(),"搜索“Agent” · 待分类 · 文章 · "+SITE.name);
   assert.equal($("link[rel=canonical]").attr("href"),web.origin+"/?q=Agent&category=uncategorized");
   assert.equal($("meta[name=robots]").attr("content"),"noindex, follow");assert.ok($("main").text().includes(item.title));
 });

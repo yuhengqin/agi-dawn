@@ -5,6 +5,7 @@ export const KEYS = {
   theme: "agidawn-theme",
   readingDisplay: "agi-dawn-reading-display-v1",
   figureNotices: "agi-dawn-figure-notices-v1",
+  sidebar: "agidawn-sidebar-v1",
   changelogSeen: "agidawn-changelog-seen-version",
   feedbackDraft: "agidawn-feedback-draft-v1",
   recentSearches: "agidawn-recent-searches",
@@ -71,6 +72,7 @@ function onStorage(event: StorageEvent) {
   if (key === null || key === KEYS.theme) unsavedTheme = undefined;
   if (key === null || key === KEYS.readingDisplay) unsavedReadingDisplay = undefined;
   if (key === null || key === KEYS.figureNotices) unsavedFigureNotices = undefined;
+  if (key === null || key === KEYS.sidebar) unsavedSidebarPreference = undefined;
   if (key === null) cache.clear();
   else cache.delete(key);
   // Clear the snapshot once, before notifying all cards. Each key is parsed at most once.
@@ -92,6 +94,7 @@ function subscribeKey(key: string) {
 const subscribeTheme = subscribeKey(KEYS.theme);
 const subscribeReadingDisplay = subscribeKey(KEYS.readingDisplay);
 const subscribeFigureNotices = subscribeKey(KEYS.figureNotices);
+const subscribeSidebarPreference = subscribeKey(KEYS.sidebar);
 const subscribeChangelog = subscribeKey(KEYS.changelogSeen);
 const subscribeRecentSearches = subscribeKey(KEYS.recentSearches);
 
@@ -115,7 +118,9 @@ let unsavedReadingDisplay:ReadingDisplay|undefined;
 function parseReadingDisplay(input:unknown):ReadingDisplay{
   const value=input&&typeof input==="object"&&!Array.isArray(input)?input as Record<string,unknown>:{};
   const choose=<K extends keyof ReadingDisplay>(key:K):ReadingDisplay[K]=>(readingValues[key] as readonly unknown[]).includes(value[key])?value[key] as ReadingDisplay[K]:DEFAULT_READING_DISPLAY[key];
-  return {size:choose("size"),spacing:choose("spacing"),width:choose("width")};
+  const size=choose("size"),spacing=choose("spacing"),width=choose("width");
+  if(size===DEFAULT_READING_DISPLAY.size&&spacing===DEFAULT_READING_DISPLAY.spacing&&width===DEFAULT_READING_DISPLAY.width)return DEFAULT_READING_DISPLAY;
+  return {size,spacing,width};
 }
 export function getReadingDisplay():ReadingDisplay{return unsavedReadingDisplay??cached(KEYS.readingDisplay,()=>parseReadingDisplay(readJson(KEYS.readingDisplay)));}
 export function setReadingDisplay(input:ReadingDisplay):boolean{
@@ -145,6 +150,60 @@ export function restoreFigureNotices():boolean{
   return updateFigureNotices(DEFAULT_FIGURE_NOTICES,writeRaw(KEYS.figureNotices,null));
 }
 export function useFigureNotices():FigureNotices{return useSyncExternalStore(subscribeFigureNotices,getFigureNotices,()=>DEFAULT_FIGURE_NOTICES);}
+
+export interface SidebarPreference {
+  collapsed: boolean;
+  width: number;
+}
+export const DEFAULT_SIDEBAR_WIDTH = 194;
+export const COLLAPSED_SIDEBAR_WIDTH = 60;
+export const MIN_SIDEBAR_WIDTH = 180;
+export const MAX_SIDEBAR_WIDTH = 280;
+export const DEFAULT_SIDEBAR_PREFERENCE: SidebarPreference = {
+  collapsed: false,
+  width: DEFAULT_SIDEBAR_WIDTH,
+};
+let unsavedSidebarPreference: SidebarPreference | undefined;
+export function parseSidebarPreference(input: unknown): SidebarPreference {
+  const value = input && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, unknown>) : {};
+  const rawWidth = typeof value.width === "number" && Number.isFinite(value.width)
+    ? Math.round(value.width)
+    : DEFAULT_SIDEBAR_WIDTH;
+  const collapsed = value.collapsed === true;
+  const width = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, rawWidth));
+  if (!collapsed && width === DEFAULT_SIDEBAR_WIDTH) return DEFAULT_SIDEBAR_PREFERENCE;
+  return { collapsed, width };
+}
+export function getSidebarPreference(): SidebarPreference {
+  return unsavedSidebarPreference ?? cached(KEYS.sidebar, () => parseSidebarPreference(readJson(KEYS.sidebar)));
+}
+function applySidebarPreference(value: SidebarPreference) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const width = `${value.collapsed ? COLLAPSED_SIDEBAR_WIDTH : value.width}px`;
+  if (root.style.getPropertyValue("--desktop-sidebar-width") !== width) {
+    root.style.setProperty("--desktop-sidebar-width", width);
+  }
+  if (value.collapsed) {
+    if (root.getAttribute("data-sidebar-collapsed") !== "true") {
+      root.setAttribute("data-sidebar-collapsed", "true");
+    }
+  } else if (root.hasAttribute("data-sidebar-collapsed")) {
+    root.removeAttribute("data-sidebar-collapsed");
+  }
+}
+export function setSidebarPreference(input: SidebarPreference): boolean {
+  const value = parseSidebarPreference(input);
+  const saved = writeRaw(KEYS.sidebar, JSON.stringify(value));
+  unsavedSidebarPreference = saved ? undefined : value;
+  applySidebarPreference(value);
+  invalidate(KEYS.sidebar);
+  return saved;
+}
+export function useSidebarPreference(): SidebarPreference {
+  return useSyncExternalStore(subscribeSidebarPreference, getSidebarPreference, () => DEFAULT_SIDEBAR_PREFERENCE);
+}
+export const SIDEBAR_BOOT_SCRIPT = `(function(){var v,d=document.documentElement;try{v=JSON.parse(localStorage.getItem('${KEYS.sidebar}'))}catch(e){}v=v&&typeof v==='object'&&!Array.isArray(v)?v:{};var c=v.collapsed===true;var w=typeof v.width==='number'&&isFinite(v.width)?Math.round(v.width):${DEFAULT_SIDEBAR_WIDTH};if(w<${MIN_SIDEBAR_WIDTH})w=${MIN_SIDEBAR_WIDTH};if(w>${MAX_SIDEBAR_WIDTH})w=${MAX_SIDEBAR_WIDTH};if(d.style)d.style.setProperty('--desktop-sidebar-width',(c?${COLLAPSED_SIDEBAR_WIDTH}:w)+'px');if(c)d.setAttribute('data-sidebar-collapsed','true');else if(d.removeAttribute)d.removeAttribute('data-sidebar-collapsed');})();`;
 
 export type ThemePreference = "light" | "dark" | null;
 let unsavedTheme: ThemePreference | undefined;
@@ -192,7 +251,9 @@ export function useAppearanceSync() {
   },[]);
   const pref = useThemePreference();
   const reading = useReadingDisplay();
+  const sidebar = useSidebarPreference();
   useEffect(() => {applyReadingDisplay(getReadingDisplay());}, [reading]);
+  useEffect(() => {applySidebarPreference(getSidebarPreference());}, [sidebar]);
   useEffect(() => {
     // Read the stored choice itself: during hydration the hook still reports the server's "none".
     const current = getThemePreference();
@@ -224,11 +285,14 @@ export function setChangelogSeen(version: string) {
   invalidate(KEYS.changelogSeen);
 }
 
+const NO_SEARCHES: string[] = [];
+
 // recent searches (newest first, at most RECENT_SEARCH_LIMIT; this browser only)
 function getRecentSearches(): string[] {
   return cached(KEYS.recentSearches, () => {
     const parsed = readJson(KEYS.recentSearches);
-    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string" && v.trim() !== "").slice(0, RECENT_SEARCH_LIMIT) : [];
+    const items = Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string" && v.trim() !== "").slice(0, RECENT_SEARCH_LIMIT) : [];
+    return items.length ? items : NO_SEARCHES;
   });
 }
 
@@ -269,7 +333,6 @@ export function useChangelogSeen(): string | null {
   return useSyncExternalStore(subscribeChangelog, getChangelogSeen, () => null);
 }
 
-const NO_SEARCHES: string[] = [];
 export function useRecentSearches(): string[] {
   return useSyncExternalStore(subscribeRecentSearches, getRecentSearches, () => NO_SEARCHES);
 }

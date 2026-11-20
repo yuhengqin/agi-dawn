@@ -1,4 +1,7 @@
-import { beijingDate, beijingTime, beijingWeekday, monthDay as engineMonthDay } from "@agidawn/contracts/time";
+import { BEIJING_TIMEZONE, beijingDate, beijingTime, beijingWeekday, monthDay as engineMonthDay } from "@agidawn/contracts/time";
+
+export const readerDate = (value: string) =>
+  new Intl.DateTimeFormat("zh-CN", { timeZone: BEIJING_TIMEZONE, dateStyle: "medium" }).format(new Date(value));
 
 /**
  * "9月28日" of a calendar date (YYYY-MM-DD). A day of another year than `now` (Beijing) carries its year, so an

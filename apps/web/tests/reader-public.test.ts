@@ -225,7 +225,7 @@ test('image zoom steps start at the displayed size and preserve the viewed cente
     const initial=await geometry();await dialog.getByRole('button',{name:'放大图片',exact:true}).click();
     await expect.poll(async()=>(await geometry()).width/initial.width).toBeCloseTo(1.25,2);
     await expect.poll(async()=>(await geometry()).x).toBeCloseTo(initial.x,2);await expect.poll(async()=>(await geometry()).y).toBeCloseTo(initial.y,2);
-    await expect(dialog.getByRole('status',{name:'图片缩放比例',exact:true})).toHaveText(/44%/);
+    await expect(dialog.getByRole('status',{name:'图片缩放比例',exact:true})).toHaveText(/43%/);
     await dialog.getByRole('button',{name:'放大图片',exact:true}).click();await stage.evaluate(el=>{el.scrollLeft=150;el.scrollTop=30;});
     const panned=await geometry();await dialog.getByRole('button',{name:'放大图片',exact:true}).click();
     await expect.poll(async()=>(await geometry()).x).toBeCloseTo(panned.x,2);await expect.poll(async()=>(await geometry()).y).toBeCloseTo(panned.y,2);
@@ -1501,7 +1501,7 @@ for(const engine of [chromium,webkit])test(`mobile categories and additional top
 
 for(const engine of [chromium,webkit])test(`topic overlay dismisses, restores focus and closes after navigation (${engine.name()})`,async()=>{
   const browser=await engine.launch();let web:WebServer|undefined;
-  const topics=Array.from({length:8},(_,i)=>({slug:'topic-'+i,name:'技术主题 '+i,group:'field',definition:'Topic',brand:null,total:1,recent:1,indexable:true,latest:null}));
+  const topics=Array.from({length:12},(_,i)=>({slug:'topic-'+i,name:'技术主题 '+i,group:'field',definition:'Topic',brand:null,total:1,recent:1,indexable:true,latest:null}));
   try{
     web=await startWebServer(fakeApi(url=>{
       if(url.pathname==='/api/site/articles')return readerPage([feedItem({id:'overlay',title:'Overlay result'})],url);
@@ -1510,20 +1510,21 @@ for(const engine of [chromium,webkit])test(`topic overlay dismisses, restores fo
       if(url.pathname==='/api/site/sources')return {items:[]};
     }));
     const page=await browser.newPage({viewport:{width:1440,height:900}});await visit(page,web.origin+'/?category=coding');
-    const trigger=page.locator('summary').filter({hasText:/更多主题|技术主题 7/}),panel=page.getByRole('navigation',{name:'全部技术主题'});
+    const trigger=page.locator('summary').filter({hasText:/更多主题|技术主题 11/}),panel=page.getByRole('navigation',{name:'全部技术主题'});
     for(const width of [961,1024,1920]){await page.setViewportSize({width,height:900});await trigger.click();await expect(panel).toBeVisible();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.keyboard.press('Escape');}
     await trigger.click();await expect(panel).toBeVisible();
+    await expect(panel.getByRole('link',{name:'全部主题',exact:true})).toBeHidden();
     await page.getByRole('searchbox').click();await expect(panel).toBeHidden();
     await trigger.click();await trigger.click();await expect(panel).toBeHidden();
     await trigger.focus();await page.keyboard.press('Enter');await page.keyboard.press('Tab');
-    await expect(panel.getByRole('link',{name:'全部主题',exact:true})).toBeFocused();
+    await expect(panel.locator('a:visible').first()).toBeFocused();
     await page.keyboard.press('Escape');await expect(panel).toBeHidden();await expect(trigger).toBeFocused();
-    await trigger.click();await panel.getByRole('link',{name:'技术主题 7',exact:true}).click();
-    await expect(page).toHaveURL(/topic=topic-7/);assert.equal(new URL(page.url()).searchParams.get('category'),'coding');await expect(panel).toBeHidden();
-    await trigger.click();await panel.getByRole('link',{name:'技术主题 7',exact:true}).click();await expect(panel).toBeHidden();
-    await trigger.click();await panel.getByRole('link',{name:'全部主题',exact:true}).click();
+    await trigger.click();await panel.getByRole('link',{name:'技术主题 11',exact:true}).click();
+    await expect(page).toHaveURL(/topic=topic-11/);assert.equal(new URL(page.url()).searchParams.get('category'),'coding');await expect(panel).toBeHidden();
+    await trigger.click();await panel.getByRole('link',{name:'技术主题 11',exact:true}).click();await expect(panel).toBeHidden();
+    await page.getByRole('navigation',{name:'文章主题'}).getByRole('link',{name:'全部主题',exact:true}).click();
     await expect(page).not.toHaveURL(/topic=/);assert.equal(new URL(page.url()).searchParams.get('category'),'coding');
-    await page.goBack();await expect(page).toHaveURL(/topic=topic-7/);await expect(panel).toBeHidden();
+    await page.goBack();await expect(page).toHaveURL(/topic=topic-11/);await expect(panel).toBeHidden();
   }finally{await browser.close();await web?.stop();}
 });
 
@@ -1916,7 +1917,7 @@ test('single reader filters stay visible and removable after collapsing the side
 
 test('reader topic counts follow the other filters without the selected topic or pagination',async()=>{
   const browser=await chromium.launch();let web:WebServer|undefined;const topicQueries:Record<string,string>[]=[];
-  const topics=Array.from({length:8},(_,i)=>({slug:'topic-'+i,name:'技术主题 '+i,group:'field',definition:'Topic',brand:null,total:11,recent:0,indexable:true,latest:null}));
+  const topics=Array.from({length:12},(_,i)=>({slug:'topic-'+i,name:'技术主题 '+i,group:'field',definition:'Topic',brand:null,total:11,recent:0,indexable:true,latest:null}));
   try{
     web=await startWebServer(fakeApi(url=>{
       if(url.pathname==='/api/site/articles')return readerPage(Array.from({length:51},(_,i)=>feedItem({id:'facet-'+i,title:'Article '+i})),url);
@@ -1928,9 +1929,9 @@ test('reader topic counts follow the other filters without the selected topic or
       }
     }));
     const page=await browser.newPage({viewport:{width:1280,height:800}});
-    await visit(page,web.origin+'/?sourceId=source&category=coding&q=tools&from=2026-11-01&to=2026-11-13&topic=topic-7&page=2&limit=50');
+    await visit(page,web.origin+'/?sourceId=source&category=coding&q=tools&from=2026-11-01&to=2026-11-13&topic=topic-11&page=2&limit=50');
     assert.deepEqual(topicQueries.at(-1),{sourceId:'source',category:'coding',q:'tools',from:'2026-11-01',to:'2026-11-13'});
-    const trigger=page.locator('summary').filter({hasText:/技术主题 7/}),topic=page.getByRole('navigation',{name:'全部技术主题'}).getByRole('link',{name:'技术主题 7',exact:true});
+    const trigger=page.locator('summary').filter({hasText:/技术主题 11/}),topic=page.getByRole('navigation',{name:'全部技术主题'}).getByRole('link',{name:'技术主题 11',exact:true});
     await trigger.click();await expect(topic).toContainText('0');await expect(topic).toHaveAttribute('aria-description','共0篇文章');await page.keyboard.press('Escape');
     await page.getByLabel('当前筛选',{exact:true}).getByRole('link',{name:'移除来源：Source',exact:true}).click();
     await expect(page).not.toHaveURL(/sourceId=/);await trigger.click();await expect(topic).toContainText('11');
@@ -2071,5 +2072,80 @@ for(const engine of [chromium,webkit])test(`source cards show their latest artic
     await expect(page.getByRole('heading',{level:1})).toHaveText('文章');await expect(page.getByRole('link',{name:'A source article',exact:true})).toBeVisible();
     await page.goBack();await expect(page).toHaveURL(web.origin+'/explore?view=sources');
     await page.getByRole('navigation',{name:'探索方式'}).getByRole('link',{name:'主题',exact:true}).click();await expect(page).toHaveURL(web.origin+'/explore');
+  }finally{await browser.close();await web?.stop();}
+});
+
+test('desktop reading polish covers Go highlighting, no-body summary UX, search stepper, sidebar persistence and list search ergonomics',async()=>{
+  const browser=await chromium.launch();let web:WebServer|undefined;
+  const picture='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="white"/></svg>').toString('base64');
+  const full=itemDetail({
+    id:'go-article',title:'Using Claude with Go',metadataTranslation:{title:'用 Claude 写 Go',summary:'Claude 协助 Go 调试。'},category:'coding',
+    translation:{bodyHtml:`<p>第一处 Claude 与 <a href="https://example.org/ref">参考</a>。</p><pre><code class="language-go">package main\nfunc main() { println("Claude") }\n</code></pre><figure><img src="${picture}" alt="Go diagram" width="1600" height="900"><figcaption>图 1 架构图</figcaption></figure>`,outline:[],complete:true},
+    matches:[{field:'title',language:'translation',snippet:'用 Claude 写 Go'},{field:'title',language:'original',snippet:'Using Claude with Go'},{field:'body',language:'translation',snippet:'第一处 Claude'}],
+    related:[feedItem({id:'rel-1',title:'Related Go post',readingMinutes:6})],
+  });
+  const summaryOnly=itemDetail({
+    id:'summary-only',title:'Summary only item',summary:'仅有摘要。',intro:'仅有摘要。',bodyHtml:null,readingMinutes:null,
+    bodyState:{status:'unavailable',bodyRevision:null,refreshPending:false,issues:[]},
+  });
+  try{
+    web=await startWebServer(fakeApi(url=>{
+      if(url.pathname==='/api/site/articles')return readerPage([full,summaryOnly],url);
+      if(url.pathname==='/api/site/items/'+full.id)return full;
+      if(url.pathname==='/api/site/items/'+summaryOnly.id)return summaryOnly;
+      if(url.pathname==='/api/site/engagement')return {items:[{id:full.id,views:1,likes:0,liked:false},{id:summaryOnly.id,views:0,likes:0,liked:false}]};
+      if(url.pathname.endsWith('/view'))return {id:full.id,views:2,likes:0,liked:false};
+      if(url.pathname==='/api/site/categories')return {items:[{id:'coding',name:'AI Coding'}]};
+      if(url.pathname==='/api/site/sources')return {items:[]};
+      if(url.pathname==='/api/site/topics')return {topics:[]};
+    }));
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    await visit(page,web.origin+'/');
+    // Summary-only badge in list & keyboard `/` shortcut + recent searches.
+    await expect(page.getByText('仅摘要',{exact:true})).toBeVisible();
+    await page.keyboard.press('/');
+    await expect(page.getByRole('searchbox',{name:'搜索文章',exact:true})).toBeFocused();
+    await page.keyboard.type('Claude');await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/q=Claude/);
+    await expect(page).toHaveTitle(/搜索“Claude”/);
+    // Redundant 标题原文命中 omitted when displayed Chinese title/summary already matches Claude.
+    await expect(page.getByText('标题原文命中：',{exact:false})).toHaveCount(0);
+    // Active filter chip carries dimension prefix.
+    await expect(page.getByLabel('当前筛选',{exact:true})).toContainText('搜索：');
+    // Sidebar collapse & custom width persist across reload.
+    await page.getByRole('separator',{name:'调整侧栏宽度',exact:true}).focus();
+    await page.keyboard.press('ArrowRight');await page.keyboard.press('ArrowRight');
+    const resizedWidth=await page.locator('#desktop-sidebar').evaluate(el=>Math.round(el.getBoundingClientRect().width));
+    assert.ok(resizedWidth>194);
+    await page.getByRole('button',{name:'收起侧栏',exact:true}).click();
+    await page.reload();
+    await expect(page.getByRole('button',{name:'展开侧栏',exact:true})).toBeVisible();
+    await page.getByRole('button',{name:'展开侧栏',exact:true}).click();
+    await expect.poll(()=>page.locator('#desktop-sidebar').evaluate(el=>Math.round(el.getBoundingClientRect().width))).toBe(resizedWidth);
+    // Navigate from search result into fulltext article: Go highlighting, external link target, search stepper & clear, caption in lightbox.
+    await page.getByRole('link',{name:'用 Claude 写 Go',exact:true}).click();
+    await expect(page.getByRole('link',{name:'返回列表',exact:true})).toBeVisible();
+    await expect(page.locator('.article-category-badge')).toHaveText('AI Coding');
+    await expect(page.locator('pre code.language-go')).toHaveClass(/hljs/);
+    await expect(page.locator('[role="region"][aria-label="文章正文"] a[href="https://example.org/ref"]')).toHaveAttribute('target','_blank');
+    const searchRegion=page.getByRole('region',{name:'搜索定位',exact:true});
+    await expect(searchRegion).not.toContainText('搜索结果命中标题原文');
+    await searchRegion.getByRole('button',{name:'下一处匹配',exact:true}).click();
+    await expect(searchRegion).toContainText('1 /');
+    await searchRegion.getByRole('link',{name:'清除高亮',exact:true}).click();
+    await expect(searchRegion).toHaveCount(0);
+    await expect(page.getByRole('contentinfo',{name:'文章后续阅读'})).toContainText('约 6 分钟');
+    await page.getByRole('button',{name:'查看大图：Go diagram',exact:true}).click();
+    await expect(page.getByRole('dialog')).toContainText('图 1 架构图');
+    await expect(page.getByRole('dialog').getByRole('button',{name:'放大图片',exact:true})).toBeEnabled();
+    await page.keyboard.press('+');
+    await expect(page.getByRole('dialog').getByRole('button',{name:'缩小图片',exact:true})).toBeEnabled();
+    await page.keyboard.press('Escape');
+    // Summary-only detail hides display settings, focus mode and duplicated footer actions, shows primary CTA.
+    await visit(page,web.origin+'/items/summary-only');
+    await expect(page.getByLabel('阅读显示设置',{exact:true})).toHaveCount(0);
+    await expect(page.getByRole('button',{name:'开启专注模式',exact:true})).toHaveCount(0);
+    await expect(page.getByRole('link',{name:'前往原文阅读',exact:true})).toHaveAttribute('href',summaryOnly.links.original);
+    await expect(page.getByRole('contentinfo',{name:'文章后续阅读'})).toHaveCount(0);
   }finally{await browser.close();await web?.stop();}
 });

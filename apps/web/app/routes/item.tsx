@@ -1,11 +1,12 @@
-import {data,Link,useLoaderData} from "react-router";
+import {data,Link,useLoaderData,useNavigate,useRouteLoaderData} from "react-router";
 import {useEffect,useState} from 'react';
 import type {Route} from "./+types/item";
+import type {loader as rootLoader} from "../root";
 import type {ReaderItemDetail} from "@agidawn/contracts/site";
 import {ARTICLE_FOOTER} from "@agidawn/site";
 import {loadOr404} from "../lib/api.server";
 import {PhoneBar} from "../components/shell/PhoneBar";
-import {IconCalendar,IconDoc,IconExternal,IconClock,IconUser} from "../components/icons";
+import {IconArrowLeft,IconCalendar,IconDoc,IconExternal,IconClock,IconUser} from "../components/icons";
 import {ArticleLayout} from "../components/ui/Page";
 import {ArticleBody} from "../features/item/ArticleBody";
 import {ArticleSearch} from "../features/item/ArticleSearch";
@@ -13,7 +14,7 @@ import {ArticleTools} from "../features/item/ArticleTools";
 import {FigureNotice} from "../features/item/FigureNotice";
 import {ArticleOutline,ArticleProgress,MobileArticleOutline,useArticleReading} from '../features/item/ArticleReading';
 import {EngagementProvider,ArticleEngagementBar} from "../features/item/ArticleEngagement";
-import {readerDate} from "../features/feed/ReaderPage";
+import {readerDate} from "../lib/format";
 import {transitionAppearance} from "../lib/motion";
 import {webModules} from "../site-modules";
 import {pageMeta} from "../lib/seo";
@@ -29,6 +30,9 @@ export function meta({loaderData}:Route.MetaArgs){return pageMeta({title:loaderD
 const notices={pending:"全文暂未就绪。可以先阅读摘要，或访问原文。",unavailable:"暂时无法取得全文，请访问原文。",partial:"正文有缺失，请对照原文。","not-permitted":"本来源暂以摘要与原文链接展示。",ready:""};
 export default function Item(){const item=useLoaderData<typeof loader>();return <ItemReading key={item.id} item={item}/>;}
 function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useState(false),[outlineCollapsed,setOutlineCollapsed]=useState(false);
+  const navigate=useNavigate();
+  const root=useRouteLoaderData<typeof rootLoader>('root');
+  const categoryName=item.category?root?.categories?.find(category=>category.id===item.category)?.name:undefined;
   const translated=item.body?.language==='translation'?item.body:null,metadata=item.metadataTranslation,outline=item.body?.outline??[],html=item.body?.html??null;
   const languageLabel=translated?'中文译文':item.body?.contentLanguage==='zh'?'中文正文':null;
   const reading=useArticleReading(outline,html,focus,outlineCollapsed),outlineProps={outline,current:reading.current,navigate:reading.navigate,progress:reading.progress};
@@ -43,12 +47,20 @@ function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useS
     window.addEventListener('keydown',escape);return()=>window.removeEventListener('keydown',escape);
   },[focus,reading.preserve]);
   const figureIssues=item.bodyState.issues.filter(issue=>issue.kind==='missing-figure'),otherIssues=item.bodyState.issues.filter(issue=>issue.kind!=='missing-figure');
+  const statusNotice=notices[item.bodyState.status]&&(!html||item.bodyState.status!=='partial'||otherIssues.length>0||!figureIssues.length)?(item.bodyState.status==='pending'&&!item.intro?'全文暂未就绪，请访问原文。':notices[item.bodyState.status]):'';
+  const showFooterActions=!!html&&!ARTICLE_FOOTER.hideActionsForSources.includes(item.source.id);
+  const showFooter=showFooterActions||item.topics.length>0||!!item.related?.length;
   return <EngagementProvider items={[item]} trackView={item.id}><div ref={reading.scope} className="public-article-reading" data-reading-focus={focus} data-outline-collapsed={outlineCollapsed}>
   <PhoneBar title="文章"/>
   {html&&<ArticleProgress progress={reading.progress}/>}
   <ArticleLayout readingDisplay right={html&&outline.length?<ArticleOutline {...outlineProps} collapsed={outlineCollapsed} onToggle={()=>{reading.preserve();setOutlineCollapsed(value=>!value);}}/>:undefined}>
     <article className="public-article break-words pb-12 pt-5 lg:pt-0">
-      <header className="article-heading"><h1 tabIndex={-1} className="article-title" data-search-content>{metadata?.title??item.title}</h1>
+      <header className="article-heading">
+        <div className="article-top-bar">
+          <Link to="/" className="article-back-link" onClick={event=>{if(!event.button&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey&&typeof window!=='undefined'&&(window.history.state as {idx?:number}|null)?.idx){event.preventDefault();void navigate(-1);}}}><IconArrowLeft size={15}/><span>返回列表</span></Link>
+          {categoryName&&<span className="article-category-badge">{categoryName}</span>}
+        </div>
+        <h1 tabIndex={-1} className="article-title" data-search-content>{metadata?.title??item.title}</h1>
         <div className="article-meta"><div className="article-byline">
           <Link className="article-source" data-search-content to={`/?${new URLSearchParams({sourceId:item.source.id})}`}><IconDoc size={15}/>{item.source.name}</Link>
           {item.author&&<span className="article-author"><IconUser size={15}/><span><span className="sr-only">作者：</span>{item.author}</span></span>}
@@ -65,19 +77,19 @@ function ItemReading({item}:{item:ReaderItemDetail}){const [focus,setFocus]=useS
       </header>
       <ArticleSearch item={item} onNavigate={reading.stop}/>
       {html&&outline.length>0&&<div ref={reading.toolbar} className="article-reading-toolbar" data-reading-controls><MobileArticleOutline {...outlineProps}/></div>}
-      {notices[item.bodyState.status]&&(item.bodyState.status!=='partial'||otherIssues.length>0||!figureIssues.length)&&<p className="article-status" role="status">{item.bodyState.status==='pending'&&!item.intro?'全文暂未就绪，请访问原文。':notices[item.bodyState.status]}</p>}
+      {statusNotice&&(!html?<div className="article-status-card"><p className="article-status" role="status">{statusNotice}</p><a href={item.links.original} target="_blank" rel="noreferrer" className="article-tool-link article-original-cta">前往原文阅读<IconExternal size={15}/></a></div>:<p className="article-status" role="status">{statusNotice}</p>)}
       {item.bodyState.refreshPending&&<p className="article-status">正文正在更新，当前显示已保存版本。</p>}
       <FigureNotice issues={figureIssues} onDismiss={()=>reading.scope.current?.querySelector<HTMLElement>('.floating-tools summary')?.focus({preventScroll:true})}/>
       {otherIssues.length>0&&<ul className="article-status list-disc pl-5">{otherIssues.map((issue,i)=><li key={i}>{issue.message}</li>)}</ul>}
       {translated&&!translated.complete&&<p className="article-status" role="status">译文尚不完整，未译段落保留原文；可打开原文对照。</p>}
       {html&&<div ref={reading.body} className="article-reading-body" role="region" aria-label="文章正文" data-search-content><ArticleBody html={html}/></div>}
-      <footer role="contentinfo" aria-label="文章后续阅读" className="article-footer">
-        {!ARTICLE_FOOTER.hideActionsForSources.includes(item.source.id)&&<div className="flex flex-wrap items-center gap-x-6 gap-y-2"><span className="text-sm text-ink-3">{item.source.name}</span><a href={item.links.original} target="_blank" rel="noreferrer" aria-label="文末打开原文" className="article-tool-link text-accent">打开原文<IconExternal size={16}/></a><ArticleEngagementBar item={item} labelPrefix="文末" showViews={false}/></div>}
+      {showFooter&&<footer role="contentinfo" aria-label="文章后续阅读" className="article-footer">
+        {showFooterActions&&<div className="flex flex-wrap items-center gap-x-6 gap-y-2"><Link to={`/?${new URLSearchParams({sourceId:item.source.id})}`} aria-label={`查看更多 ${item.source.name} 文章`} className="text-sm text-ink-3 hover:text-accent hover:underline">{item.source.name}</Link><a href={item.links.original} target="_blank" rel="noreferrer" aria-label="文末打开原文" className="article-tool-link text-accent">打开原文<IconExternal size={16}/></a><ArticleEngagementBar item={item} labelPrefix="文末" showViews={false}/></div>}
         {item.topics.length>0&&<nav aria-label="文末主题" className="article-topics">{item.topics.map(topic=><Link key={topic.slug} to={`/?${new URLSearchParams({topic:topic.slug})}`}>{topic.name}</Link>)}</nav>}
-        {!!item.related?.length&&<div className="mt-6"><h2 className="text-sm font-medium">继续阅读</h2><ul className="mt-3 space-y-3">{item.related.map(related=><li key={related.id}><Link viewTransition to={'/items/'+related.id} className="text-accent hover:underline">{related.metadataTranslation?.title??related.title}</Link><span className="ml-3 text-xs text-ink-3">{related.source.name}</span></li>)}</ul></div>}
-      </footer>
+        {!!item.related?.length&&<div className="article-related mt-6"><h2 className="text-sm font-medium">继续阅读</h2><ul className="article-related-list mt-3 space-y-3">{item.related.map(related=><li key={related.id} className="article-related-item"><Link viewTransition to={'/items/'+related.id} className="article-related-title text-accent hover:underline">{related.metadataTranslation?.title??related.title}</Link><div className="article-related-meta mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3"><span>{related.source.name}</span><time dateTime={related.publishedAt??related.discoveredAt}>{readerDate(related.publishedAt??related.discoveredAt)}</time>{!!related.readingMinutes&&<span>约 {related.readingMinutes} 分钟</span>}</div></li>)}</ul></div>}
+      </footer>}
       {webModules().map(module=>module.articleTools?<module.articleTools key={module.name} articleId={item.id}/>:null)}
     </article>
   </ArticleLayout>
-  <ArticleTools focus={focus} onFocus={()=>{reading.preserve();transitionAppearance(()=>setFocus(value=>!value));}} onBackToTop={reading.stop}/>
+  <ArticleTools focus={focus} hasBody={!!html} onFocus={()=>{reading.preserve();transitionAppearance(()=>setFocus(value=>!value));}} onBackToTop={reading.stop}/>
   </div></EngagementProvider>;}

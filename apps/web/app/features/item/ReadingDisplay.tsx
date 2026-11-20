@@ -1,7 +1,7 @@
 import {useId,useRef,useState} from "react";
 import {DEFAULT_READING_DISPLAY,restoreFigureNotices,setReadingDisplay,useFigureNotices,useReadingDisplay,type ReadingDisplay as Display} from "../../lib/local-state";
-import {ReaderPopover} from '../feed/ReaderNavigation';
-import {IconMore} from '../../components/icons';
+import {ReaderPopover} from '../../components/ui/Popover';
+import {IconTypography} from '../../components/icons';
 
 const choices=[
   {key:'size',label:'正文字号',options:[['default','默认'],['large','较大'],['larger','更大']]},
@@ -24,5 +24,5 @@ export function ReadingDisplay({floating=false}:{floating?:boolean}){
       }} className="min-h-9 text-[13px] text-accent underline underline-offset-4">恢复图表提示</button></div>}
       <div className={floating?'':'sm:col-span-3'}><button type="button" disabled={isDefault} onClick={()=>apply(DEFAULT_READING_DISPLAY)} className="min-h-9 rounded-control border border-line px-3 text-[13px] disabled:cursor-default disabled:opacity-50">恢复默认显示</button>{message&&<p role="status" className="mt-2 text-xs text-ink-3">{message}</p>}</div>
     </fieldset>;
-  return floating?<ReaderPopover closeOnPageScroll triggerLabel="阅读显示设置" label={<IconMore size={20}/>} className="article-display-control relative" panelClassName="article-display-panel"><p className="mb-3 text-sm font-semibold">阅读显示设置</p>{fields}</ReaderPopover>:<details className="my-5 min-w-0 border-y border-line py-1"><summary className="min-h-12 cursor-pointer py-3 text-sm font-medium text-accent">阅读显示设置</summary>{fields}</details>;
+  return floating?<ReaderPopover closeOnPageScroll triggerLabel="阅读显示设置" label={<IconTypography size={20}/>} className="article-display-control relative" panelClassName="article-display-panel"><p className="mb-3 text-sm font-semibold">阅读显示设置</p>{fields}</ReaderPopover>:<details className="my-5 min-w-0 border-y border-line py-1"><summary className="min-h-12 cursor-pointer py-3 text-sm font-medium text-accent">阅读显示设置</summary>{fields}</details>;
 }

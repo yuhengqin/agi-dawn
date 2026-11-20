@@ -6,16 +6,19 @@ import type {ReaderItemDetail} from "@agidawn/contracts/site";
 import { IntentLink } from "../ui/IntentLink";
 import { SITE } from "@agidawn/site";
 import { Wordmark } from "@agidawn/site/brand/Logo.tsx";
-import { useChangelogSeen } from "../../lib/local-state";
+import {
+  COLLAPSED_SIDEBAR_WIDTH,
+  DEFAULT_SIDEBAR_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+  MIN_SIDEBAR_WIDTH,
+  useChangelogSeen,
+} from "../../lib/local-state";
 import { sidebar, sidebarIsActive, type NavItem } from "./nav";
 import { Filings } from "./Filings";
 import { InfoLink } from "./InfoLink";
 import { IconBookmark, IconChevronDown, IconGithub, IconSidebar, IconUser } from "../icons";
 
-export const DEFAULT_SIDEBAR_WIDTH = 194;
-export const COLLAPSED_SIDEBAR_WIDTH = 60;
-const MIN_SIDEBAR_WIDTH = 180;
-const MAX_SIDEBAR_WIDTH = 280;
+export { COLLAPSED_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH };
 
 const linkClass = "flex min-h-10 items-center gap-2.5 rounded-control px-2.5 text-[14px] font-medium text-ink-3 hover:bg-bg-sunk hover:text-ink data-[active=true]:bg-accent/10 data-[active=true]:font-semibold data-[active=true]:text-accent";
 const footerDot = <span className="block size-1.5 shrink-0 rounded-full bg-hot" aria-hidden="true" />;
@@ -132,10 +135,10 @@ export function Sidebar({ changelogVersion, categories, initiallyCategoriesColla
   const categoryName = categoryItems.find(category => category.id === currentCategory)?.name;
   const [primary, ...sections] = sidebar();
   const options = sections.pop()!.items.filter(item => item.to !== "/more");
-  const resize = (value: number) => onResize(Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, value)));
+  const resize = (value: number) => onResize(Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, Math.round(value))));
   const toggleLabel = collapsed ? "展开侧栏" : "收起侧栏";
   return (
-    <aside id="desktop-sidebar" className="site-sidebar sticky top-0 hidden h-dvh w-[var(--desktop-sidebar-width)] shrink-0 flex-col border-r border-line bg-sidebar px-2.5 pb-3 pt-4 lg:flex">
+    <aside id="desktop-sidebar" className="site-sidebar sticky top-0 hidden h-dvh w-[var(--desktop-sidebar-width,194px)] shrink-0 flex-col border-r border-line bg-sidebar px-2.5 pb-3 pt-4 lg:flex">
       <div className={`mb-3 flex h-11 shrink-0 items-center ${collapsed ? "justify-center" : "justify-between gap-1 pl-1"}`}>
         {!collapsed && <Link to="/" className="flex min-w-0 items-center text-ink" aria-label={`${SITE.name} 首页`}>
           <Wordmark size={24} />

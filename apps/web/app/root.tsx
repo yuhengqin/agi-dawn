@@ -5,10 +5,10 @@ import {
 import type { SiteMeta } from "@agidawn/contracts/site";
 import { SITE } from "@agidawn/site";
 import { RingMark } from "@agidawn/site/brand/Logo.tsx";
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Route } from "./+types/root";
 import "./app.css";
-import { COLLAPSED_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, Sidebar } from "./components/shell/Sidebar";
+import { Sidebar } from "./components/shell/Sidebar";
 import { InfoDialogs } from "./components/shell/InfoDialogs";
 import { TabBar } from "./components/shell/TabBar";
 import { PullToRefresh } from "./components/shell/PullToRefresh";
@@ -17,7 +17,7 @@ import { BackToTop, NavigationProgress } from "./components/shell/Chrome";
 import { ThemeToggle } from "./components/shell/ThemeSwitch";
 import { buttonClass } from "./components/ui/Controls";
 import { NotFoundPage } from "./components/NotFoundPage";
-import { rememberPage, APPEARANCE_BOOT_SCRIPT, useAppearanceSync } from "./lib/local-state";
+import { getSidebarPreference, rememberPage, setSidebarPreference, APPEARANCE_BOOT_SCRIPT, SIDEBAR_BOOT_SCRIPT, useAppearanceSync, useSidebarPreference } from "./lib/local-state";
 import { apiGet } from "./lib/api.server";
 import { useHydratedFlag } from "./lib/hydration";
 import { titled } from "./lib/seo";
@@ -60,6 +60,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#13191c" />
         <meta name="apple-mobile-web-app-title" content={SITE.name} />
         <script dangerouslySetInnerHTML={{ __html: APPEARANCE_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: SIDEBAR_BOOT_SCRIPT }} />
         {webModules().map((m) => m.root?.bootScript && <script key={m.name} dangerouslySetInnerHTML={{ __html: m.root.bootScript }} />)}
         <Meta />
         <Links />
@@ -85,14 +86,12 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
   const navigation = useNavigation();
   const site=useRouteLoaderData<typeof loader>('root');
   const article=useRouteLoaderData('routes/item');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
-  const shellStyle = { "--desktop-sidebar-width": `${sidebarCollapsed ? COLLAPSED_SIDEBAR_WIDTH : sidebarWidth}px` } as CSSProperties;
+  const sidebarPref = useSidebarPreference();
   // The phone search and pull-to-refresh are client-side, mounted once the page is interactive.
   const [interactive, setInteractive] = useState(false);
   useEffect(() => setInteractive(true), []);
   return (
-    <InfoDialogs><div className="site-shell flex min-h-dvh" style={shellStyle}>
+    <InfoDialogs><div className="site-shell flex min-h-dvh">
       <NavigationProgress active={navigation.state === "loading"} />
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[70] focus:rounded-control focus:bg-surface focus:px-3 focus:py-2">
         跳到正文
@@ -101,10 +100,16 @@ function SiteShell({ changelogVersion, children }: { changelogVersion: string | 
         changelogVersion={changelogVersion}
         categories={site?.categories ?? []}
         initiallyCategoriesCollapsed={site?.categoriesCollapsed ?? false}
-        collapsed={sidebarCollapsed}
-        width={sidebarWidth}
-        onToggle={() => setSidebarCollapsed(value => !value)}
-        onResize={setSidebarWidth}
+        collapsed={sidebarPref.collapsed}
+        width={sidebarPref.width}
+        onToggle={() => {
+          const current = getSidebarPreference();
+          setSidebarPreference({ ...current, collapsed: !current.collapsed });
+        }}
+        onResize={(width) => {
+          const current = getSidebarPreference();
+          setSidebarPreference({ ...current, width });
+        }}
       />
       {/* Phone shell (≤ 960px): each page's top bar (PhoneBar), one centred column, the tab bar below.
           Desktop: the page fills the main area up to the list width (--page-max-wide), centred beyond it. */}

@@ -67,12 +67,28 @@ function OutlineLinks({outline,current,navigate}:OutlineProps){
 export function ArticleOutline({collapsed,onToggle,...props}:OutlineProps&{progress:number;collapsed:boolean;onToggle:()=>void}){
   const id=useId();
   const [nav,overscroll]=useContainedScroll<HTMLElement>();
+  const [fade,setFade]=useState({top:false,bottom:false});
   useEffect(()=>{
     if(collapsed)return;
     const box=nav.current,active=box?.querySelector<HTMLElement>('[aria-current="location"]');if(!box||!active)return;
     const outer=box.getBoundingClientRect(),inner=active.getBoundingClientRect();
     if(inner.top<outer.top)box.scrollTop-=outer.top-inner.top;else if(inner.bottom>outer.bottom)box.scrollTop+=inner.bottom-outer.bottom;
   },[props.current,collapsed]);
+  useEffect(()=>{
+    const box=nav.current;
+    if(!box||collapsed){setFade(prev=>prev.top||prev.bottom?{top:false,bottom:false}:prev);return;}
+    const update=()=>{
+      const overflow=box.scrollHeight>box.clientHeight+2;
+      const top=overflow&&box.scrollTop>2,bottom=overflow&&box.scrollTop+box.clientHeight<box.scrollHeight-2;
+      setFade(prev=>prev.top===top&&prev.bottom===bottom?prev:{top,bottom});
+    };
+    update();
+    box.addEventListener('scroll',update,{passive:true});
+    const observer=new ResizeObserver(update);
+    observer.observe(box);
+    for(const child of box.children)observer.observe(child);
+    return()=>{box.removeEventListener('scroll',update);observer.disconnect();};
+  },[collapsed,props.outline]);
   const label=collapsed?'展开本文目录':'收起本文目录';
   return <section className="article-outline-section" data-reading-controls>
     <div className="article-outline-header">
@@ -82,7 +98,7 @@ export function ArticleOutline({collapsed,onToggle,...props}:OutlineProps&{progr
       <h2 hidden={collapsed}>本文目录</h2>
       <span hidden={collapsed} className="article-outline-progress" aria-hidden="true">{props.progress}%</span>
     </div>
-    <nav id={id} ref={nav} hidden={collapsed} aria-label="本文目录" tabIndex={overscroll?0:undefined} className={`article-outline scrollbar-thin overflow-y-auto ${overscroll}`}
+    <nav id={id} ref={nav} hidden={collapsed} aria-label="本文目录" data-fade-top={fade.top||undefined} data-fade-bottom={fade.bottom||undefined} tabIndex={overscroll?0:undefined} className={`article-outline scrollbar-thin overflow-y-auto ${overscroll}`}
       onKeyDown={event=>{const box=event.currentTarget;if(box.scrollHeight<=box.clientHeight||event.altKey||event.ctrlKey||event.metaKey)return;
         const up=['ArrowUp','PageUp','Home'].includes(event.key)||(event.key===' '&&event.shiftKey),down=['ArrowDown','PageDown','End'].includes(event.key)||(event.key===' '&&!event.shiftKey);
         if((up&&box.scrollTop<=0)||(down&&box.scrollTop+box.clientHeight>=box.scrollHeight-1))event.preventDefault();}}><OutlineLinks {...props}/></nav>

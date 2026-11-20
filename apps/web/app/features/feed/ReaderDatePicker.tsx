@@ -1,7 +1,8 @@
 import {useLayoutEffect,useRef,useState,type KeyboardEvent,type Ref} from 'react';
 import {Form,useNavigate} from 'react-router';
 import {addDays,beijingDate,isValidDate,monthDay} from '@agidawn/contracts/time';
-import {ReaderPopover,readerLink} from './ReaderNavigation';
+import {ReaderPopover} from '../../components/ui/Popover';
+import {readerLink} from './ReaderNavigation';
 import {IconChevronDown,IconChevronLeft,IconChevronRight} from '../../components/icons';
 import {useReaderQuery} from './useReaderQuery';
 
@@ -157,7 +158,7 @@ function DateDraft({from:appliedFrom,to:appliedTo,action,onApply,fromName='from'
           <tbody>{Array.from({length:cells.length/7},(_,week)=><tr key={week}>{cells.slice(week*7,week*7+7).map((day,index)=>{
             const selected=!!day&&((!!from&&!!to&&day>=from&&day<=to)||day===from||day===to);
             const inRange=!!day&&!dateError(shownFrom)&&!dateError(shownTo)&&!!shownFrom&&!!shownTo&&day>=shownFrom&&day<=shownTo,end=!!day&&(day===shownFrom||day===shownTo);
-            return <td key={index} role="gridcell" aria-selected={selected} className={`reader-date-cell ${inRange?(hasPreview?'bg-accent/5':'bg-accent/10'):''}`} data-start={inRange&&day===shownFrom||undefined} data-end={inRange&&day===shownTo||undefined}>{day&&<button type="button" data-date={day} tabIndex={day===focusDay?0:-1} aria-label={dayLabel(day)} aria-current={day===today?'date':undefined}
+            return <td key={index} role="gridcell" aria-selected={selected} className={`reader-date-cell ${inRange?(hasPreview?'bg-accent/5':'bg-accent/10'):''}`} data-start={inRange&&day===shownFrom||undefined} data-end={inRange&&day===shownTo||undefined}>{day&&<button type="button" data-date={day} data-future={day>today||undefined} tabIndex={day===focusDay?0:-1} aria-label={dayLabel(day)} aria-current={day===today?'date':undefined}
               className={`reader-date-day outline-offset-[-2px] focus-visible:outline-2 focus-visible:outline-accent ${end?(hasPreview?'bg-accent/15 font-medium text-accent-ink':'bg-accent font-medium text-accent-contrast'):'text-ink hover:bg-bg-sunk'}`}
               onFocus={()=>setFocusDay(day)} onPointerEnter={event=>{if(event.pointerType==='mouse')setPreview(day);}} onClick={()=>choose(day)} onKeyDown={event=>keyDown(event,day)}>{Number(day.slice(8))}</button>}</td>;
           })}</tr>)}</tbody>

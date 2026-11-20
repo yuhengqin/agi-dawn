@@ -7,6 +7,7 @@ import { IconArrowLeft, IconArrowRight, IconClose } from "../icons";
 export interface LightboxImage {
   src: string;
   alt?: string | null;
+  caption?: string | null;
   source: HTMLImageElement;
 }
 
@@ -18,14 +19,19 @@ export interface LightboxImage {
  */
 export function Lightbox({ images, index, onIndex, onClose }: { images: LightboxImage[]; index: number | null; onIndex: (i: number) => void; onClose: () => void }) {
   const open = index !== null && !!images[index];
+  const current = open ? images[index!]! : null;
+  const many = images.length > 1;
   const [phase,setPhase]=useState<'opening'|'open'|'closing'>('opening');
   const motion=useRef<ReturnType<typeof createImageZoom>|null>(null),layer=useRef<HTMLDivElement>(null),closing=useRef(false),generation=useRef(0);
   const [zoom,setZoom]=useState<number|null>(null),[dimensions,setDimensions]=useState({width:0,height:0}),[viewport,setViewport]=useState({width:0,height:0});
   const stage=useRef<HTMLDivElement>(null),img=useRef<HTMLImageElement>(null),backdrop=useRef<HTMLDivElement>(null),pan=useRef<{x:number;y:number;left:number;top:number}|null>(null);
   const center=useRef<{x:number;y:number}|null>(null);
+  const clickTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const clearClickTimer=()=>{if(clickTimer.current!==null){clearTimeout(clickTimer.current);clickTimer.current=null;}};
   const fit=dimensions.width&&viewport.width?Math.min(1,viewport.width/dimensions.width,viewport.height/dimensions.height):0;
   const scale=zoom===null?fit:Math.max(fit,zoom),enlarged=scale>fit+0.001;
   useLayoutEffect(()=>{
+    clearClickTimer();
     setZoom(null);center.current=null;pan.current=null;
     const picture=img.current;
     // A repeated source or a quick reopen can reuse an already-loaded image without another load event.
@@ -34,9 +40,15 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
   },[index,open]);
   useLayoutEffect(()=>{
     const box=stage.current;if(!open||!box)return;
-    const measure=()=>setViewport({width:box.clientWidth,height:box.clientHeight});
+    const measure=()=>{
+      const style=getComputedStyle(box);
+      setViewport({
+        width:Math.max(0,box.clientWidth-(parseFloat(style.paddingLeft)||0)-(parseFloat(style.paddingRight)||0)),
+        height:Math.max(0,box.clientHeight-(parseFloat(style.paddingTop)||0)-(parseFloat(style.paddingBottom)||0)),
+      });
+    };
     measure();const observer=new ResizeObserver(measure);observer.observe(box);return()=>observer.disconnect();
-  },[open]);
+  },[open,many]);
   useLayoutEffect(()=>{
     const point=center.current,box=stage.current,picture=img.current;if(!point||!box||!picture)return;
     const outer=box.getBoundingClientRect(),inner=picture.getBoundingClientRect();
@@ -45,6 +57,7 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
     center.current=null;
   },[scale,zoom]);
   const resize=(next:number|null)=>{
+    clearClickTimer();
     const box=stage.current,picture=img.current;if(!box||!picture||!fit)return;
     const outer=box.getBoundingClientRect(),inner=picture.getBoundingClientRect();
     center.current={x:(outer.left+box.clientWidth/2-inner.left)/inner.width,y:(outer.top+box.clientHeight/2-inner.top)/inner.height};
@@ -55,6 +68,7 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
   const state = useRef({ index, count: images.length, onIndex, onClose });
   state.current = { index, count: images.length, onIndex, onClose };
   const close=()=>{
+    clearClickTimer();
     if(!open||closing.current)return;
     closing.current=true;pan.current=null;
     closeButton.current?.focus({preventScroll:true});
@@ -64,6 +78,23 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
     void Promise.resolve(finished).finally(()=>{if(generation.current===at)state.current.onClose();});
   };
   useLayoutEffect(()=>{if(open){closing.current=false;setPhase('opening');}},[open]);
+  useEffect(()=>clearClickTimer,[]);
+
+  const wheelState=useRef({phase,fit,scale,enlarged,resize});
+  wheelState.current={phase,fit,scale,enlarged,resize};
+  useEffect(()=>{
+    const box=stage.current;if(!open||!box)return;
+    const onWheel=(event:WheelEvent)=>{
+      const currentState=wheelState.current;
+      if(currentState.phase!=='open'||!currentState.fit||event.deltaY===0)return;
+      if(!currentState.enlarged&&event.deltaY>0)return;
+      if(!(event.ctrlKey||event.metaKey||!currentState.enlarged))return;
+      event.preventDefault();
+      currentState.resize(event.deltaY<0?currentState.scale*1.25:(currentState.scale/1.25<=currentState.fit+0.001?null:currentState.scale/1.25));
+    };
+    box.addEventListener('wheel',onWheel,{passive:false});
+    return()=>box.removeEventListener('wheel',onWheel);
+  },[open]);
 
   useModal({
     open,
@@ -71,7 +102,13 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
     initialFocus: closeButton,
     onClose:close,
     onKeyDown: (e) => {
-      if(enlarged||phase!=='open')return;
+      if(phase!=='open')return;
+      if(!e.ctrlKey&&!e.metaKey&&!e.altKey){
+        if(e.key==='+'||e.key==='='){e.preventDefault();if(fit)resize(Math.min(4,scale*1.25));return;}
+        if(e.key==='-'||e.key==='_'){e.preventDefault();if(enlarged)resize(scale/1.25<=fit+0.001?null:scale/1.25);return;}
+        if(e.key==='0'){e.preventDefault();resize(null);return;}
+      }
+      if(enlarged)return;
       if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
       const { index: at, count, onIndex: go } = state.current;
       if (at !== null && count > 1) go((at + (e.key === "ArrowRight" ? 1 : -1) + count) % count);
@@ -147,9 +184,7 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
     return moved;
   };
 
-  const current = open ? images[index!]! : null;
-  const many = images.length > 1;
-  const nav = "absolute top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20";
+  const nav = "absolute top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/65 text-white ring-1 ring-white/25 backdrop-blur-sm shadow-lg transition-colors hover:bg-black/85";
   if (typeof document === "undefined"||!open) return null;
   return createPortal(
       <div
@@ -168,11 +203,25 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onTouchCancel={cancelDrag}
-        className="lightbox fixed inset-0 z-[80] grid cursor-zoom-out touch-pinch-zoom place-items-center p-4 sm:p-10"
+        className={`lightbox fixed inset-0 z-[80] grid cursor-zoom-out touch-pinch-zoom place-items-center ${many ? "py-4 px-14 sm:py-10 sm:px-16" : "p-4 sm:p-10"}`}
       >
         <div ref={backdrop} className="lightbox-backdrop absolute inset-0 bg-black/85" />
         <div ref={stage} role="region" aria-label="可滚动图片" tabIndex={enlarged?0:-1} className={`lightbox-stage${enlarged?' is-enlarged':''}`}
-          onClick={event=>{if(enlarged){event.stopPropagation();tappedAfterDrag();}}}
+          onClick={event=>{
+            if(enlarged){event.stopPropagation();tappedAfterDrag();return;}
+            if(event.target===img.current){
+              event.stopPropagation();
+              if(tappedAfterDrag())return;
+              if(event.detail>1){clearClickTimer();return;}
+              clearClickTimer();
+              clickTimer.current=setTimeout(()=>{clickTimer.current=null;close();},240);
+            }
+          }}
+          onDoubleClick={event=>{
+            event.stopPropagation();clearClickTimer();
+            if(phase!=='open'||!fit)return;
+            if(enlarged)resize(null);else resize(fit<0.9?1:Math.min(4,fit*1.5));
+          }}
           onPointerDown={event=>{if(phase!=='open'||!enlarged||event.pointerType!=='mouse'||event.button!==0)return;const box=event.currentTarget;pan.current={x:event.clientX,y:event.clientY,left:box.scrollLeft,top:box.scrollTop};box.setPointerCapture(event.pointerId);event.preventDefault();}}
           onPointerMove={event=>{const held=pan.current;if(!held)return;const dx=event.clientX-held.x,dy=event.clientY-held.y;if(Math.hypot(dx,dy)>3)suppressTap.current=true;event.currentTarget.scrollLeft=held.left-dx;event.currentTarget.scrollTop=held.top-dy;}}
           onPointerUp={event=>{pan.current=null;if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);}}
@@ -183,14 +232,14 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
             className="lightbox-img rounded-control object-contain shadow-2xl"/>}
         </div>
         <div ref={layer} className="lightbox-transition-layer pointer-events-none fixed inset-0" aria-hidden="true" />
-        <div className="lightbox-tools absolute left-5 top-5 flex gap-1 rounded-control bg-black/60 text-sm text-white" onClick={event=>event.stopPropagation()}>
-          <button type="button" className="min-h-11 px-3 hover:bg-white/10" aria-pressed={zoom===null} disabled={phase!=='open'} onClick={()=>resize(null)}>适应窗口</button>
-          <button type="button" className="min-h-11 px-3 hover:bg-white/10" aria-pressed={zoom!==null&&scale===1} disabled={phase!=='open'||!fit} onClick={()=>resize(1)}>原尺寸</button>
-          <button type="button" className="min-h-11 px-3 hover:bg-white/10 disabled:opacity-40" aria-label="缩小图片" disabled={phase!=='open'||!enlarged} onClick={()=>resize(scale/1.25<=fit+0.001?null:scale/1.25)}>－</button>
+        <div className="lightbox-tools absolute left-5 top-5 flex gap-1 rounded-control bg-black/60 p-1 text-sm text-white ring-1 ring-white/15 backdrop-blur-sm" onClick={event=>event.stopPropagation()}>
+          <button type="button" className="min-h-11 rounded-mark px-3 hover:bg-white/10 aria-pressed:bg-white/25 aria-pressed:font-semibold" aria-pressed={zoom===null} disabled={phase!=='open'} onClick={()=>resize(null)}>适应窗口</button>
+          <button type="button" className="min-h-11 rounded-mark px-3 hover:bg-white/10 aria-pressed:bg-white/25 aria-pressed:font-semibold" aria-pressed={zoom!==null&&Math.abs(scale-1)<0.005} disabled={phase!=='open'||!fit} onClick={()=>resize(1)}>原尺寸</button>
+          <button type="button" className="min-h-11 rounded-mark px-3 hover:bg-white/10 disabled:opacity-40" aria-label="缩小图片" disabled={phase!=='open'||!enlarged} onClick={()=>resize(scale/1.25<=fit+0.001?null:scale/1.25)}>－</button>
           <span role="status" aria-label="图片缩放比例" className="grid min-w-12 place-items-center tabular-nums">{fit?`${Math.round(scale*100)}%`:'—'}</span>
-          <button type="button" className="min-h-11 px-3 hover:bg-white/10 disabled:opacity-40" aria-label="放大图片" disabled={phase!=='open'||!fit||scale>=4} onClick={()=>resize(scale*1.25)}>＋</button>
+          <button type="button" className="min-h-11 rounded-mark px-3 hover:bg-white/10 disabled:opacity-40" aria-label="放大图片" disabled={phase!=='open'||!fit||scale>=4} onClick={()=>resize(scale*1.25)}>＋</button>
         </div>
-        <button ref={closeButton} type="button" aria-label="关闭" onClick={(e) => { e.stopPropagation(); close(); }} className="lightbox-tools absolute right-[max(16px,env(safe-area-inset-right))] top-[max(16px,env(safe-area-inset-top))] grid size-11 place-items-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
+        <button ref={closeButton} type="button" aria-label="关闭" onClick={(e) => { e.stopPropagation(); close(); }} className="lightbox-tools absolute right-[max(16px,env(safe-area-inset-right))] top-[max(16px,env(safe-area-inset-top))] grid size-11 place-items-center rounded-full bg-black/60 text-white ring-1 ring-white/20 backdrop-blur-sm shadow-lg transition-colors hover:bg-black/80">
           <IconClose size={18} />
         </button>
         {many && index !== null && (
@@ -201,10 +250,21 @@ export function Lightbox({ images, index, onIndex, onClose }: { images: Lightbox
             <button type="button" aria-label="下一张" disabled={phase!=='open'} onClick={(e) => { e.stopPropagation(); onIndex((index + 1) % images.length); }} className={`${nav} lightbox-tools right-[max(12px,env(safe-area-inset-right))] sm:right-5`}>
               <IconArrowRight size={18} />
             </button>
-            <span className="lightbox-tools num pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/40 px-2.5 py-0.5 text-[12px] text-white/85">
-              {index + 1} / {images.length}
-            </span>
           </>
+        )}
+        {(current?.caption || (many && index !== null)) && (
+          <div className="lightbox-footer lightbox-tools pointer-events-none absolute inset-x-4 bottom-4 flex flex-col items-center gap-1.5">
+            {current?.caption && (
+              <p className="lightbox-caption line-clamp-2 max-w-2xl rounded-control bg-black/65 px-3.5 py-1.5 text-center text-[13px] leading-snug text-white/95 ring-1 ring-white/15 backdrop-blur-sm shadow-lg">
+                {current.caption}
+              </p>
+            )}
+            {many && index !== null && (
+              <span className="num rounded-full bg-black/65 px-2.5 py-0.5 text-[12px] text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                {index + 1} / {images.length}
+              </span>
+            )}
+          </div>
         )}
       </div>, document.body
   );

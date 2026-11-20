@@ -43,8 +43,11 @@ export const IconArrowLeft = (p: P) => (<Svg {...p}><path d="M19 12H5M11 18l-6-6
 export const IconArrowRight = (p: P) => (<Svg {...p}><path d="M5 12h14M13 6l6 6-6 6" /></Svg>);
 export const IconArrowUpRight = (p: P) => (<Svg {...p}><path d="M7 17L17 7M8 7h9v9" /></Svg>);
 export const IconChevronDown = (p: P) => (<Svg {...p}><path d="M6 9l6 6 6-6" /></Svg>);
+export const IconChevronUp = (p: P) => (<Svg {...p}><path d="M6 15l6-6 6 6" /></Svg>);
 export const IconChevronRight = (p: P) => (<Svg {...p}><path d="M9 6l6 6-6 6" /></Svg>);
 export const IconChevronLeft = (p: P) => (<Svg {...p}><path d="M15 5l-7 7 7 7" /></Svg>);
+export const IconTypography = (p: P) => (<Svg {...p}><path d="M3.5 18L7.5 6h1l4 12M5 14h6M14.5 12.2a2.5 2.5 0 014.5 1.3V18M19 15.2h-2.3a1.9 1.9 0 100 2.8c1.1 0 2.3-.7 2.3-2.2" /></Svg>);
+export const IconFocus = (p: P) => (<Svg {...p}><path d="M4 9V5.5A1.5 1.5 0 015.5 4H9M15 4h3.5A1.5 1.5 0 0120 5.5V9M20 15v3.5a1.5 1.5 0 01-1.5 1.5H15M9 20H5.5A1.5 1.5 0 014 18.5V15" /><path d="M8.5 12h7" /></Svg>);
 export const IconExternal = (p: P) => (<Svg {...p}><path d="M14 4h6v6M20 4l-9 9" /><path d="M19 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1h5" /></Svg>);
 export const IconDownload = (p: P) => (<Svg {...p}><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></Svg>);
 export const IconImage = (p: P) => (<Svg {...p}><rect x="3.5" y="3.5" width="17" height="17" rx="2.5" /><circle cx="9" cy="9" r="1.6" /><path d="M20.5 15.5l-4.5-4.5-9 9.5" /></Svg>);

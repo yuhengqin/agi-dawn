@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { useRef } from "react";
+import { matchRanges, searchWords } from "@agidawn/contracts/search";
 import type { ReaderPageData } from "./reader.server";
 import { ReaderFilters,ReaderToolbar } from "./ReaderFilters";
 import { PhoneBar } from "../../components/shell/PhoneBar";
@@ -7,21 +8,35 @@ import {ReaderNavigation,readerLink} from "./ReaderNavigation";
 import {ReaderListSummary,ReaderPagination} from './ReaderPagination';
 import {EngagementProvider,ArticleEngagementBar} from "../item/ArticleEngagement";
 import {pageMeta,listPath} from "../../lib/seo";
-import {BEIJING_TIMEZONE} from "@agidawn/contracts/time";
+import {readerDate} from "../../lib/format";
 import {SearchHighlight} from './SearchHighlight';
 import {useReaderQuery} from './useReaderQuery';
 import {IconCalendar,IconClock,IconDoc} from '../../components/icons';
 
 export function readerMeta(value:ReaderPageData|undefined){
   const query={...value?.query};
-  return pageMeta({title:value&&value.page.page>1?`文章 · 第 ${value.page.page} 页`:"文章",path:listPath("/",query),noindex:Object.keys(query).length>0});
+  const parts:string[]=[];
+  if(query.q)parts.push(`搜索“${query.q}”`);
+  const categoryName=query.category?value?.categories.find(c=>c.id===query.category)?.name:undefined;
+  if(categoryName)parts.push(categoryName);
+  const topicName=query.topic?value?.topics.find(t=>t.slug===query.topic)?.name:undefined;
+  if(topicName)parts.push(topicName);
+  const sourceName=query.sourceId?value?.sources.find(s=>s.id===query.sourceId)?.name:undefined;
+  if(sourceName)parts.push(sourceName);
+  const base=parts.length?`${parts.join(' · ')} · 文章`:'文章';
+  const title=value&&value.page.page>1?`${base} · 第 ${value.page.page} 页`:base;
+  return pageMeta({title,path:listPath("/",query),noindex:Object.keys(query).length>0});
 }
 
-export const readerDate=(value:string)=>new Intl.DateTimeFormat("zh-CN",{timeZone:BEIJING_TIMEZONE,dateStyle:"medium"}).format(new Date(value));
+const recoveryLink="inline-flex min-h-10 items-center text-sm text-accent underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
 export function ReaderPage({page,sources,topics,categories,query,latestArticleDate}:ReaderPageData) {
   const datePickerTrigger=useRef<HTMLElement>(null);
   const target=useReaderQuery(query);
   const hasDates=!!(query.from||query.to);
+  const activeFilters=[query.category,query.topic,query.sourceId,query.q].filter(Boolean).length;
+  const hasRecoveryLinks=!!(query.sourceId||query.q||(!hasDates&&(query.category||query.topic)));
+  const words=query.q?searchWords(query.q).slice(0,6):[];
   const emptyDateTitle=query.from&&query.to?`${query.from===query.to?query.from:`${query.from} 至 ${query.to}`} 暂无文章`:query.from?`${query.from} 起暂无文章`:`截至 ${query.to} 暂无文章`;
   return <section className="reader-feed mx-auto min-w-0 pb-12 [overflow-wrap:anywhere]">
     <PhoneBar title="文章"/>
@@ -44,14 +59,19 @@ export function ReaderPage({page,sources,topics,categories,query,latestArticleDa
         <h2 className="text-base font-medium text-ink">没有符合条件的文章</h2>
         <p className="text-sm text-ink-3">可以移除部分筛选条件，或稍后查看更新。</p>
       </>}
-      {(query.sourceId||query.q)&&<div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-        {query.sourceId&&<Link to={readerLink(target,{sourceId:null})} className="inline-flex min-h-10 items-center text-sm text-accent underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">移除来源限制</Link>}
-        {query.q&&<Link to={readerLink(target,{q:null})} className="inline-flex min-h-10 items-center text-sm text-accent underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">清除关键词</Link>}
+      {hasRecoveryLinks&&<div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {!hasDates&&query.category&&<Link to={readerLink(target,{category:null})} className={recoveryLink}>移除类别限制</Link>}
+        {!hasDates&&query.topic&&<Link to={readerLink(target,{topic:null})} className={recoveryLink}>移除主题限制</Link>}
+        {query.sourceId&&<Link to={readerLink(target,{sourceId:null})} className={recoveryLink}>移除来源限制</Link>}
+        {query.q&&<Link to={readerLink(target,{q:null})} className={recoveryLink}>清除关键词</Link>}
+        {!hasDates&&activeFilters>=2&&<Link to={readerLink(target.limit?{limit:target.limit}:{},{})} className={recoveryLink}>清除全部筛选</Link>}
       </div>}
     </div>:<ol className="divide-y divide-line border-b border-line">
       {page.items.map(item=>{const title=item.metadataTranslation?.title??item.title,rawSummary=item.metadataTranslation?.summary??item.summary;
         const summary=rawSummary&&item.summaryTruncated&&!/[.!?。！？…]["'”’）)]*$/.test(rawSummary.trim())?rawSummary+'…':rawSummary;
-        const extra=item.matches?.find(hit=>hit.field==='body'||hit.field==='topic'||hit.language==='original'&&!!item.metadataTranslation&&['title','summary'].includes(hit.field));
+        const displayed=[title,summary??''].join(' ');
+        const allVisible=words.length>0&&words.every(word=>matchRanges(displayed,[word]).length>0);
+        const extra=item.matches?.find(hit=>hit.field==='body'||hit.field==='topic'||(!allVisible&&hit.language==='original'&&!!item.metadataTranslation&&['title','summary'].includes(hit.field)));
         const search=query.q?new URLSearchParams({q:query.q}):null;
         if(search)for(const hit of item.matches??[])search.append('match',`${hit.field}:${hit.language}`);
         return <li key={item.id} className="reader-feed-row"><article>
@@ -66,6 +86,7 @@ export function ReaderPage({page,sources,topics,categories,query,latestArticleDa
             {item.readingMinutes&&<span className="reader-meta-item whitespace-nowrap"><IconClock size={15}/><span>约 {item.readingMinutes} 分钟</span></span>}
             {item.bodyState.status==='pending'&&<span className="reader-body-status">全文暂未就绪</span>}
             {item.bodyState.status==='partial'&&item.bodyState.issues.some(issue=>issue.kind!=='missing-figure')&&<span className="reader-body-status" title="正文有缺失，请对照原文">正文不完整</span>}
+            {(item.bodyState.status==='not-permitted'||item.bodyState.status==='unavailable')&&!item.readingMinutes&&<span className="reader-body-status" title="本站仅提供摘要，点击进入后可前往原文阅读">仅摘要</span>}
           </div>
           <ArticleEngagementBar item={item} compact/>
         </div>

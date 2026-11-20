@@ -4,6 +4,7 @@ import type {ReaderPageData} from "./reader.server";
 import {readerLink} from "./ReaderNavigation";
 import {ReaderDatePicker,dateRangeLabel} from "./ReaderDatePicker";
 import {IconSearch,IconChevronDown} from "../../components/icons";
+import {addRecentSearch,clearRecentSearches,useRecentSearches} from "../../lib/local-state";
 import {useReaderQuery} from './useReaderQuery';
 
 export function PreservedFilters({query,except}:{query:Record<string,string>;except:string[]}){
@@ -13,7 +14,9 @@ export function PreservedFilters({query,except}:{query:Record<string,string>;exc
 
 export function ReaderSearch({query}:{query:Record<string,string>}){
   const location=useLocation(),navigate=useNavigate(),navigation=useNavigation(),navigationType=useNavigationType();
-  const [draft,setDraft]=useState(query.q??''),input=useRef<HTMLInputElement>(null),timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
+  const [draft,setDraft]=useState(query.q??''),[focused,setFocused]=useState(false),[recentOpen,setRecentOpen]=useState(false);
+  const recentSearches=useRecentSearches();
+  const container=useRef<HTMLDivElement>(null),input=useRef<HTMLInputElement>(null),timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
   const composing=useRef(false),submitted=useRef<string|null>(null),editedFor=useRef<string|null>(null);
   const target=useReaderQuery(query),latestQuery=useRef(target);
   useLayoutEffect(()=>{latestQuery.current=target;},[target]);
@@ -35,22 +38,75 @@ export function ReaderSearch({query}:{query:Record<string,string>}){
     if(navigation.location){cancel();editedFor.current=null;}
   },[navigation.location]);
   useEffect(()=>()=>cancel(),[]);
+  useLayoutEffect(()=>{
+    const onKeyDown=(event:KeyboardEvent)=>{
+      if(event.defaultPrevented||event.isComposing)return;
+      const modK=(event.ctrlKey||event.metaKey)&&!event.altKey&&!event.shiftKey&&event.key.toLowerCase()==='k';
+      const target=event.target as HTMLElement|null;
+      const editable=!!target?.isContentEditable||!!target?.closest('input,textarea,select');
+      const slash=event.key==='/'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!editable;
+      if(!modK&&!slash)return;
+      event.preventDefault();
+      input.current?.focus();
+      input.current?.select();
+    };
+    const onPointerDown=(event:PointerEvent)=>{
+      if(!container.current?.contains(event.target as Node))setRecentOpen(false);
+    };
+    document.addEventListener('keydown',onKeyDown);
+    document.addEventListener('pointerdown',onPointerDown);
+    return()=>{document.removeEventListener('keydown',onKeyDown);document.removeEventListener('pointerdown',onPointerDown);};
+  },[]);
   const changed=(value:string)=>{
     setDraft(value);editedFor.current=navigation.location?.key??location.key;cancel();if(composing.current)return;
     if(!value)search('',true);else timer.current=setTimeout(()=>search(value,true),300);
   };
-  return <Form role="search" method="get" action="/" className="flex min-w-0 items-center gap-1 rounded-control border border-line bg-surface pl-3 pr-0.5 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent"
-    onSubmit={event=>{event.preventDefault();if(!composing.current)search(draft,false);}}>
-    <PreservedFilters query={query} except={['q']}/>
-    <input ref={input} aria-label="搜索文章" className="reader-search-input min-h-10 w-full min-w-0 bg-transparent text-base text-ink outline-none sm:text-sm" type="search" name="q" maxLength={200} value={draft} placeholder="搜索文章"
-      onChange={event=>changed(event.currentTarget.value)} onCompositionStart={()=>{composing.current=true;cancel();}} onCompositionEnd={event=>{composing.current=false;changed(event.currentTarget.value);}}/>
-    {draft&&<button type="button" aria-label="清除搜索" className="min-h-10 min-w-8 text-lg text-ink-3" onClick={()=>{composing.current=false;setDraft('');search('',true);input.current?.focus();}}>×</button>}
-    <button type="submit" aria-label="搜索" title="搜索" className="grid size-11 shrink-0 place-items-center rounded-mark text-accent hover:bg-accent/10 focus-visible:outline-2 focus-visible:outline-accent"><IconSearch size={20}/></button>
-  </Form>;
+  const showRecent=(focused||recentOpen)&&recentOpen&&!draft&&recentSearches.length>0;
+  return <div ref={container} className="relative min-w-0"
+    onBlur={event=>{if(!event.relatedTarget||!event.currentTarget.contains(event.relatedTarget as Node))setRecentOpen(false);}}
+    onKeyDown={event=>{
+      if(event.key==='Escape'&&!event.nativeEvent.isComposing&&!composing.current&&showRecent&&document.activeElement!==input.current){
+        event.preventDefault();event.stopPropagation();setRecentOpen(false);input.current?.focus();
+      }
+    }}>
+    <Form role="search" method="get" action="/" className="flex min-w-0 items-center gap-1 rounded-control border border-line bg-surface pl-3 pr-0.5 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent"
+      onSubmit={event=>{event.preventDefault();if(!composing.current){const value=draft;search(value,false);setRecentOpen(false);if(value.trim())addRecentSearch(value);}}}>
+      <PreservedFilters query={query} except={['q']}/>
+      <input ref={input} aria-label="搜索文章" className="reader-search-input min-h-10 w-full min-w-0 bg-transparent text-base text-ink outline-none sm:text-sm" type="search" name="q" maxLength={200} value={draft} placeholder="搜索文章"
+        onFocus={()=>{setFocused(true);setRecentOpen(true);}}
+        onBlur={()=>setFocused(false)}
+        onClick={()=>setRecentOpen(true)}
+        onKeyDown={event=>{
+          if(event.key==='Escape'&&!event.nativeEvent.isComposing&&!composing.current){
+            if(showRecent){event.preventDefault();event.stopPropagation();setRecentOpen(false);}
+            else input.current?.blur();
+          }
+        }}
+        onChange={event=>changed(event.currentTarget.value)} onCompositionStart={()=>{composing.current=true;cancel();}} onCompositionEnd={event=>{composing.current=false;changed(event.currentTarget.value);}}/>
+      {!draft&&!focused&&<kbd aria-hidden="true" className="reader-search-kbd hidden lg:inline-flex">/</kbd>}
+      {draft&&<button type="button" aria-label="清除搜索" className="min-h-10 min-w-8 text-lg text-ink-3" onClick={()=>{composing.current=false;setDraft('');search('',true);input.current?.focus();}}>×</button>}
+      <button type="submit" aria-label="搜索" title="搜索" className="grid size-11 shrink-0 place-items-center rounded-mark text-accent hover:bg-accent/10 focus-visible:outline-2 focus-visible:outline-accent"><IconSearch size={20}/></button>
+    </Form>
+    {showRecent&&<div className="reader-recent-searches" aria-label="最近搜索">
+      <div className="reader-recent-searches-header">
+        <span>最近搜索</span>
+        <button type="button" className="reader-recent-searches-clear" onMouseDown={event=>event.preventDefault()} onClick={()=>{clearRecentSearches();setRecentOpen(false);input.current?.focus();}}>清空历史</button>
+      </div>
+      <div className="reader-recent-searches-list">
+        {recentSearches.map(term=><button key={term} type="button" className="reader-recent-search-item" onMouseDown={event=>event.preventDefault()} onClick={()=>{setDraft(term);addRecentSearch(term);setRecentOpen(false);search(term,false);}}>{term}</button>)}
+      </div>
+    </div>}
+  </div>;
 }
 
 export function ReaderToolbar({query,sources,datePickerTrigger}:Pick<ReaderPageData,'query'|'sources'>&{datePickerTrigger?:Ref<HTMLElement>}){
-  const submit=useSubmit(),toolbar=useRef<HTMLDivElement>(null);
+  const submit=useSubmit(),toolbar=useRef<HTMLDivElement>(null),[stuck,setStuck]=useState(false);
+  useEffect(()=>{
+    const onScroll=()=>setStuck(window.scrollY>16);
+    onScroll();
+    window.addEventListener('scroll',onScroll,{passive:true});
+    return()=>window.removeEventListener('scroll',onScroll);
+  },[]);
   useLayoutEffect(()=>{
     const root=document.documentElement;
     const update=()=>root.style.setProperty('--reader-toolbar-height',`${toolbar.current!.getBoundingClientRect().height}px`);
@@ -58,7 +114,7 @@ export function ReaderToolbar({query,sources,datePickerTrigger}:Pick<ReaderPageD
     return()=>{observer.disconnect();root.style.removeProperty('--reader-toolbar-height');};
   },[]);
   const sourceName=sources.find(source=>source.id===query.sourceId)?.name??'全部来源';
-  return <div ref={toolbar} role="group" aria-label="文章检索工具" className="reader-toolbar grid grid-cols-1 gap-2 pt-3 sm:grid-cols-[minmax(180px,400px)_minmax(0,auto)] sm:items-center sm:justify-between sm:gap-x-6 lg:pt-0">
+  return <div ref={toolbar} role="group" aria-label="文章检索工具" data-stuck={stuck||undefined} className="reader-toolbar grid grid-cols-1 gap-2 pt-3 sm:grid-cols-[minmax(180px,400px)_minmax(0,auto)] sm:items-center sm:justify-between sm:gap-x-6 lg:pt-0">
     <ReaderSearch query={query}/>
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-5 gap-y-1">
       <Form method="get" action="/" key={query.sourceId??''}>
@@ -87,8 +143,8 @@ export function ReaderFilters({query,sources,topics,categories}:Pick<ReaderPageD
   ];
   const filters=choices.filter(filter=>filter.value);
   if(!filters.length)return null;
-  return <div aria-label="当前筛选" className="flex min-w-0 flex-wrap items-center gap-x-3 border-b border-line py-2 text-xs text-ink-3">
-      <span>已选条件</span>{filters.map(({key,value,label,changes})=><Link key={key} to={readerLink(target,changes)} aria-label={`移除${label}：${value}`} className="inline-flex min-h-9 items-center gap-1 text-accent hover:underline">{value}<span aria-hidden="true">×</span></Link>)}
+  return <div aria-label="当前筛选" className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line py-2 text-xs text-ink-3">
+      <span>已选条件</span>{filters.map(({key,value,label,changes})=><Link key={key} to={readerLink(target,changes)} aria-label={`移除${label}：${value}`} className="reader-filter-chip"><span className="reader-filter-label">{label}：</span><span>{value}</span><span aria-hidden="true">×</span></Link>)}
       <Link to={readerLink(target.limit?{limit:target.limit}:{},{})} className="inline-flex min-h-9 items-center underline underline-offset-4">清除全部筛选</Link>
   </div>;
 }

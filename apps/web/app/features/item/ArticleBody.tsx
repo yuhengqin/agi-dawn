@@ -1,12 +1,14 @@
 // An article body as the server sent it (sanitised HTML, in the first HTML response), enhanced after
 // hydration: code blocks get a head with the language and a copy button and are coloured on demand,
 // and pictures that are not links open in the viewer, stepping through the body's pictures.
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Lightbox, type LightboxImage } from "../../components/ui/Lightbox";
+import type { LightboxImage } from "../../components/ui/Lightbox";
 import { IconCheck, IconChevronDown, IconCopy } from "../../components/icons";
 import { copyText } from "../../lib/clipboard";
 import { declaredLanguage, isPlainLanguage, languageLabel } from "./code-language";
+
+const LazyLightbox = lazy(() => import("../../components/ui/Lightbox").then((m) => ({ default: m.Lightbox })));
 
 /** Pictures worth enlarging: not inside a link, not tiny icons. */
 function canZoom(img: HTMLImageElement): boolean {
@@ -148,6 +150,7 @@ export function ArticleBody({ html }: { html: string }) {
   const [codeControls, setCodeControls] = useState<CodeControls[]>([]);
   const [images, setImages] = useState<LightboxImage[]>([]);
   const [open, setOpen] = useState<number | null>(null);
+  const [lightboxLoaded, setLightboxLoaded] = useState(false);
   // Toolbars change the body's height: install them before history scroll restoration.
   // Highlighting still runs only when a code block approaches the viewport.
   useLayoutEffect(() => {
@@ -156,6 +159,27 @@ export function ArticleBody({ html }: { html: string }) {
     setCodeControls(enhanced.controls);
     return enhanced.dispose;
   }, [html, prefix]);
+  useEffect(() => {
+    setOpen(null);
+    const root = ref.current;
+    if (!root) return;
+    if (root.querySelector('[data-reader-math="katex"]')) void import("./katex");
+    for (const anchor of root.querySelectorAll<HTMLAnchorElement>("a[href]")) {
+      if (anchor.closest("pre")) continue;
+      const raw = anchor.getAttribute("href")?.trim();
+      if (!raw || raw.startsWith("#")) continue;
+      let parsed: URL;
+      try {
+        parsed = new URL(anchor.href, window.location.href);
+      } catch {
+        continue;
+      }
+      if ((parsed.protocol === "http:" || parsed.protocol === "https:") && parsed.origin !== window.location.origin) {
+        anchor.target = "_blank";
+        anchor.rel = "noopener noreferrer";
+      }
+    }
+  }, [html]);
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
@@ -186,7 +210,13 @@ export function ArticleBody({ html }: { html: string }) {
       if (index < 0) return;
       e.preventDefault();
       e.stopPropagation();
-      setImages(list.map((i) => ({ src: i.src, alt: i.alt, source: i })));
+      setLightboxLoaded(true);
+      setImages(list.map((i) => ({
+        src: i.src,
+        alt: i.alt,
+        caption: i.closest("figure")?.querySelector("figcaption")?.textContent?.trim() || null,
+        source: i,
+      })));
       setOpen(index);
     };
     const onKeyDown = (e: KeyboardEvent) => {
@@ -205,7 +235,7 @@ export function ArticleBody({ html }: { html: string }) {
     <>
       <div ref={ref} className="prose article-prose" dangerouslySetInnerHTML={{ __html: html }} />
       {codeControls.map(control => createPortal(<CodeBlockTools {...control}/>, control.tools, control.id))}
-      <Lightbox images={images} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />
+      {lightboxLoaded && <Suspense fallback={null}><LazyLightbox images={images} index={open} onIndex={setOpen} onClose={() => setOpen(null)} /></Suspense>}
     </>
   );
 }
