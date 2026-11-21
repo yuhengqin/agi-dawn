@@ -44,7 +44,7 @@ export async function translateMetadataPending(started=Date.now(),durationMs=240
     const values=[title,cleanSummary(summary,{title,url:String(row.url)})],indexes=values.flatMap((value,index)=>value?.trim()&&
       (!isChineseText(value)||/\p{Letter}/u.test(value.replace(/\p{Script=Han}/gu,'')))?[index]:[]);
     try{
-      const answer=indexes.length?await requestTranslation(id,0,indexes.map(index=>values[index]!),false,'translate_metadata'):null;
+      const answer=indexes.length?await requestTranslation(id,0,indexes.map(index=>values[index]!),undefined,'translate_metadata'):null;
       if(answer&&(!answer.t||answer.t.some((value,at)=>!value.trim()||metadataAddsMarkup(values[indexes[at]!]!,value)))){
         await rejectReceivedResponse(answer.receiptId,'translation returned empty metadata or added markup');
         throw new ModelOutputError('Translation returned unusable metadata',answer.receiptId);

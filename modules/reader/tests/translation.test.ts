@@ -17,11 +17,13 @@ import {translatePending} from '../translation/index.ts';
 import {translateMetadataPending} from '../translation/metadata.ts';
 
 let hold:ReturnType<typeof gate>|null=null,asked=gate(),invalidAnswers=false,onAnswer:(()=>void)|null=null,addedMarkup=false,lastPrompt='';
+let lastInput:{segments:string[];retryReasons?:string[]};
 const provider=await stub((_hit,req)=>{
   const body=JSON.parse(req.body);
   lastPrompt=body.messages[0].content;
   assert.equal(body.model,'translation-fixture');
-  const {segments}=JSON.parse(body.messages[1].content) as {segments:string[]};
+  lastInput=JSON.parse(body.messages[1].content);
+  const {segments}=lastInput;
   asked.open();
   const reply=()=>{onAnswer?.();return {id:'translation-fixture',choices:[{message:{content:JSON.stringify({t:invalidAnswers?[]:segments.map(s=>s.includes('never keeps')?'丢失了链接。':addedMarkup?'<a id="L0">中文译文：</a>'+s:'中文译文：'+s)})}}]};};
   return hold?hold.promise.then(reply):reply();
@@ -95,8 +97,17 @@ test('Chinese prose remains untranslated when its protected code contains much m
 
 test('missing protected content is retried once, then retained as original and labelled partial',async()=>{
   const {articleId}=await upsertMaterial(input('<p>A good paragraph.</p><p>This never keeps <a href="https://example.org/safe">the link</a>.</p>'));
+  const before=provider.hits();
   await run();const item=await detail(articleId);
+  assert.equal(provider.hits()-before,2);
+  assert.equal(lastInput.segments.length,1);
+  assert.match(lastInput.retryReasons?.[0]??'',/缺少.*L0|L0.*缺失/);
   assert.equal(item.body.complete,false);assert.match(item.body.html,/中文译文/);assert.match(item.body.html,/This never keeps/);
+  const sent=provider.hits();
+  await sql`UPDATE reader_translations SET status='pending',body_html=NULL WHERE article_id=${articleId}`;
+  await run();
+  assert.equal(provider.hits(),sent,'both the first answer and its corrective answer replay from their receipts');
+  assert.equal((await detail(articleId)).body.html,item.body.html);
 });
 
 test('switches and missing or stopped budgets leave work pending without sending or consuming attempts',async()=>{

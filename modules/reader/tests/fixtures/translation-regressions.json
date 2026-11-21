@@ -1,0 +1,92 @@
+[
+  {
+    "id": "model-token-cost",
+    "origin": "Anthropic · Harness design for long-running application development，11 月 13 日审校",
+    "context": "The author is reporting the time and expense of running an LLM application-development task.",
+    "source": "$124 in token costs",
+    "observed": "代币成本为 124 美元",
+    "reference": "token 成本为 124 美元",
+    "criterion": "计费对象是模型处理的 token，金额为 124 美元。把 token 说成货币或加密代币即为误译。"
+  },
+  {
+    "id": "agent-harness",
+    "origin": "Anthropic · Managed Agents，A006-01",
+    "context": "The harness invokes Claude and dispatches tool calls. The author is discussing where it can run.",
+    "source": "A second issue was that the harness assumed that whatever Claude worked on lived in the container with it.",
+    "observed": "另一个问题是，测试框架假设 Claude 所处理的一切都与它一同位于容器内。",
+    "reference": "另一个问题是，运行框架假定 Claude 处理的东西都在它所在的容器里。",
+    "criterion": "作出假设的是智能体运行框架；称为测试框架会改变组件的用途。"
+  },
+  {
+    "id": "tab-completion",
+    "origin": "Geoffrey Huntley · Mirrors，A079-01",
+    "context": "An interviewer is watching a candidate write code in an editor.",
+    "source": "If they heavily rely upon AI-powered tab completion, they're probably not a good fit.",
+    "observed": "如果他们严重依赖 AI 驱动的标签页自动补全，他们可能也不合适。",
+    "reference": "如果他们很依赖用 Tab 键接受 AI 代码补全，可能不太适合这个岗位。",
+    "criterion": "补全的对象是代码。可以保留 Tab 键或用代码补全表达，不能变成补全浏览器标签页。"
+  },
+  {
+    "id": "omit-sensitive-internals",
+    "origin": "OpenAI · What makes a great ChatGPT app，A148-01",
+    "context": "This advice concerns which information an app should return to the user.",
+    "source": "Skip sensitive internals “just in case.”",
+    "observed": "不要“以防万一”跳过敏感的内部信息。",
+    "reference": "为保险起见，省略敏感的内部信息。",
+    "criterion": "读者依照译文操作应当省略敏感信息。“不要返回”也可接受；“不要省略”反转了指令。"
+  },
+  {
+    "id": "matrix-transpose",
+    "origin": "Shrivu Shankar · The Transposed Organization，A183-01",
+    "context": "An article title. The author describes an organization as a matrix of teams and functions, then exchanges its rows and columns.",
+    "source": "The Transposed Organization",
+    "observed": "被颠覆的组织",
+    "reference": "转置后的组织",
+    "criterion": "保留矩阵转置或行列互换的比喻。只表达组织遭到颠覆会丢掉标题与正文的联系。"
+  },
+  {
+    "id": "development-value-and-cost",
+    "origin": "Geoffrey Huntley，11 月 20 日审校 013 · P15",
+    "context": "A developer describes their commercial work on existing projects using Sonnet.",
+    "source": "delivering paid for dev worth 100K + for 3K in sonnet tokens in brownfield projects",
+    "observed": "在棕地项目中，我实际上是在用价值 100K + 的付费开发工作量，换取 3K 的 sonnet token。",
+    "reference": "在已有项目上，我能交付价值十万以上的开发成果，Sonnet 的 token 开销只有三千。",
+    "criterion": "100K+ 对应交付价值，3K 对应 token 支出。两者不能互换，也不能补造原句没有给出的币种。"
+  },
+  {
+    "id": "output-multiple",
+    "origin": "Geoffrey Huntley，11 月 20 日审校 013 · P59",
+    "context": "A developer compares how much the team produces using a new approach with its earlier output.",
+    "source": "three times the output",
+    "observed": "产出提高了三倍",
+    "reference": "产出达到原来的三倍",
+    "criterion": "若基准产出是 10，译文应能明确推出新产出为 30。“增加到三倍”也可接受；不能把 30 当作增量。"
+  },
+  {
+    "id": "heterogeneous-platform",
+    "origin": "Microsoft · Ignite 2026，11 月 20 日审校 109 · P42",
+    "context": "Microsoft is describing a platform it is building with partners.",
+    "source": "We are building a heterogeneous platform working across the ecosystem to bring you all the latest innovation.",
+    "observed": "我们正在构建一个跨生态的异步平台，为你带来所有最新的创新。",
+    "reference": "我们正与生态伙伴一起构建异构平台，把最新的创新成果带给你。",
+    "criterion": "平台包含不同类型的组成部分。将 heterogeneous 译成描述执行方式的“异步”即为误译。"
+  },
+  {
+    "id": "weight-availability",
+    "origin": "Microsoft · Ignite 2026，11 月 20 日审校 109 · P21",
+    "context": "The platform supports both groups of models mentioned here.",
+    "source": "closed and open weight models",
+    "observed": "闭源权重和开源权重模型",
+    "reference": "权重不公开的模型和开放权重的模型",
+    "criterion": "两类由权重可获得性区分。译文不能据此断定源代码开放程度或许可条款。"
+  },
+  {
+    "id": "fresh-fuzz-cache",
+    "origin": "Google Developers Blog · Catch Go bugs that fuzzing misses，11 月 13 日补译、11 月 20 日审校 248 · P15",
+    "context": "This describes the setup for repeated runs of the same fuzz test.",
+    "source": "each with a fresh fuzz cache",
+    "observed": "每次均清空模糊测试缓存",
+    "reference": "每次都使用全新的模糊测试缓存",
+    "criterion": "原文只规定每次运行的缓存起始状态。不能擅自指定通过清空旧缓存来实现。"
+  }
+]

@@ -13,6 +13,46 @@ test('Chinese prose and short technical names may correctly remain unchanged',as
   const result=await translateHtml('<h2>GPT-5.4</h2><p>这是已有的中文正文。</p>',async parts=>({t:parts,receiptId:1}));
   assert.equal(result.complete,true);assert.match(result.html,/GPT-5.4/);
 });
+
+test('only rejected segments get a corrective request with their own validation failure',async()=>{
+  const source=['<p>Good.</p>','<p>Run <code>vsock</code>.</p>','<p>See <a href="https://example.org/docs">docs</a>.</p>',
+    '<h2>Introduction</h2>','<p>Hosted tools</p>','<p>Another paragraph.</p>'].join('');
+  let calls=0;
+  const result=await translateHtml(source,async(parts,retry)=>{
+    calls++;
+    if(calls===1)return {t:['已译。','运行 ⟦0⟧⟦0⟧。','查阅文档。','Introduction','托管工具。}]}',''],receiptId:1};
+    assert.equal(parts.length,5);
+    const reasons=retry?.retryReasons;
+    assert.ok(Array.isArray(reasons),'the retry includes one reason per rejected segment');
+    assert.equal(reasons.length,parts.length);
+    assert.match(reasons[0]!,/重复.*⟦0⟧|⟦0⟧.*重复/);
+    assert.match(reasons[1]!,/缺少.*L0|L0.*缺失/);
+    assert.match(reasons[2]!,/英文/);
+    assert.match(reasons[3]!,/JSON/);
+    assert.match(reasons[4]!,/空/);
+    return {t:['运行 ⟦0⟧。','查阅 <a id="L0">文档</a>。','引言','托管工具','另一段。'],receiptId:2};
+  });
+  assert.equal(calls,2);
+  assert.equal(result.complete,true);
+  assert.match(result.html,/<code>vsock<\/code>/);
+  assert.match(result.html,/href="https:\/\/example.org\/docs"/);
+});
+
+test('wrong response counts explain a split and a successful half stays translated',async()=>{
+  const calls:string[][]=[];
+  const result=await translateHtml('<p>First.</p><p>Second.</p><p>Third.</p>',async(parts,retry)=>{
+    calls.push(parts);
+    if(calls.length===1)return {t:['只有一条，不能对应原文。'],receiptId:1};
+    const reasons=retry?.retryReasons;
+    assert.ok(Array.isArray(reasons));
+    assert.equal(reasons.length,parts.length);
+    for(const reason of reasons)assert.match(reason,/数量|条数/);
+    return {t:parts[0]==='Third.'?['第三段。']:null,receiptId:calls.length};
+  });
+  assert.deepEqual(calls,[['First.','Second.','Third.'],['First.','Second.'],['Third.'],['First.','Second.'],['First.'],['Second.']]);
+  assert.equal(result.complete,false);
+  assert.match(result.html,/<p>First\.<\/p><p>Second\.<\/p><p>第三段。<\/p>/);
+});
 test('a literal documentation URL is not mistaken for an untranslated English sentence',async()=>{
   const html='<p><a href="https://www.erlang.org/doc/apps/dialyzer/dialyzer.html">https://www.erlang.org/doc/apps/dialyzer/dialyzer.html</a></p>';
   const result=await translateHtml(html,async parts=>({t:parts,receiptId:1}));assert.equal(result.complete,true);assert.match(result.html,/href="https:\/\/www.erlang.org/);

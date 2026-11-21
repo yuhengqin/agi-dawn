@@ -2,6 +2,7 @@ import {sql,type Db} from '@agidawn/backend/db';
 import {paidRequest,assertAccepted,rejectReceivedResponse,ModelUnavailableError,ModelOutputError} from '@agidawn/backend/providers/receipts';
 import {shutdownSignal} from '@agidawn/backend/lib/shutdown';
 import {guardedFetch} from '@agidawn/backend/lib/http-fetch';
+import type {BodyRetry} from './body.ts';
 
 const translationRules=`忠实与语义：逐句保留事实、主语、指代、条件、因果和可能性限定，不省略、不概括、不补写原文没有的信息；原文截断时不要补全，缺少货币或计量单位时不要猜补。
 先确定否定的作用范围、修饰关系与比较方向，再组织中文。特别核对 not/never/unless/only、low/high、more/less；问句也必须保留原来的正反方向，不能因中文顺口而反转判断或更换动作主体。
@@ -36,7 +37,7 @@ export async function initializeTranslationBudget(db:Db=sql){
     VALUES('llm',300,6000,40000,'新文章全文翻译，按请求计数') ON CONFLICT(service) DO NOTHING`;
 }
 
-export async function requestTranslation(articleId:string,bodyRevision:number,segments:string[],retry=false,purpose:'translate_body'|'translate_metadata'='translate_body'){
+export async function requestTranslation(articleId:string,bodyRevision:number,segments:string[],retry?:BodyRetry,purpose:'translate_body'|'translate_metadata'='translate_body'){
   if(process.env.MODEL_CALLS_ENABLED!=='true')throw new ModelUnavailableError('Model calls are disabled');
   const model=process.env.LLM_MODEL?.trim(),base=process.env.LLM_BASE_URL?.replace(/\/$/,''),key=process.env.LLM_API_KEY;
   if(!model||!base||!key)throw new ModelUnavailableError('Configure LLM_BASE_URL, LLM_API_KEY and LLM_MODEL');
@@ -46,11 +47,13 @@ export async function requestTranslation(articleId:string,bodyRevision:number,se
   catch{throw new ModelUnavailableError('LLM_EXTRA_JSON must be a JSON object');}
   const reasoning=Number(process.env.LLM_REASONING_TOKENS||0);
   if(!Number.isSafeInteger(reasoning)||reasoning<0)throw new ModelUnavailableError('LLM_REASONING_TOKENS must be a non-negative integer');
-  const body={model,messages:[{role:'system',content:purpose==='translate_metadata'?metadataSystem:system},{role:'user',content:JSON.stringify({segments})}],temperature:0.2,
+  const prompt=purpose==='translate_metadata'?metadataSystem:system;
+  const content=retry?prompt+'\nretryReasons 与 segments 逐项对应。请根据每条校验反馈重新翻译对应的原片段。':prompt;
+  const body={model,messages:[{role:'system',content},{role:'user',content:JSON.stringify({segments,retryReasons:retry?.retryReasons})}],temperature:0.2,
     max_tokens:Math.min(8000,Math.ceil(segments.join('').length*1.2)+400)+reasoning,
     ...(process.env.LLM_JSON_MODE==='false'?{}:{response_format:{type:'json_object'}}),...extra};
   const receipt=await paidRequest({service:'llm',model,purpose,subject:`article:${articleId}@${bodyRevision}`,
-    identity:{articleId,bodyRevision,base,body},attemptTag:retry?'retry':undefined,
+    identity:{articleId,bodyRevision,base,body},attemptTag:retry?.attemptTag,
     requestSummary:{model,segments:segments.length,characters:segments.join('').length}},async()=>{
     const response=await guardedFetch(base+'/chat/completions',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+key},body:JSON.stringify(body),timeoutMs:180_000});
     const text=response.text();assertAccepted('llm',response.status,text);
