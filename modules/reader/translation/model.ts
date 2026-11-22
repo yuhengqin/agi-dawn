@@ -9,6 +9,8 @@ const translationRules=`忠实与语义：逐句保留事实、主语、指代�
 自然表达：按上下文理解技术比喻、俚语和习惯搭配，用清楚自然的中文传达同一含义与语气，避免把词语的日常字面义硬套进工程语境；不得为润色改写作者观点。无法可靠确定的术语保留英文，不编造解释。
 术语在各片段和批次中保持一致，不随意换同义词；按以下语境区分，不对同形词一律套用同一译法：
 - AI agent：智能体；网络 proxy：代理服务器。token 保留 token；文本分词用“分词”，敏感数据的 tokenize/untokenize 用“标记化/解标记化”。
+- 模型的 open weights / open-weight 指“开放权重”，closed weights 指“权重不公开”。并列短语中 open、closed 共同修饰 weights。只有原文讨论 open source 或 closed source 时才译为“开源”或“闭源”，不得从权重是否公开推断源码或许可证。
+- 软件测试中的 fuzz / fuzzing 指“模糊测试”，fuzz cache 译为“模糊测试缓存”。在操作系统和虚拟内存语境中，page fault 译为“缺页异常”（也称缺页中断），注意与网页报错区分。
 - 机器学习 feature：特征；产品 feature：功能。推荐/广告 impression：曝光；流处理 watermark：水位线，图像 watermark：水印。
 - training-serving skew：训练-服务偏差；feature allow list：特征允许列表；sequence-based：基于序列的，serialization：序列化，不混淆两者。
 - 软件 task runner：任务运行器；scheduler：调度器；代码编辑中的 tab completion：代码补全；模型 reasoning effort：推理强度。
@@ -21,7 +23,8 @@ export const system=`你是专业的科技文章译者。用户给出若干 HTML
 按原顺序返回相同数量的片段，输出 JSON：{"t":["译文"]}。
 ${translationRules}
 只翻译可读文字，保持所有 HTML 标签、属性和层级，不增加或删除强调、代码等标签，不跨片段搬移内容。⟦0⟧ 等占位符代表媒体、公式或代码，每个必须在对应片段原样出现一次。
-链接 <a id="L0">文字</a> 只翻译文字，保留标签与 id，不增删链接。
+遇到占位符后的同位语或解释，可用“它”“该接口”等承接。保留占位符一次，后面的说明用自己的中文句式接续。
+链接 <a id="L0">文字</a> 只翻译文字。每个 id 对应的名称或短语仍在该链接内，周围的普通文字仍在链接外。调整语序时整体移动链接，不在标签外重写一遍名称。
 已有中文原样返回。`;
 
 export const metadataSystem=`你是专业的科技文章译者。用户给出若干纯文本标题或摘要，请逐条翻译成简体中文。

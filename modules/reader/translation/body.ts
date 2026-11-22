@@ -29,8 +29,8 @@ function restore(text:string,input:ReturnType<typeof shield>):CheckedSegment{
   const ordinaryHeading=/^(?:introduction|overview|background|conclusions?|summary|acknowledg(?:e)?ments?|results|discussion)$/i.test(before)
     ||/^(?:what|why|how|when|where)\b/i.test(before)||/\bwithout\b/i.test(before);
   if(han(before)===0&&(sourceWords.length>=8||ordinaryHeading)){
-    if(han(after)===0)return {reason:'英文原文未译成中文，请翻译可读文字，保留专名。'};
-    if(sourceWords.length>=8&&han(after)<4&&targetWords.join(' ').toLowerCase().includes(sourceWords.join(' ').toLowerCase()))return {reason:'译文仍整段照抄英文，请翻译整段可读文字。'};
+    if(han(after)===0)return {reason:'原文未译成中文，请翻译可读文字，保留专名。'};
+    if(sourceWords.length>=8&&han(after)<4&&targetWords.join(' ').toLowerCase().includes(sourceWords.join(' ').toLowerCase()))return {reason:'译文仍整段照抄原文，请翻译整段可读文字。'};
   }
   const counts=new Map<number,number>();
   for(const match of text.matchAll(/⟦(\d+)⟧/g)){const n=Number(match[1]);counts.set(n,(counts.get(n)??0)+1);}

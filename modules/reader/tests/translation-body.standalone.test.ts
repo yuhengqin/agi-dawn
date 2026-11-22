@@ -27,7 +27,7 @@ test('only rejected segments get a corrective request with their own validation 
     assert.equal(reasons.length,parts.length);
     assert.match(reasons[0]!,/重复.*⟦0⟧|⟦0⟧.*重复/);
     assert.match(reasons[1]!,/缺少.*L0|L0.*缺失/);
-    assert.match(reasons[2]!,/英文/);
+    assert.match(reasons[2]!,/原文未译成中文/);
     assert.match(reasons[3]!,/JSON/);
     assert.match(reasons[4]!,/空/);
     return {t:['运行 ⟦0⟧。','查阅 <a id="L0">文档</a>。','引言','托管工具','另一段。'],receiptId:2};
@@ -96,10 +96,19 @@ test('ordinary short English headings cannot be returned unchanged as complete t
   assert.match(result.html,/Introduction/);
 });
 
-test('adding a few Chinese characters does not translate a copied English paragraph',async()=>{
-  const text='This paragraph describes the complete architecture and several important implementation details for distributed systems.';
-  const result=await translateHtml('<p>'+text+'</p>',async parts=>({t:parts.map(part=>'中文'+part),receiptId:1}));
-  assert.equal(result.complete,false);assert.match(result.html,/This paragraph describes/);
+test('untranslated and partially copied German prose gets language-neutral feedback',async()=>{
+  const text='Das elektrische Feld im Spalt zwischen den Platten ist…';
+  let calls=0;
+  const result=await translateHtml('<p>'+text+'</p><p>'+text+'</p>',async(parts,retry)=>{
+    calls++;
+    if(retry){
+      assert.match(retry.retryReasons[0]!,/原文未译成中文/);
+      assert.match(retry.retryReasons[1]!,/整段照抄原文/);
+      for(const reason of retry.retryReasons)assert.doesNotMatch(reason,/英文/);
+    }
+    return {t:[parts[0]!,'中文'+parts[1]!],receiptId:calls};
+  });
+  assert.equal(calls,2);assert.equal(result.complete,false);assert.match(result.html,/Das elektrische Feld/);
 });
 
 test('product labels and genuine translations retaining technical terms are accepted',async()=>{
